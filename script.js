@@ -118,6 +118,15 @@ function setCatAuto(s) {
   if (Number($("sellCat").value) !== s.id) { $("sellCat").value = s.id; renderAttrs(); }
   const n = $("sellAuto"); n.textContent = `✨ Categorie aleasă automat: ${s.parent} › ${s.name}. Poți schimba dacă nu e corectă.`; n.hidden = false;
 }
+/* Când titlul poate însemna două lucruri (mașină întreagă sau piesă), întrebăm în loc să ghicim. */
+function renderAsk(ask) {
+  const n = $("sellAuto"); n.textContent = ask.question; n.hidden = false;
+  for (const o of ask.options) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "ask-btn"; b.textContent = o.label;
+    b.addEventListener("click", () => { catManual = true; setCatAuto(o); $("sellChips").innerHTML = ""; });
+    $("sellChips").appendChild(b);
+  }
+}
 let timer;
 $("sellTitle")?.addEventListener("input", (e) => {
   clearTimeout(attrTimer); attrTimer = setTimeout(fillAttrs, 250);
@@ -125,10 +134,14 @@ $("sellTitle")?.addEventListener("input", (e) => {
   if (t.length < 3) { $("sellChips").innerHTML = ""; $("sellAuto").hidden = true; return; }
   timer = setTimeout(async () => {
     try {
-      const { suggestions } = await api("/api/categories/suggest?title=" + encodeURIComponent(t));
+      const { suggestions, ask, confident } = await api("/api/categories/suggest?title=" + encodeURIComponent(t));
       $("sellChips").innerHTML = "";
       if (!suggestions.length) { if (!catManual) $("sellAuto").hidden = true; return; }
-      if (!catManual && !editing) setCatAuto(suggestions[0]);
+      if (ask && !catManual && !editing) { renderAsk(ask); return; }
+      if (!catManual && !editing) {
+        if (confident !== false) setCatAuto(suggestions[0]);
+        else { const n = $("sellAuto"); n.textContent = "Nu sunt sigur de categorie. Alege una:"; n.hidden = false; }
+      }
       for (const s of suggestions) {
         if (Number($("sellCat").value) === s.id) continue;
         const b = document.createElement("button"); b.type = "button"; b.textContent = `${s.parent} › ${s.name}`;

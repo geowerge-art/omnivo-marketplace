@@ -834,3 +834,7 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
 .acc-stat-row span:first-child { color: var(--navy); font-weight: 600; cursor: pointer; overflow-wrap: anywhere; }
 .acc-stat-row span:not(:first-child) { color: var(--muted); font-size: 14px; white-space: nowrap; }
 #saveSearchBtn { margin: 0; min-height: 0; font-size: 14px; }
+
+/* --- întrebare „mașină sau piesă” --- */
+.ask-btn{flex:1 1 140px;min-height:52px;padding:0 14px;border:2px solid var(--blue);background:#fff;color:var(--blue);border-radius:14px;font-weight:700;font-size:15px}
+.ask-btn:active{background:var(--light)}

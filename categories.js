@@ -5,28 +5,20 @@ const { ah, requireDb } = require('./common');
 const router = express.Router();
 router.use(requireDb);
 
-const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const { detect } = require('./detect');
 let leafCache = null;
 
-/* Sugestie de categorie după titlu: potrivire pe cuvinte-cheie (cuvânt întreg = 3 puncte, început de cuvânt = 2). */
+/* Sugestie de categorie după titlu (vezi detect.js): întoarce variantele, dacă sistemul e sigur și, uneori, o întrebare. */
 router.get('/suggest', ah(async (req, res) => {
-  const words = fold(req.query.title).split(/[^a-z0-9]+/).filter((w) => w.length >= 3).slice(0, 12);
-  if (!words.length) return res.json({ suggestions: [] });
+  const title = String(req.query.title || '').slice(0, 200);
+  if (title.trim().length < 3) return res.json({ suggestions: [], ask: null, confident: false });
   if (!leafCache || Date.now() - leafCache.at > 5 * 60 * 1000) {
     const r = await db.query(
       `SELECT c.id, c.slug, c.name, p.name AS parent_name, c.keywords
          FROM categories c JOIN categories p ON p.id = c.parent_id WHERE c.keywords <> ''`);
-    leafCache = { at: Date.now(), rows: r.rows.map((x) => ({ ...x, kw: x.keywords.split(' ') })) };
+    leafCache = { at: Date.now(), rows: r.rows };
   }
-  const scored = leafCache.rows.map((c) => {
-    let score = 0;
-    for (const w of words) for (const k of c.kw) {
-      if (w === k) score += 3;
-      else if (k.length >= 4 && w.length >= 4 && (w.startsWith(k) || k.startsWith(w))) score += 2;
-    }
-    return { id: c.id, slug: c.slug, name: c.name, parent: c.parent_name, score };
-  }).filter((c) => c.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
-  res.json({ suggestions: scored });
+  res.json(detect(title, leafCache.rows));
 }));
 
 /* Arborele de categorii, cu atributele fiecăreia. Se schimbă rar, deci îl ținem 5 minute în memorie. */
