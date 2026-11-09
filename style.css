@@ -904,3 +904,18 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
 /* ---- insigna Nou / Folosit / Second-hand pe poza cardului ---- */
 .product-image .cond { position: absolute; left: 8px; bottom: 8px; z-index: 1; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.4; background: rgba(255, 255, 255, .94); color: var(--navy); box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
 .product-image .cond.nou { background: #e6f5ec; color: #1b6b3f; }
+
+/* ---- pagina anunțului: ecran întreg pe telefon, ca „Publică un anunț” ---- */
+.sheet.det { padding: 0; }
+.det-top { padding-right: 16px; }
+.det-top .ad-crumbs { margin: 0; min-width: 0; }
+.sheet.det .ad-gal { border-radius: 0; }
+.sheet.det .ad-slide { height: min(62vh, 520px); }
+.det-body { padding: 14px 18px 8px; }
+.sheet.det .det-body h2 { font-size: 24px; margin: 0 0 4px; }
+.sheet.det .ad-price { font-size: 30px; }
+.sheet.det .ad-callbar { margin: 10px 0 0; padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 760px) {
+  #detailDialog.det { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; border-radius: 0; }
+}
+@media (min-width: 761px) { .sheet.det { overflow: hidden auto; } .sheet.det .ad-slide { height: 420px; } }
