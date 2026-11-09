@@ -13,6 +13,11 @@ test('weakPassword respinge parole slabe', () => {
   assert.strictEqual(S.weakPassword('Cal-Verde-Aleargă-7'), null);
 });
 
+test('email: acceptă orice adresă de forma ceva@ceva, fără spații', () => {
+  for (const ok of ['a@b.ro', 'test@test', 'nume.prenume+tag@exemplu.com', 'x@localhost', 'ana@mail.co.uk']) assert.ok(S.EMAIL_RE.test(ok), ok);
+  for (const bad of ['fara-arond', '@fara-nume', 'fara-domeniu@', 'cu spatiu@mail.ro', 'a@@b.ro', '']) assert.ok(!S.EMAIL_RE.test(bad), bad);
+});
+
 test('nickname: fără @ și fără spații', () => {
   assert.ok(S.NICK_RE.test('dezkamle1'));
   assert.ok(!S.NICK_RE.test('ab'));

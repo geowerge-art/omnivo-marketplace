@@ -10,6 +10,7 @@ const adminRouter = express.Router();
 router.use(requireDb);
 adminRouter.use(requireDb, requireRole('admin', 'moderator'));
 const createAllow = createThrottle(30, 60 * 60 * 1000); // max 30 anunțuri/oră per utilizator
+const editAllow = createThrottle(60, 60 * 60 * 1000); // max 60 editări/oră per utilizator
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.created_at,
@@ -86,6 +87,9 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);
   res.json({ listing: {
     images: imgs.rows.map((i) => i.url),
+    seller_id: l.user_id, mine: !!owner,
+    // datele brute de care are nevoie formularul de editare; le primește doar proprietarul
+    edit: owner ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
     category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type,
@@ -106,6 +110,34 @@ router.post('/', requireAuth, requireVerified, ah(async (req, res) => {
     [req.user.id, v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
      JSON.stringify(v.attributes), config.NEW_LISTING_STATUS, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' ')]);
   res.status(201).json({ listing: r.rows[0] });
+}));
+
+/* ---- editarea unui anunț existent (doar proprietarul) ----
+   Câmpurile lipsă din cerere (oraș, tip vânzător) se păstrează. Dacă se schimbă titlul, descrierea, categoria sau atributele,
+   un anunț respins revine la moderare, iar unul publicat/vândut revine la moderare doar când moderarea e activă (NEW_LISTING_STATUS=pending). */
+const same = (a) => JSON.stringify(Object.keys(a || {}).sort().map((k) => [k, a[k]]));
+router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => {
+  if (!editAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const cur = (await db.query('SELECT * FROM listings WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])).rows[0];
+  if (!cur || cur.status === 'deleted') return res.status(404).json({ error: 'NEGASIT' });
+  if (cur.status === 'blocked') return res.status(403).json({ error: 'INTERZIS' });
+  const p = await parse({ seller_type: cur.seller_type, city: cur.city, ...(req.body || {}) });
+  if (p.error) return res.status(400).json({ error: p.error, field: p.field });
+  const v = p.v;
+  const changed = cur.title !== v.title || (cur.description || '') !== v.description || cur.category_id !== v.category_id || same(cur.attributes) !== same(v.attributes);
+  let status = cur.status;
+  if (changed && ['approved', 'sold', 'rejected'].includes(cur.status) && (config.NEW_LISTING_STATUS === 'pending' || cur.status === 'rejected')) {
+    const pend = await db.query("SELECT COUNT(*)::int AS n FROM listings WHERE user_id = $1 AND status = 'pending'", [req.user.id]);
+    if (pend.rows[0].n >= 20) return res.status(429).json({ error: 'PREA_MULTE_ANUNTURI' });
+    status = 'pending';
+  }
+  const r = await db.query(
+    `UPDATE listings SET category_id=$1, title=$2, description=$3, price=$4, currency=$5, negotiable=$6, condition=$7, seller_type=$8,
+            county=$9, city=$10, attributes=$11, status=$12, search_text=$13, updated_at=NOW()
+      WHERE id=$14 AND user_id=$15 RETURNING id, status`,
+    [v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
+     JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, req.user.id]);
+  res.json({ listing: r.rows[0], resubmitted: status === 'pending' && cur.status !== 'pending' });
 }));
 
 /* ---- proprietar: vândut / repus la vânzare; ștergere în doi pași ---- */

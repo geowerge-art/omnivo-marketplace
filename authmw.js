@@ -1,6 +1,7 @@
 const db = require('./db');
 const { hashToken } = require('./security');
 const config = require('./config');
+const { MAIL_READY } = require('./mail');
 
 const COOKIE = 'session';
 
@@ -36,9 +37,10 @@ const requireRole = (...roles) => (req, res, next) => {
   return roles.includes(req.user.role) ? next() : res.status(403).json({ error: 'INTERZIS' });
 };
 
-/* Dacă REQUIRE_VERIFIED_EMAIL=true, doar conturile cu email confirmat pot publica. Adminii sunt scutiți. */
+/* Dacă REQUIRE_VERIFIED_EMAIL=true, doar conturile cu email confirmat pot publica. Adminii sunt scutiți.
+   Fără email configurat (RESEND_*) nu se poate trimite niciun link de confirmare, deci cerința se ignoră: altfel nimeni n-ar putea publica. */
 const requireVerified = (req, res, next) => {
-  if (!config.REQUIRE_VERIFIED_EMAIL || req.user.role !== 'user' || req.user.email_verified) return next();
+  if (!config.REQUIRE_VERIFIED_EMAIL || !MAIL_READY || req.user.role !== 'user' || req.user.email_verified) return next();
   return res.status(403).json({ error: 'EMAIL_NECONFIRMAT' });
 };
 

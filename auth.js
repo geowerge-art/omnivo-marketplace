@@ -64,11 +64,11 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 router.post('/register', ah(async (req, res) => {
   const { name, nickname, email, phone, password, accept_terms, remember = true } = req.body || {};
   if (accept_terms !== true) return res.status(400).json({ error: 'TERMENI_NEACCEPTATI' });
-  if ([name, nickname, email, password].some((v) => typeof v !== 'string') ||
-      !name.trim() || name.length > 100 || email.length > 254 || !S.EMAIL_RE.test(email.trim()) ||
-      (phone && !S.PHONE_RE.test(String(phone)))) {
+  if ([name, nickname, email, password].some((v) => typeof v !== 'string') || !name.trim() || name.length > 100) {
     return res.status(400).json({ error: 'DATE_INVALIDE' });
   }
+  if (email.length > 254 || !S.EMAIL_RE.test(email.trim())) return res.status(400).json({ error: 'EMAIL_INVALID' });
+  if (phone && !S.PHONE_RE.test(String(phone))) return res.status(400).json({ error: 'TELEFON_INVALID' });
   const em = S.normEmail(email), nick = S.normNick(nickname);
   if (!S.NICK_RE.test(nick)) return res.status(400).json({ error: 'NICKNAME_INVALID' });
   const weak = S.weakPassword(password, { email: em, nickname: nick });

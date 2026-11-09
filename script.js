@@ -6,17 +6,23 @@ const ERR = {
   PAROLA_SLABA: "Parola e prea slabă: folosește minim 8 caractere, nu o parolă comună.", TERMENI_NEACCEPTATI: "Trebuie să accepți termenii.", DATE_INVALIDE: "Completează corect toate câmpurile.",
   TITLU_INVALID: "Titlul trebuie să aibă 5-120 de caractere.", PRET_INVALID: "Preț invalid.", CATEGORIE_INVALIDA: "Alege o categorie.", ATRIBUT_LIPSA: "Completează câmpul obligatoriu", ATRIBUT_INVALID: "Valoare invalidă pentru",
   PREA_MULTE_ANUNTURI: "Ai postat prea multe anunțuri într-o oră.", EMAIL_NECONFIRMAT: "Confirmă-ți emailul înainte să publici.", RATE_LIMIT: "Prea multe cereri, încearcă mai târziu.",
-  PREA_MULTE_POZE: "Maximum 8 poze per anunț.", SPATIU_POZE_DEPASIT: "Ai depășit spațiul pentru poze.", POZA_INVALIDA: "Poza nu a putut fi citită. Încearcă JPG sau PNG.", STORAGE_EROARE: "Pozele nu se pot salva acum."
+  PREA_MULTE_POZE: "Maximum 8 poze per anunț.", SPATIU_POZE_DEPASIT: "Ai depășit spațiul pentru poze.", POZA_INVALIDA: "Poza nu a putut fi citită. Încearcă JPG sau PNG.", STORAGE_EROARE: "Pozele nu se pot salva acum.",
+  EMAIL_INVALID: "Scrie o adresă de email de forma nume@domeniu.", TELEFON_INVALID: "Număr de telefon invalid.",
+  MESAJ_INVALID: "Scrie un mesaj de maximum 2000 de caractere.", PREA_MULTE_MESAJE: "Ai trimis prea multe mesaje. Încearcă mai târziu.", BLOCAT: "Nu poți trimite mesaje acestui utilizator.",
+  BLOCAT_DE_TINE: "Ai blocat acest utilizator. Deblochează-l ca să-i scrii.", INTERZIS: "Nu ai voie să faci asta.", NEGASIT: "Nu am găsit ce căutai.", NU_SE_POATE_BLOCA: "Acest cont nu poate fi blocat."
 };
 let me = null, cats = [], iconOf = {}, mode = "public", filter = {};
+let editing = null, existing = [];            // editarea unui anunț: id-ul și pozele deja salvate
+let chat = null, chatTimer = null, unreadTimer = null, unread = 0;
 
 async function api(url, method = "GET", body) {
   const r = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   let d = {}; try { d = await r.json(); } catch { /* răspuns fără JSON */ }
-  if (!r.ok) throw Object.assign(new Error(d.error || "EROARE"), { code: d.error, field: d.field, status: r.status });
+  if (!r.ok) throw Object.assign(new Error(d.error || "EROARE"), { code: d.error, field: d.field, reason: d.reason, status: r.status });
   return d;
 }
-const errText = (e) => (ERR[e.code] ? ERR[e.code] + (e.field ? ` „${e.field}”.` : "") : e.status === 503 ? "Serviciul nu e disponibil acum." : "A apărut o eroare. Încearcă din nou.");
+const PW = { TOO_SHORT: "Parola trebuie să aibă minim 8 caractere.", TOO_LONG: "Parola e prea lungă (maximum 72 de caractere).", COMMON: "Parola e prea comună. Alege alta.", ONLY_DIGITS: "Parola nu poate fi doar cifre. Adaugă litere sau fă-o mai lungă (12+).", REPEATED: "Parola nu poate fi același caracter repetat.", CONTAINS_EMAIL: "Parola nu trebuie să conțină începutul adresei de email.", CONTAINS_NICKNAME: "Parola nu trebuie să conțină nickname-ul." };
+const errText = (e) => (e.code === "PAROLA_SLABA" && PW[e.reason] ? PW[e.reason] : ERR[e.code] ? ERR[e.code] + (e.field ? ` „${e.field}”.` : "") : e.status === 503 ? "Serviciul nu e disponibil acum." : "A apărut o eroare. Încearcă din nou.");
 const price = (l) => (l.price == null ? "Preț la cerere" : `${Number(l.price).toLocaleString("ro-RO")} ${l.currency === "EUR" ? "€" : "lei"}`);
 const open = (id) => { const d = $(id); if (!d.open) d.showModal(); };
 const fold = (t) => t.toLocaleLowerCase("ro").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -26,7 +32,7 @@ function showMessage(title, message) {
   $("dialogTitle").textContent = title; $("dialogText").textContent = message; open("messageDialog");
 }
 $("closeDialog")?.addEventListener("click", () => $("messageDialog").close());
-[["sellClose", "sellDialog"], ["authClose", "authDialog"], ["accClose", "accountDialog"], ["detClose", "detailDialog"]].forEach(([b, d]) => $(b)?.addEventListener("click", () => $(d).close()));
+[["sellClose", "sellDialog"], ["authClose", "authDialog"], ["accClose", "accountDialog"], ["detClose", "detailDialog"], ["inboxClose", "inboxDialog"], ["chatClose", "chatDialog"]].forEach(([b, d]) => $(b)?.addEventListener("click", () => $(d).close()));
 $("menuButton")?.addEventListener("click", () => $("mainMenu").classList.toggle("open"));
 
 /* ---- categorii, sertar, formular ---- */
@@ -96,30 +102,78 @@ $("sellForm")?.addEventListener("submit", async (e) => {
   document.querySelectorAll("#sellAttrs [data-attr]").forEach((el) => { attributes[el.dataset.attr] = el.value; });
   $("sellSubmit").disabled = true;
   try {
-    const created = await api("/api/listings", "POST", {
+    const payload = {
       title: f.get("title"), category_id: f.get("category_id"), price: f.get("price"), currency: f.get("currency"), condition: f.get("condition"),
       county: f.get("county"), description: f.get("description"), negotiable: f.get("negotiable") === "on", attributes
-    });
+    };
+    const wasEdit = !!editing; let id, note;
+    if (wasEdit) {
+      const r = await api(`/api/listings/${editing}`, "PATCH", payload); id = editing;
+      note = r.resubmitted ? "Modificările sunt salvate. Anunțul a fost retrimis la moderare și apare după aprobare." : "Modificările au fost salvate.";
+    } else { id = (await api("/api/listings", "POST", payload)).listing.id; note = "Anunțul tău a fost salvat. Dacă nu apare imediat, așteaptă aprobarea."; }
     let failed = 0;
     for (let i = 0; i < photos.length; i++) {
       show($("sellProg"), `Se încarcă poza ${i + 1} din ${photos.length}…`);
-      try { await uploadPhoto(created.listing.id, photos[i].blob); } catch { failed++; }
+      try { await uploadPhoto(id, photos[i].blob); } catch { failed++; }
     }
     show($("sellProg"), ""); photos.length = 0; renderPrev();
     e.target.reset(); $("sellAttrs").innerHTML = ""; $("sellDialog").close();
-    showMessage("Anunț trimis", failed ? `Anunțul e salvat, dar ${failed} poze nu s-au încărcat.` : "Anunțul tău a fost salvat. Dacă nu apare imediat, așteaptă aprobarea.");
-    mode = "public"; filter = {}; loadListings();
+    showMessage(wasEdit ? "Anunț actualizat" : "Anunț trimis", failed ? `${note} ${failed} poze nu s-au încărcat.` : note);
+    if (!wasEdit) { mode = "public"; filter = {}; }
+    loadListings();
   } catch (err) { if (err.status === 401) { $("sellDialog").close(); openAuth(); } else show($("sellErr"), errText(err)); }
   $("sellSubmit").disabled = false;
 });
-function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră în cont sau creează unul nou."); if (!cats.length) loadCats(); open("sellDialog"); $("sellTitle").focus(); }
+
+/* ---- editarea unui anunț existent: același formular, precompletat ---- */
+function resetSell() {
+  editing = null; existing = [];
+  $("sellHead").textContent = "Adaugă un anunț"; $("sellSubmit").textContent = "Publică anunțul";
+  photos.forEach((p) => URL.revokeObjectURL(p.url)); photos.length = 0;
+  $("sellForm").reset(); $("sellAttrs").innerHTML = ""; $("sellChips").innerHTML = ""; show($("sellErr"), "");
+  renderExisting(); renderPrev();
+}
+$("sellDialog")?.addEventListener("close", () => { if (editing) resetSell(); });
+function renderExisting() {
+  const box = $("sellExisting"); box.hidden = !existing.length;
+  box.replaceChildren(...existing.map((im, i) => {
+    const d = document.createElement("div"), g = document.createElement("img"), b = document.createElement("button");
+    g.src = im.url; g.alt = `Poza ${i + 1}`; b.type = "button"; b.textContent = "✕"; b.setAttribute("aria-label", "Șterge poza");
+    b.addEventListener("click", async () => {
+      if (!confirm("Ștergi această poză? Nu se poate anula.")) return;
+      try { await api(`/api/listings/${editing}/images/${im.id}`, "DELETE"); existing.splice(existing.indexOf(im), 1); renderExisting(); renderPrev(); }
+      catch (err) { show($("sellErr"), errText(err)); }
+    });
+    d.append(g, b); return d;
+  }));
+}
+async function openEdit(l) {
+  if (!l.edit) return;
+  if (!cats.length) await loadCats();
+  resetSell();
+  editing = l.id; existing = l.edit.images.slice();
+  $("sellHead").textContent = "Editează anunțul"; $("sellSubmit").textContent = "Salvează modificările";
+  $("sellTitle").value = l.title; $("sellCat").value = l.edit.category_id; renderAttrs();
+  for (const [k, v] of Object.entries(l.edit.attributes)) { const el = document.querySelector(`#sellAttrs [data-attr="${CSS.escape(k)}"]`); if (el) el.value = v; }
+  $("sellPrice").value = l.price == null ? "" : Number(l.price); $("sellCur").value = l.currency === "EUR" ? "EUR" : "RON";
+  if (l.condition) $("sellCond").value = l.condition;
+  if (l.county) $("sellCounty").value = l.county;
+  $("sellDesc").value = l.description || ""; $("sellForm").elements.negotiable.checked = !!l.negotiable;
+  renderExisting(); renderPrev(); open("sellDialog");
+}
+function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră în cont sau creează unul nou."); if (editing) resetSell(); if (!cats.length) loadCats(); open("sellDialog"); $("sellTitle").focus(); }
 ["sellButton", "sellButtonBottom", "bnSell"].forEach((i) => $(i)?.addEventListener("click", openSell));
 
 /* ---- cont ---- */
 function openAuth() { open("authDialog"); }
 const tab = (reg) => { $("loginForm").hidden = reg; $("regForm").hidden = !reg; $("tabLogin").classList.toggle("on", !reg); $("tabReg").classList.toggle("on", reg); };
 $("tabLogin").addEventListener("click", () => tab(false)); $("tabReg").addEventListener("click", () => tab(true));
-function setMe(u) { me = u; $("loginButton").textContent = u ? u.nickname : "Contul meu"; }
+function renderUnread() { $("loginButton").textContent = me ? me.nickname + (unread ? ` (${unread})` : "") : "Contul meu"; $("accMsgsN").textContent = unread ? `(${unread})` : ""; const bd = $("bnBadge"); if (bd) { bd.hidden = !unread; bd.textContent = unread > 9 ? "9+" : unread; } }
+async function refreshUnread() { if (!me) return; try { unread = (await api("/api/messages/unread")).unread; renderUnread(); } catch { /* insigna rămâne cum era */ } }
+function setMe(u) {
+  me = u; unread = 0; renderUnread(); clearInterval(unreadTimer);
+  if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); }
+}
 async function authSubmit(e, url, body, errEl) {
   e.preventDefault(); show(errEl, "");
   try { setMe((await api(url, "POST", body)).user); $("authDialog").close(); e.target.reset(); } catch (err) { show(errEl, errText(err)); }
@@ -128,7 +182,7 @@ $("loginForm").addEventListener("submit", (e) => authSubmit(e, "/api/auth/login"
 $("regForm").addEventListener("submit", (e) => authSubmit(e, "/api/auth/register", { name: $("rgName").value, nickname: $("rgNick").value, email: $("rgEmail").value, password: $("rgPw").value, accept_terms: $("rgTerms").checked }, $("rgErr")));
 function openAccount() {
   if (!me) return openAuth();
-  $("accName").textContent = me.nickname; $("accMod").hidden = !["admin", "moderator"].includes(me.role); open("accountDialog");
+  refreshUnread(); $("accName").textContent = me.nickname; $("accMod").hidden = !["admin", "moderator"].includes(me.role); open("accountDialog");
 }
 ["loginButton", "bnAccount"].forEach((i) => $(i)?.addEventListener("click", openAccount));
 $("accOut").addEventListener("click", async () => { await api("/api/auth/logout", "POST").catch(() => {}); setMe(null); $("accountDialog").close(); mode = "public"; loadListings(); });
@@ -153,6 +207,7 @@ function card(l) {
   if (mode === "mine") {
     if (l.status === "approved") btn("Marchează vândut", () => api(`/api/listings/${l.id}/status`, "PATCH", { status: "sold" }));
     if (l.status === "sold") btn("Repune la vânzare", () => api(`/api/listings/${l.id}/status`, "PATCH", { status: "approved" }));
+    if (l.status !== "blocked") btn("Editează", async () => openEdit((await api(`/api/listings/${l.id}`)).listing));
     btn("Șterge", () => api(`/api/listings/${l.id}`, "DELETE"));
   } else { btn("Aprobă", () => api(`/api/admin/listings/${l.id}`, "PATCH", { status: "approved" })); btn("Respinge", () => api(`/api/admin/listings/${l.id}`, "PATCH", { status: "rejected" })); }
   const w = document.createElement("div"); w.append(a, box); return w;
@@ -181,6 +236,10 @@ async function openDetail(id) {
     $("detGallery").replaceChildren(...l.images.map((u) => { const g = document.createElement("img"); g.src = u; g.alt = l.title; g.loading = "lazy"; return g; }));
     const s = $("detSeller"); s.textContent = `Vânzător: ${l.seller || "—"}`;
     if (l.phone) { const a = document.createElement("a"); a.href = "tel:" + l.phone.replace(/[^+\d]/g, ""); a.textContent = ` · ${l.phone}`; s.appendChild(a); }
+    const act = $("detActions"); act.replaceChildren();
+    const add = (txt, fn, alt) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (alt) b.className = "alt"; b.addEventListener("click", () => { $("detailDialog").close(); fn(); }); act.appendChild(b); };
+    if (l.mine) { if (l.status !== "blocked") add("Editează anunțul", () => openEdit(l)); }
+    else if (l.seller_id && ["approved", "sold"].includes(l.status)) add("Trimite mesaj vânzătorului", () => (me ? openChat(l.id, l.seller_id, l.title) : openAuth()));
     open("detailDialog");
   } catch (err) { showMessage("Eroare", errText(err)); }
 }
@@ -207,12 +266,12 @@ function renderPrev() {
     b.addEventListener("click", () => { URL.revokeObjectURL(p.url); photos.splice(i, 1); renderPrev(); });
     d.append(g, b); if (i === 0) { const t = document.createElement("span"); t.textContent = "Principală"; d.appendChild(t); } return d;
   }));
-  $("sellPhotoBtn").textContent = photos.length ? `📷 Adaugă încă (${photos.length}/8)` : "📷 Adaugă poze";
+  { const n = photos.length + existing.length; $("sellPhotoBtn").textContent = n ? `📷 Adaugă încă (${n}/8)` : "📷 Adaugă poze"; }
 }
 $("sellPhotoBtn")?.addEventListener("click", () => $("sellPhotos").click());
 $("sellPhotos")?.addEventListener("change", async (e) => {
   show($("sellErr"), ""); let bad = 0;
-  for (const f of [...e.target.files].slice(0, 8 - photos.length)) {
+  for (const f of [...e.target.files].slice(0, 8 - photos.length - existing.length)) {
     try { const blob = await compress(f); photos.push({ blob, url: URL.createObjectURL(blob) }); renderPrev(); } catch { bad++; }
   }
   if (bad) show($("sellErr"), ERR.POZA_INVALIDA);
@@ -222,5 +281,82 @@ async function uploadPhoto(id, blob) {
   const r = await fetch(`/api/listings/${id}/images`, { method: "POST", headers: { "content-type": "image/jpeg" }, body: blob });
   if (!r.ok) throw new Error("upload");
 }
+
+/* ---- mesagerie: căsuță + conversație (reîmprospătare la 8 s cât e deschisă) ---- */
+const when = (t) => new Date(t).toLocaleString("ro-RO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+async function openInbox() {
+  if (!me) return openAuth();
+  try {
+    const { threads } = await api("/api/messages");
+    $("inboxEmpty").hidden = threads.length > 0;
+    $("inboxList").replaceChildren(...threads.map((t) => {
+      const b = document.createElement("button"), h = document.createElement("b"), sm = document.createElement("small");
+      b.type = "button"; if (t.unread) b.className = "unread";
+      h.textContent = `${t.other_name} · ${t.title}`;
+      if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; h.prepend(d); }
+      sm.textContent = (t.mine ? "Tu: " : "") + t.body; b.append(h, sm);
+      b.addEventListener("click", () => { $("inboxDialog").close(); openChat(t.listing_id, t.other, t.title); });
+      return b;
+    }));
+    open("inboxDialog");
+  } catch (err) { if (err.status === 401) { setMe(null); openAuth(); } else showMessage("Eroare", errText(err)); }
+}
+$("accMsgs")?.addEventListener("click", () => { $("accountDialog").close(); openInbox(); });
+
+async function openChat(listingId, withId, title) {
+  chat = { listingId, withId, sig: "", blocked: false, first: true };
+  $("chatTitle").textContent = title || "Conversație"; $("chatWith").textContent = ""; $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
+  open("chatDialog"); $("chatInput").focus();
+  await refreshChat();
+  clearInterval(chatTimer); chatTimer = setInterval(() => { if (!document.hidden) refreshChat(); }, 8000);
+}
+async function refreshChat() {
+  const c = chat; if (!c) return;
+  try {
+    const d = await api(`/api/messages/thread?listing=${c.listingId}&with=${c.withId}`);
+    if (chat !== c) return;                       // între timp s-a închis sau s-a deschis alta
+    c.first = false; c.blocked = d.blocked_by_me;
+    $("chatTitle").textContent = d.listing.title; $("chatWith").textContent = `Cu ${d.other.nickname}` + (c.blocked ? " · blocat de tine" : "");
+    $("chatBlock").textContent = c.blocked ? "Deblochează utilizatorul" : "Blochează utilizatorul";
+    $("chatInput").disabled = $("chatSend").disabled = c.blocked;
+    const sig = d.messages.length + ":" + (d.messages.length ? d.messages[d.messages.length - 1].id : 0);
+    if (sig !== c.sig) {
+      c.sig = sig; const log = $("chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+      log.replaceChildren(...d.messages.map((m) => {
+        const el = document.createElement("div"), t = document.createElement("time");
+        el.className = "bubble" + (m.mine ? " mine" : ""); el.append(m.body); t.textContent = when(m.created_at); t.dateTime = m.created_at; el.appendChild(t); return el;
+      }));
+      if (atEnd || !log.dataset.seen) log.scrollTop = log.scrollHeight; log.dataset.seen = "1";
+    }
+    refreshUnread();
+  } catch (err) {
+    if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); }
+    else if (c.first) show($("chatErr"), errText(err));
+  }
+}
+$("chatForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault(); const c = chat, body = $("chatInput").value.trim(); if (!c || !body) return;
+  show($("chatErr"), ""); $("chatSend").disabled = true;
+  try { await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, body }); $("chatInput").value = ""; c.sig = ""; await refreshChat(); }
+  catch (err) { if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); } else show($("chatErr"), errText(err)); }
+  if (chat) $("chatSend").disabled = chat.blocked;
+});
+$("chatBlock")?.addEventListener("click", async () => {
+  const c = chat; if (!c) return;
+  try {
+    if (c.blocked) await api(`/api/messages/block/${c.withId}`, "DELETE");
+    else { if (!confirm("Blochezi acest utilizator? Nu vă veți mai putea scrie.")) return; await api("/api/messages/block", "POST", { user_id: c.withId }); }
+    c.sig = ""; await refreshChat();
+  } catch (err) { show($("chatErr"), errText(err)); }
+});
+$("chatDialog")?.addEventListener("close", () => { clearInterval(chatTimer); chat = null; refreshUnread(); });
+
+/* link din email: /#verifica-email=TOKEN */
+(async () => {
+  const m = location.hash.match(/^#verifica-email=([\w-]+)$/); if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  try { await api("/api/auth/verify-email", "POST", { token: m[1] }); if (me) me.email_verified = true; showMessage("Email confirmat", "Adresa ta de email a fost confirmată. Mulțumim!"); }
+  catch { showMessage("Link invalid", "Linkul de confirmare a expirat sau a fost deja folosit."); }
+})();
 
 (async () => { try { setMe((await api("/api/me")).user); } catch { /* fără server */ } await loadCats(); loadListings(); })();

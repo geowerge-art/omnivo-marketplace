@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 const newToken = () => crypto.randomBytes(32).toString('base64url');
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+$/; // orice adresă de forma ceva@ceva, fără spații (nu cerem punct în domeniu)
 const NICK_RE = /^[a-z0-9_.-]{3,24}$/i; // fără @ și fără spații (nu se confundă cu emailul la login)
 const PHONE_RE = /^\+?[0-9 ().-]{6,20}$/;
 

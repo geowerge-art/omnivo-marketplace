@@ -39,3 +39,10 @@ test('antete de securitate și pagina principală', async () => {
   assert.ok(r.headers.get('content-security-policy').includes("script-src 'self'"));
   assert.ok(!r.headers.get('x-powered-by'));
 });
+
+test('mesageria și editarea cer baza de date (503 fără DB)', async () => {
+  const hdr = { 'content-type': 'application/json' };
+  assert.strictEqual((await fetch(`${base}/api/messages/unread`)).status, 503);
+  assert.strictEqual((await fetch(`${base}/api/messages`, { method: 'POST', headers: hdr, body: '{}' })).status, 503);
+  assert.strictEqual((await fetch(`${base}/api/listings/1`, { method: 'PATCH', headers: hdr, body: '{}' })).status, 503);
+});

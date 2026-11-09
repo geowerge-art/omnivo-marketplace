@@ -81,7 +81,7 @@
     <button type="button" class="bn-item" id="bnCats"><span>☰</span>Categorii</button>
     <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span class="bn-plus">+</span>Adaugă</button>
     <button type="button" class="bn-item" id="bnSearch"><span>🔍</span>Caută</button>
-    <button type="button" class="bn-item" id="bnAccount"><span>👤</span>Cont</button>
+    <button type="button" class="bn-item" id="bnAccount"><span>👤</span>Cont<i class="bn-badge" id="bnBadge" hidden></i></button>
   </nav>
 
   <div class="scrim" id="scrim" hidden></div>
@@ -92,7 +92,7 @@
 
   <dialog id="sellDialog" class="sheet">
     <button class="dialog-close" id="sellClose" aria-label="Închide">✕</button>
-    <h2>Adaugă un anunț</h2>
+    <h2 id="sellHead">Adaugă un anunț</h2>
     <form id="sellForm" novalidate>
       <label for="sellTitle">Ce vinzi?</label>
       <input id="sellTitle" name="title" maxlength="120" placeholder="ex: iPhone 13, 128GB" autocomplete="off" required>
@@ -111,6 +111,7 @@
       <label for="sellDesc">Descriere</label>
       <textarea id="sellDesc" name="description" rows="4" maxlength="4000" placeholder="Detalii despre produs"></textarea>
       <label>Poze (până la 8)</label>
+      <div id="sellExisting" class="prev" hidden></div>
       <input id="sellPhotos" type="file" accept="image/*" multiple hidden>
       <button type="button" class="ghost" id="sellPhotoBtn">📷 Adaugă poze</button>
       <div id="sellPrev" class="prev"></div>
@@ -143,6 +144,7 @@
     <button class="dialog-close" id="accClose" aria-label="Închide">✕</button>
     <h2 id="accName">Contul meu</h2>
     <button class="primary" id="accMine" type="button">Anunțurile mele</button>
+    <button class="primary" id="accMsgs" type="button">Mesaje <span id="accMsgsN"></span></button>
     <button class="primary" id="accMod" type="button" hidden>Moderare anunțuri</button>
     <button class="ghost" id="accOut" type="button">Ieșire din cont</button>
   </dialog>
@@ -152,6 +154,27 @@
     <div id="detGallery" class="gallery"></div>
     <h2 id="detTitle"></h2><p class="price" id="detPrice"></p><p class="muted" id="detMeta"></p>
     <ul id="detAttrs" class="attrs"></ul><p id="detDesc" class="desc"></p><p id="detSeller" class="seller"></p>
+    <div id="detActions" class="det-actions"></div>
+  </dialog>
+
+    <dialog id="inboxDialog" class="sheet">
+    <button class="dialog-close" id="inboxClose" aria-label="Închide">✕</button>
+    <h2>Mesaje</h2>
+    <div id="inboxList" class="inbox"></div>
+    <p id="inboxEmpty" class="muted" hidden>Nu ai nicio conversație încă. Scrie unui vânzător din pagina unui anunț.</p>
+  </dialog>
+
+  <dialog id="chatDialog" class="sheet">
+    <button class="dialog-close" id="chatClose" aria-label="Închide">✕</button>
+    <h2 id="chatTitle">Conversație</h2>
+    <p class="muted" id="chatWith"></p>
+    <div id="chatLog" class="chat-log" aria-live="polite"></div>
+    <form id="chatForm" class="chat-form" novalidate>
+      <textarea id="chatInput" rows="2" maxlength="2000" placeholder="Scrie un mesaj…" aria-label="Mesaj"></textarea>
+      <button class="primary" type="submit" id="chatSend">Trimite</button>
+    </form>
+    <p id="chatErr" class="err" hidden></p>
+    <button type="button" class="link-btn" id="chatBlock">Blochează utilizatorul</button>
   </dialog>
 
   <dialog id="messageDialog">
