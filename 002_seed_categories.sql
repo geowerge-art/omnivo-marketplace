@@ -1,0 +1,23 @@
+INSERT INTO categories (slug, name, icon, position) VALUES
+  ('auto-moto', 'Auto și moto', '🚗', 1),
+  ('electronice', 'Electronice', '📱', 2),
+  ('casa-gradina', 'Casă și grădină', '🏠', 3),
+  ('moda', 'Modă', '👕', 4),
+  ('servicii', 'Servicii', '🛠️', 5),
+  ('sport-timp-liber', 'Sport și timp liber', '⚽', 6),
+  ('mobila', 'Mobilă', '🪑', 7),
+  ('copii-jucarii', 'Copii și jucării', '🧸', 8);
+
+INSERT INTO category_attributes (category_id, key, label, type, options, required, filterable, position)
+SELECT c.id, a.key, a.label, a.type, a.options::jsonb, a.required, a.filterable, a.position
+FROM categories c
+JOIN (VALUES
+  ('auto-moto','marca','Marcă','text',NULL,TRUE,TRUE,1),
+  ('auto-moto','model','Model','text',NULL,FALSE,TRUE,2),
+  ('auto-moto','an','An fabricație','number',NULL,FALSE,TRUE,3),
+  ('auto-moto','km','Kilometri','number',NULL,FALSE,FALSE,4),
+  ('electronice','marca','Marcă','text',NULL,FALSE,TRUE,1),
+  ('electronice','model','Model','text',NULL,FALSE,FALSE,2),
+  ('moda','marca','Marcă','text',NULL,FALSE,TRUE,1),
+  ('moda','marime','Mărime','select','["XS","S","M","L","XL","XXL"]',FALSE,TRUE,2)
+) AS a(slug,key,label,type,options,required,filterable,position) ON a.slug = c.slug;

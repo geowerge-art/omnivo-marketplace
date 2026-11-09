@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Omnivo - marketplace general din România">
+  <title>Omnivo - Marketplace</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="header">
+    <a class="logo" href="/">omnivo<span>.ro</span></a>
+    <button class="menu-button" id="menuButton" aria-label="Meniu">☰</button>
+    <nav id="mainMenu">
+      <a href="#categorii">Categorii</a>
+      <a href="#anunturi">Anunțuri</a>
+      <button id="loginButton">Contul meu</button>
+      <button class="sell-button" id="sellButton">+ Adaugă anunț</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <span class="eyebrow">BINE AI VENIT PE OMNIVO</span>
+      <h1>Tot ce cauți.<br>Într-un singur loc.</h1>
+      <p>Cumpără și vinde simplu, rapid și sigur.</p>
+      <form id="searchForm" class="search">
+        <input id="searchInput" type="search" placeholder="Ce cauți astăzi?">
+        <button type="submit">Caută</button>
+      </form>
+      <div class="hero-note">Anunțuri din toată România</div>
+    </section>
+
+    <section class="section" id="categorii">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">DESCOPERĂ</span>
+          <h2>Categorii populare</h2>
+        </div>
+      </div>
+      <div class="categories">
+        <a href="#anunturi">🚗 <span>Auto și moto</span></a>
+        <a href="#anunturi">📱 <span>Electronice</span></a>
+        <a href="#anunturi">🏠 <span>Casă și grădină</span></a>
+        <a href="#anunturi">👕 <span>Modă</span></a>
+        <a href="#anunturi">🛠️ <span>Servicii</span></a>
+        <a href="#anunturi">⚽ <span>Sport și timp liber</span></a>
+        <a href="#anunturi">🪑 <span>Mobilă</span></a>
+        <a href="#anunturi">🧸 <span>Copii și jucării</span></a>
+      </div>
+    </section>
+
+    <section class="section" id="anunturi">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">PIAȚA OMNIVO</span>
+          <h2>Anunțuri recente</h2>
+        </div>
+      </div>
+      <div id="products" class="products">
+        <article class="product">
+          <div class="product-image">📱</div>
+          <div class="product-info">
+            <h3>Telefon mobil</h3>
+            <p>Exemplu de anunț Omnivo</p>
+            <strong>750 lei</strong>
+          </div>
+        </article>
+        <article class="product">
+          <div class="product-image">🪑</div>
+          <div class="product-info">
+            <h3>Scaun modern</h3>
+            <p>Exemplu de anunț Omnivo</p>
+            <strong>180 lei</strong>
+          </div>
+        </article>
+        <article class="product">
+          <div class="product-image">🚲</div>
+          <div class="product-info">
+            <h3>Bicicletă</h3>
+            <p>Exemplu de anunț Omnivo</p>
+            <strong>500 lei</strong>
+          </div>
+        </article>
+      </div>
+      <p id="emptyMessage" class="empty" hidden>Nu am găsit anunțuri pentru căutarea ta.</p>
+    </section>
+
+    <section class="cta">
+      <h2>Ai ceva de vândut?</h2>
+      <p>Adaugă un anunț și intră în comunitatea Omnivo.</p>
+      <button class="sell-button" id="sellButtonBottom">Adaugă anunț</button>
+    </section>
+  </main>
+
+  <footer>
+    <a class="logo" href="/">omnivo<span>.ro</span></a>
+    <p>Marketplace general pentru România.</p>
+    <small>© 2026 Omnivo. Toate drepturile rezervate.</small>
+  </footer>
+
+  <dialog id="messageDialog">
+    <button class="dialog-close" id="closeDialog">✕</button>
+    <h2 id="dialogTitle">Omnivo</h2>
+    <p id="dialogText"></p>
+  </dialog>
+
+  <script src="/script.js"></script>
+</body>
+</html>
