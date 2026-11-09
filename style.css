@@ -1020,3 +1020,11 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
   .cat-panel:not([hidden]) { margin: 8px 0 8px; }
   #categorii .categories a { padding: 2px 2px 4px; }
 }
+
+/* ---- telefon: „Toate" mai îngust, aliniat sus și jos cu blocul „DESCOPERĂ / Categorii populare" ---- */
+@media (max-width: 760px) {
+  #categorii .section-heading { align-items: stretch; }
+  .cat-toggle { align-self: stretch; min-height: 0; gap: 6px; padding: 0 12px; border-radius: 14px; font-size: 14px; }
+  .cat-toggle .ico { width: 20px; height: 20px; }
+  .cat-toggle i { display: none; }
+}
