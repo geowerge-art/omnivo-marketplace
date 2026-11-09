@@ -118,6 +118,11 @@
         <div><label for="sellCond">Stare</label><select id="sellCond" name="condition"><option value="folosit">Folosit</option><option value="nou">Nou</option></select></div>
         <div><label for="sellCounty">Județ</label><select id="sellCounty" name="county"></select></div>
       </div>
+      <div class="row2">
+        <div><label for="sellCity">Oraș / localitate</label><input id="sellCity" name="city" list="cityList" maxlength="60" autocomplete="off" placeholder="ex: Alba Iulia"><datalist id="cityList"></datalist></div>
+        <div><label for="sellAddr">Zonă / adresă (opțional)</label><input id="sellAddr" name="address" maxlength="120" autocomplete="off" placeholder="ex: Cartier Cetate, str. Unirii"></div>
+      </div>
+      <p class="muted">Adresa e vizibilă public. Scrie doar zona sau strada dacă vrei să te găsească ușor.</p>
       <label for="sellDesc">Descriere</label>
       <textarea id="sellDesc" name="description" rows="4" maxlength="4000" placeholder="Detalii despre produs"></textarea>
       <label>Poze (până la 8)</label>
@@ -127,6 +132,20 @@
       <div id="sellPrev" class="prev"></div>
       <p id="sellProg" class="muted" hidden></p>
       <label class="check"><input type="checkbox" name="negotiable"> Preț negociabil</label>
+      <fieldset class="contact-box" id="sellContact">
+        <legend>Contact în anunț</legend>
+        <div id="sellContactHas" hidden>
+          <p class="sp-num">Telefon: <b id="sellPhoneShown"></b></p>
+          <label class="check"><input type="checkbox" id="sellShowPhone"> Afișează telefonul în anunț</label>
+          <label class="check"><input type="checkbox" id="sellWa"> Am WhatsApp pe acest număr</label>
+          <small class="muted">Îl poți schimba din Setări cont. Cumpărătorii te pot contacta oricum prin mesaje.</small>
+        </div>
+        <div id="sellContactNew" hidden>
+          <input id="sellPhoneNew" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="07xx xxx xxx">
+          <label class="check"><input type="checkbox" id="sellWaNew" checked> Am WhatsApp pe acest număr</label>
+          <small class="muted">Numărul se salvează în contul tău și apare în anunț cu butoane de apel și WhatsApp. Lasă gol dacă vrei doar mesaje.</small>
+        </div>
+      </fieldset>
       <p id="sellErr" class="err" hidden></p>
       <button class="primary" type="submit" id="sellSubmit">Publică anunțul</button>
     </form>
@@ -145,8 +164,24 @@
       <label for="rgNick">Nickname (3-24: litere, cifre, . _ -)</label><input id="rgNick" autocomplete="nickname" required>
       <label for="rgEmail">Email</label><input id="rgEmail" type="email" autocomplete="email" required>
       <label for="rgPw">Parola (minim 8 caractere)</label><input id="rgPw" type="password" autocomplete="new-password" required>
+      <label for="rgPhone">Telefon (opțional)</label><input id="rgPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="ex: 0722 123 456">
+      <label class="check"><input type="checkbox" id="rgShowPhone"> Arată telefonul pe anunțurile mele</label>
+      <label class="check"><input type="checkbox" id="rgWa"> Am WhatsApp pe acest număr</label>
       <label class="check"><input type="checkbox" id="rgTerms"> Sunt de acord cu termenii și condițiile</label>
       <p class="err" id="rgErr" hidden></p><button class="primary" type="submit">Creează cont</button>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="sheet">
+    <button class="dialog-close" id="setClose" aria-label="Închide">✕</button>
+    <h2>Setări cont</h2>
+    <form id="setForm" novalidate>
+      <label for="setName">Nume</label><input id="setName" autocomplete="name" maxlength="100" required>
+      <label for="setPhone">Telefon</label><input id="setPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="ex: 0722 123 456">
+      <label class="check"><input type="checkbox" id="setShowPhone"> Arată telefonul pe anunțurile mele (se afișează doar la apăsarea „Arată numărul”)</label>
+      <label class="check"><input type="checkbox" id="setWa"> Am WhatsApp pe acest număr</label>
+      <p class="err" id="setErr" hidden></p><p class="muted" id="setOk" hidden></p>
+      <button class="primary" type="submit">Salvează</button>
     </form>
   </dialog>
 
@@ -156,13 +191,14 @@
     <button class="primary" id="accMine" type="button">Anunțurile mele</button>
     <button class="primary" id="accMsgs" type="button">Mesaje <span id="accMsgsN"></span></button>
     <button class="primary" id="accMod" type="button" hidden>Moderare anunțuri</button>
+    <button class="ghost" id="accSettings" type="button">Setări cont și telefon</button>
     <button class="ghost" id="accOut" type="button">Ieșire din cont</button>
   </dialog>
 
   <dialog id="detailDialog" class="sheet">
     <button class="dialog-close" id="detClose" aria-label="Închide">✕</button>
     <div id="detGallery" class="gallery"></div>
-    <h2 id="detTitle"></h2><p class="price" id="detPrice"></p><p class="muted" id="detMeta"></p>
+    <h2 id="detTitle"></h2><p class="price" id="detPrice"></p><p class="muted" id="detMeta"></p><p class="det-loc" id="detLoc" hidden></p>
     <ul id="detAttrs" class="attrs"></ul><p id="detDesc" class="desc"></p><p id="detSeller" class="seller"></p>
     <div id="detActions" class="det-actions"></div>
   </dialog>
@@ -194,6 +230,7 @@
   </dialog>
 
   <script src="/icons.js"></script>
+  <script src="/cities.js"></script>
   <script src="/autofill.js"></script>
   <script src="/script.js"></script>
 </body>

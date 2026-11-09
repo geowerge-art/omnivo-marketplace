@@ -60,7 +60,7 @@ function createApp() {
   app.use('/api', (req, res) => res.status(404).json({ error: 'NEGASIT' })); // niciodată index.html pentru /api/*
 
   // Servim doar fișierele publice, pe listă; restul (server.js etc.) nu poate fi descărcat
-  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js'];
+  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js'];
   for (const f of PUBLIC_FILES) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
   app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 

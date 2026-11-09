@@ -18,7 +18,7 @@ const loginIpAllow = S.createThrottle(40, 15 * 60 * 1000);
 
 const publicUser = (u) => ({
   id: u.id, name: u.name, nickname: u.nickname, email: u.email, phone: u.phone,
-  show_phone: u.show_phone, role: u.role, status: u.status, email_verified: u.email_verified
+  show_phone: u.show_phone, whatsapp: !!u.whatsapp, role: u.role, status: u.status, email_verified: u.email_verified
 });
 
 /* ---- limitare login persistentă (rezistă repornirilor) ---- */
@@ -62,7 +62,7 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 
 /* ---- înregistrare ---- */
 router.post('/register', ah(async (req, res) => {
-  const { name, nickname, email, phone, password, accept_terms, remember = true } = req.body || {};
+  const { name, nickname, email, phone, show_phone, whatsapp, password, accept_terms, remember = true } = req.body || {};
   if (accept_terms !== true) return res.status(400).json({ error: 'TERMENI_NEACCEPTATI' });
   if ([name, nickname, email, password].some((v) => typeof v !== 'string') || !name.trim() || name.length > 100) {
     return res.status(400).json({ error: 'DATE_INVALIDE' });
@@ -78,9 +78,9 @@ router.post('/register', ah(async (req, res) => {
   const hash = await bcrypt.hash(password, BCRYPT_COST);
   try {
     const r = await db.query(
-      `INSERT INTO users(name, nickname, email, phone, password_hash, terms_accepted_at)
-       VALUES($1,$2,$3,$4,$5,NOW()) RETURNING *`,
-      [name.trim(), nick, em, phone ? String(phone).trim() : null, hash]);
+      `INSERT INTO users(name, nickname, email, phone, show_phone, whatsapp, password_hash, terms_accepted_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING *`,
+      [name.trim(), nick, em, phone ? String(phone).trim() : null, !!phone && show_phone === true, !!phone && whatsapp === true, hash]);
     const user = r.rows[0];
     sendVerification(req, user).catch((e) => console.error('mail confirmare:', e.message));
     const s = await createSession(user.id, req, remember !== false);
@@ -92,6 +92,32 @@ router.post('/register', ah(async (req, res) => {
     }
     throw e;
   }
+}));
+
+/* ---- profil: nume, telefon, vizibilitatea telefonului ---- */
+router.patch('/me', requireAuth, ah(async (req, res) => {
+  const b = req.body || {}, sets = [], vals = [];
+  const add = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+  if (b.name !== undefined) {
+    const n = String(b.name).trim();
+    if (!n || n.length > 100) return res.status(400).json({ error: 'DATE_INVALIDE' });
+    add('name', n);
+  }
+  let phone = b.phone === undefined ? undefined : String(b.phone || '').trim();
+  if (phone !== undefined) {
+    if (phone && !S.PHONE_RE.test(phone)) return res.status(400).json({ error: 'TELEFON_INVALID' });
+    add('phone', phone || null);
+  }
+  if (b.show_phone !== undefined) {
+    const has = phone !== undefined ? !!phone : !!req.user.phone;
+    add('show_phone', b.show_phone === true && has);
+  } else if (phone === '') add('show_phone', false);
+  if (b.whatsapp !== undefined) add('whatsapp', b.whatsapp === true && (phone !== undefined ? !!phone : !!req.user.phone));
+  else if (phone === '') add('whatsapp', false);
+  if (!sets.length) return res.status(400).json({ error: 'DATE_INVALIDE' });
+  vals.push(req.user.id);
+  const r = await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+  res.json({ user: publicUser(r.rows[0]) });
 }));
 
 /* ---- login (email sau nickname) ---- */

@@ -69,6 +69,16 @@ $("drawerClose")?.addEventListener("click", () => setDrawer(false));
 $("scrim")?.addEventListener("click", () => setDrawer(false));
 
 $("sellCounty").innerHTML = COUNTIES.map((c) => `<option>${c}</option>`).join("");
+/* orașul: sugestii din județ; dacă nu l-ai scris tu, se completează cu reședința județului */
+let cityManual = false;
+function syncCities() {
+  const list = (window.CITIES || {})[$("sellCounty").value] || [];
+  $("cityList").innerHTML = list.map((c) => `<option value="${c}">`).join("");
+  if (!cityManual && !editing && list.length) $("sellCity").value = list[0];
+}
+$("sellCounty").addEventListener("change", syncCities);
+$("sellCity").addEventListener("input", () => { cityManual = true; });
+syncCities();
 function renderAttrs() {
   const box = $("sellAttrs"); box.innerHTML = "";
   const id = Number($("sellCat").value); let defs = [];
@@ -135,9 +145,10 @@ $("sellForm")?.addEventListener("submit", async (e) => {
   try {
     const payload = {
       title: f.get("title"), category_id: f.get("category_id"), price: f.get("price"), currency: f.get("currency"), condition: f.get("condition"),
-      county: f.get("county"), description: f.get("description"), negotiable: f.get("negotiable") === "on", attributes
+      county: f.get("county"), city: f.get("city"), address: f.get("address"), description: f.get("description"), negotiable: f.get("negotiable") === "on", attributes
     };
     const wasEdit = !!editing; let id, note;
+    try { await applySellContact(); } catch (err) { throw err; }
     if (wasEdit) {
       const r = await api(`/api/listings/${editing}`, "PATCH", payload); id = editing;
       note = r.resubmitted ? "Modificările sunt salvate. Anunțul a fost retrimis la moderare și apare după aprobare." : "Modificările au fost salvate.";
@@ -158,13 +169,13 @@ $("sellForm")?.addEventListener("submit", async (e) => {
 
 /* ---- editarea unui anunț existent: același formular, precompletat ---- */
 function resetSell() {
-  editing = null; existing = []; catManual = false; $("sellAuto").hidden = true;
+  editing = null; existing = []; catManual = false; cityManual = false; $("sellAuto").hidden = true;
   $("sellHead").textContent = "Adaugă un anunț"; $("sellSubmit").textContent = "Publică anunțul";
   photos.forEach((p) => URL.revokeObjectURL(p.url)); photos.length = 0;
-  $("sellForm").reset(); $("sellAttrs").innerHTML = ""; $("sellChips").innerHTML = ""; show($("sellErr"), "");
+  $("sellForm").reset(); syncCities(); $("sellAttrs").innerHTML = ""; $("sellChips").innerHTML = ""; show($("sellErr"), "");
   renderExisting(); renderPrev();
 }
-$("sellDialog")?.addEventListener("close", () => { catManual = false; $("sellAuto").hidden = true; if (editing) resetSell(); });
+$("sellDialog")?.addEventListener("close", () => { catManual = false; cityManual = false; setTimeout(syncCities, 0); $("sellAuto").hidden = true; if (editing) resetSell(); });
 function renderExisting() {
   const box = $("sellExisting"); box.hidden = !existing.length;
   box.replaceChildren(...existing.map((im, i) => {
@@ -189,10 +200,11 @@ async function openEdit(l) {
   $("sellPrice").value = l.price == null ? "" : Number(l.price); $("sellCur").value = l.currency === "EUR" ? "EUR" : "RON";
   if (l.condition) $("sellCond").value = l.condition;
   if (l.county) $("sellCounty").value = l.county;
+  cityManual = true; $("sellCity").value = l.city || ""; $("sellAddr").value = l.address || ""; syncCities();
   $("sellDesc").value = l.description || ""; $("sellForm").elements.negotiable.checked = !!l.negotiable;
-  renderExisting(); renderPrev(); open("sellDialog");
+  renderSellContact(); renderExisting(); renderPrev(); open("sellDialog");
 }
-function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră în cont sau creează unul nou."); if (editing) resetSell(); if (!cats.length) loadCats(); open("sellDialog"); $("sellTitle").focus(); }
+function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră în cont sau creează unul nou."); if (editing) resetSell(); renderSellContact(); if (!cats.length) loadCats(); open("sellDialog"); $("sellTitle").focus(); }
 ["sellButton", "sellButtonBottom", "bnSell"].forEach((i) => $(i)?.addEventListener("click", openSell));
 
 /* ---- cont ---- */
@@ -210,11 +222,24 @@ async function authSubmit(e, url, body, errEl) {
   try { setMe((await api(url, "POST", body)).user); $("authDialog").close(); e.target.reset(); } catch (err) { show(errEl, errText(err)); }
 }
 $("loginForm").addEventListener("submit", (e) => authSubmit(e, "/api/auth/login", { identifier: $("lgId").value, password: $("lgPw").value }, $("lgErr")));
-$("regForm").addEventListener("submit", (e) => authSubmit(e, "/api/auth/register", { name: $("rgName").value, nickname: $("rgNick").value, email: $("rgEmail").value, password: $("rgPw").value, accept_terms: $("rgTerms").checked }, $("rgErr")));
+$("regForm").addEventListener("submit", (e) => authSubmit(e, "/api/auth/register", { name: $("rgName").value, nickname: $("rgNick").value, email: $("rgEmail").value, password: $("rgPw").value, phone: $("rgPhone").value.trim() || undefined, show_phone: $("rgShowPhone").checked, whatsapp: $("rgWa").checked, accept_terms: $("rgTerms").checked }, $("rgErr")));
 function openAccount() {
   if (!me) return openAuth();
   refreshUnread(); $("accName").textContent = me.nickname; $("accMod").hidden = !["admin", "moderator"].includes(me.role); open("accountDialog");
 }
+$("accSettings").addEventListener("click", () => {
+  $("setName").value = me.name || ""; $("setPhone").value = me.phone || ""; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; show($("setErr"), ""); $("setOk").hidden = true;
+  $("accountDialog").close(); open("settingsDialog");
+});
+$("setClose").addEventListener("click", () => $("settingsDialog").close());
+$("setForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); show($("setErr"), ""); $("setOk").hidden = true;
+  const phone = $("setPhone").value.trim();
+  try {
+    const r = await api("/api/auth/me", "PATCH", { name: $("setName").value, phone, show_phone: $("setShowPhone").checked && !!phone, whatsapp: $("setWa").checked && !!phone });
+    me = r.user; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; $("setOk").textContent = "Salvat."; $("setOk").hidden = false;
+  } catch (err) { show($("setErr"), errText(err)); }
+});
 ["loginButton", "bnAccount"].forEach((i) => $(i)?.addEventListener("click", openAccount));
 $("accOut").addEventListener("click", async () => { await api("/api/auth/logout", "POST").catch(() => {}); setMe(null); $("accountDialog").close(); mode = "public"; loadListings(); });
 $("accMine").addEventListener("click", () => { mode = "mine"; $("listTitle").textContent = "Anunțurile mele"; $("accountDialog").close(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); });
@@ -261,12 +286,31 @@ async function openDetail(id) {
   try {
     const { listing: l } = await api("/api/listings/" + id);
     $("detTitle").textContent = l.title; $("detPrice").textContent = price(l) + (l.negotiable ? " · negociabil" : "");
-    $("detMeta").textContent = [l.parent_category, l.category, l.condition, [l.city, l.county].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+    $("detMeta").textContent = [l.parent_category, l.category, l.condition].filter(Boolean).join(" · ");
     $("detAttrs").replaceChildren(...l.attributes.map((a) => { const li = document.createElement("li"); li.textContent = `${a.label}: ${a.value}`; return li; }));
     $("detDesc").textContent = l.description;
     $("detGallery").replaceChildren(...l.images.map((u) => { const g = document.createElement("img"); g.src = u; g.alt = l.title; g.loading = "lazy"; return g; }));
     const s = $("detSeller"); s.textContent = `Vânzător: ${l.seller || "—"}`;
-    if (l.phone) { const a = document.createElement("a"); a.href = "tel:" + l.phone.replace(/[^+\d]/g, ""); a.textContent = ` · ${l.phone}`; s.appendChild(a); }
+    if (l.has_phone) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "phone-btn"; b.textContent = "Contact";
+      b.addEventListener("click", async () => {
+        b.disabled = true;
+        try {
+          const { phone, whatsapp } = await api(`/api/listings/${l.id}/phone`);
+          const box = document.createElement("span"); box.className = "contact-line";
+          const t = document.createElement("a"); t.href = "tel:" + phone.replace(/[^+\d]/g, ""); t.className = "phone-btn on"; t.textContent = "Sună " + fmtPhone(phone); box.appendChild(t);
+          if (whatsapp) { const w = document.createElement("a"); w.href = waLink(phone); w.target = "_blank"; w.rel = "noopener noreferrer"; w.className = "phone-btn wa"; w.textContent = "WhatsApp"; box.appendChild(w); }
+          b.replaceWith(box);
+        } catch (err) { b.disabled = false; showMessage("Eroare", errText(err)); }
+      });
+      s.appendChild(document.createTextNode(" ")); s.appendChild(b);
+    } else if (!l.mine) { const n = document.createElement("small"); n.className = "muted"; n.textContent = " · Vânzătorul nu a afișat un număr de telefon."; s.appendChild(n); }
+    const loc = $("detLoc"), place = [l.address, l.city, l.county].filter(Boolean).join(", ");
+    loc.replaceChildren(); loc.hidden = !place;
+    if (place) {
+      loc.append(place + " · ");
+      const m = document.createElement("a"); m.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(place + ", România"); m.target = "_blank"; m.rel = "noopener noreferrer"; m.textContent = "Vezi pe hartă"; loc.appendChild(m);
+    }
     const act = $("detActions"); act.replaceChildren();
     const add = (txt, fn, alt) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (alt) b.className = "alt"; b.addEventListener("click", () => { $("detailDialog").close(); fn(); }); act.appendChild(b); };
     if (l.mine) { if (l.status !== "blocked") add("Editează anunțul", () => openEdit(l)); }
@@ -426,3 +470,35 @@ async function loadForYou() {
 }
 $("forYouClear")?.addEventListener("click", () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; });
 loadForYou();
+
+
+/* ---- contact: telefon + WhatsApp (ca în autoparts) ---- */
+function fmtPhone(p) {
+  const raw = String(p || "").trim(); let d = raw.replace(/[^\d+]/g, "");
+  if (d.startsWith("+40")) d = "0" + d.slice(3); else if (d.startsWith("0040")) d = "0" + d.slice(4);
+  return /^0\d{9}$/.test(d) ? `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}` : raw;
+}
+function waLink(p) {
+  let d = String(p || "").replace(/[^\d+]/g, "");
+  if (d.startsWith("+")) d = d.slice(1); else if (d.startsWith("00")) d = d.slice(2); else if (d.startsWith("0")) d = "40" + d.slice(1);
+  return "https://wa.me/" + d;
+}
+function renderSellContact() {
+  const has = !!(me && me.phone);
+  $("sellContactHas").hidden = !has; $("sellContactNew").hidden = has;
+  if (has) { $("sellPhoneShown").textContent = fmtPhone(me.phone); $("sellShowPhone").checked = !!me.show_phone; $("sellWa").checked = !!me.whatsapp; }
+  else { $("sellPhoneNew").value = ""; $("sellWaNew").checked = true; }
+}
+/* salvează în cont ce ai ales în formularul de anunț (telefon nou, afișare, WhatsApp) */
+async function applySellContact() {
+  if (!me) return;
+  let body = null;
+  if (me.phone) {
+    const show = $("sellShowPhone").checked, wa = $("sellWa").checked;
+    if (show !== !!me.show_phone || wa !== !!me.whatsapp) body = { show_phone: show, whatsapp: wa };
+  } else {
+    const p = $("sellPhoneNew").value.trim();
+    if (p) body = { phone: p, show_phone: true, whatsapp: $("sellWaNew").checked };
+  }
+  if (body) me = (await api("/api/auth/me", "PATCH", body)).user;
+}

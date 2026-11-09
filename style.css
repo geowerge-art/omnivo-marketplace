@@ -528,3 +528,15 @@ dialog h2 {
 
 .for-you{padding-top:10px}
 .for-you .link-btn{margin:0;min-height:0;font-size:13px}
+
+.det-loc{margin:2px 0 8px;color:var(--text);font-size:14px}
+.det-loc a{color:var(--blue);font-weight:700;text-decoration:underline}
+.phone-btn{margin-left:6px;min-height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--gold);background:#fff;color:var(--blue);font-weight:700;cursor:pointer}
+a.phone-btn.on{display:inline-flex;align-items:center;background:#14110c;color:#e9d3a8;border-color:#14110c}
+
+.contact-box{border:1px solid var(--border);border-radius:12px;padding:10px 14px 12px;margin:12px 0;background:var(--light)}
+.contact-box legend{padding:0 6px;font-weight:700;color:var(--navy)}
+.contact-box input[type=tel]{margin:4px 0}
+.contact-line{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:6px}
+.contact-line .phone-btn{margin-left:0}
+a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-color:#1f9d55;color:#fff}
