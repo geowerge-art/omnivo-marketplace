@@ -177,6 +177,78 @@ a {
   color: #14110c;
 }
 
+/* pastile de categorii sub bara de căutare */
+.pills {
+  max-width: 720px;
+  margin: 12px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--navy);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: .18s;
+}
+
+.pill:hover {
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+
+.pill-ic {
+  display: grid;
+  color: var(--gold);
+}
+
+.pill small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pill.on {
+  background: #14110c;
+  border-color: #14110c;
+  color: #e9d3a8;
+}
+
+.pill.on small,
+.pill.on .pill-ic {
+  color: var(--gold-soft);
+}
+
+.pill-x {
+  font-size: 11px;
+  opacity: .8;
+}
+
+@media (max-width: 700px) {
+  .pills {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .pills::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 .section {
   padding: 65px 7%;
 }

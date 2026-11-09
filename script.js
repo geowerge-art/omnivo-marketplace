@@ -41,7 +41,7 @@ document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.
 
 /* ---- categorii, sertar, formular ---- */
 function setDrawer(on) { $("drawer").hidden = !on; $("scrim").hidden = !on; document.body.style.overflow = on ? "hidden" : ""; }
-function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
+function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); pillCat = null; if ($("searchInput")) $("searchInput").value = ""; updatePills(); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
 
 async function loadCats() {
   try { cats = (await api("/api/categories")).categories; } catch { return; }
@@ -63,6 +63,7 @@ async function loadCats() {
   document.querySelectorAll("#categorii .categories a").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault(); const n = a.querySelector("span").textContent.trim(); const c = cats.find((x) => fold(x.name) === fold(n)); if (c) pickCategory(c.slug, c.name);
   }));
+  updatePills();
 }
 $("bnCats")?.addEventListener("click", () => { setDrawer(true); if (!cats.length) loadCats(); });
 $("drawerClose")?.addEventListener("click", () => setDrawer(false));
@@ -320,8 +321,58 @@ async function openDetail(id) {
 }
 
 /* ---- căutare ---- */
-$("searchForm")?.addEventListener("submit", (e) => { e.preventDefault(); filter = { q: $("searchInput").value.trim() }; mode = "public"; $("listTitle").textContent = filter.q ? `Rezultate pentru „${filter.q}”` : "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); });
-$("searchInput")?.addEventListener("input", () => { if (!$("searchInput").value.trim() && filter.q) { filter = {}; loadListings(); } });
+/* ---- căutare + pastile de categorii sub bară ---- */
+let pillCat = null, pillTimer = null, pillSeq = 0;
+function applySearch(scroll) {
+  const q = $("searchInput").value.trim();
+  filter = {}; if (q) filter.q = q; if (pillCat) filter.category = pillCat.slug;
+  mode = "public";
+  $("listTitle").textContent = q && pillCat ? `Rezultate pentru „${q}” în ${pillCat.name}` : q ? `Rezultate pentru „${q}”` : pillCat ? pillCat.name : "Anunțuri recente";
+  loadListings();
+  if (scroll) $("anunturi").scrollIntoView({ behavior: "smooth" });
+}
+function pillEl(c) {
+  const b = document.createElement("button"); b.type = "button";
+  const on = pillCat && pillCat.slug === c.slug;
+  b.className = "pill" + (on ? " on" : ""); b.setAttribute("aria-pressed", on ? "true" : "false");
+  const ic = document.createElement("span"); ic.className = "pill-ic"; ic.innerHTML = icon(iconOf[c.slug] || c.slug, 18); b.appendChild(ic);
+  b.append(c.name);
+  if (c.parent) { const p = document.createElement("small"); p.textContent = c.parent; b.appendChild(p); }
+  if (on) { const x = document.createElement("span"); x.className = "pill-x"; x.textContent = "✕"; x.setAttribute("aria-hidden", "true"); b.appendChild(x); }
+  b.addEventListener("click", () => {
+    pillCat = on ? null : { slug: c.slug, name: c.name, parent: c.parent };
+    if (pillCat) trackInterest({ cat: c.slug, w: 2 });
+    applySearch(true); updatePills();
+  });
+  return b;
+}
+function renderPills(list) {
+  const box = $("searchPills"); if (!box) return;
+  const items = list.slice();
+  if (pillCat && !items.some((c) => c.slug === pillCat.slug)) items.unshift(pillCat);
+  box.replaceChildren(...items.map(pillEl)); box.hidden = !items.length;
+}
+const rootPills = () => cats.map((c) => ({ slug: c.slug, name: c.name, parent: "" }));
+async function updatePills() {
+  if (!$("searchPills") || !cats.length) return;
+  const text = $("searchInput").value.trim(), seq = ++pillSeq;
+  if (text.length < 2) return renderPills(rootPills());
+  const f = fold(text), found = [];
+  for (const c of cats) for (const k of [c, ...c.children]) {      // potrivire pe numele categoriei
+    if (fold(k.name).split(/[^a-z0-9]+/).some((w) => w.startsWith(f)) || fold(k.name).startsWith(f)) found.push({ slug: k.slug, name: k.name, parent: k === c ? "" : c.name });
+  }
+  let remote = [];                                                  // potrivire pe cuvinte-cheie (ex. „bormasina” → Unelte)
+  try { remote = (await api("/api/categories/suggest?title=" + encodeURIComponent(text))).suggestions.map((x) => ({ slug: x.slug, name: x.name, parent: x.parent })); } catch { /* fără sugestii */ }
+  if (seq !== pillSeq) return;                                      // a scris între timp altceva
+  const seen = new Set(), list = [];
+  for (const c of [...remote, ...found]) if (!seen.has(c.slug)) { seen.add(c.slug); list.push(c); }
+  renderPills(list.length ? list.slice(0, 6) : rootPills());
+}
+$("searchForm")?.addEventListener("submit", (e) => { e.preventDefault(); applySearch(true); });
+$("searchInput")?.addEventListener("input", () => {
+  clearTimeout(pillTimer); pillTimer = setTimeout(updatePills, 180);
+  if (!$("searchInput").value.trim() && filter.q) applySearch(false);
+});
 $("bnSearch")?.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); $("searchInput").focus(); });
 
 /* ---- poze: comprimare în browser (max 1600 px, JPEG), previzualizare, încărcare una câte una ---- */
