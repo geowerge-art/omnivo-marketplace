@@ -31,7 +31,8 @@ router.get('/unread', ah(async (req, res) => {
   const r = await db.query(
     `SELECT COUNT(*)::int AS n FROM messages m
       WHERE m.recipient_id = $1 AND m.read_at IS NULL
-        AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = m.sender_id)`, [req.user.id]);
+        AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = m.sender_id)
+        AND NOT EXISTS (SELECT 1 FROM chat_hidden h WHERE h.user_id = $1 AND h.listing_id = m.listing_id AND h.other_id = m.sender_id AND h.cleared_at >= m.created_at)`, [req.user.id]);
   res.set('Cache-Control', 'no-store').json({ unread: r.rows[0].n });
 }));
 
@@ -39,15 +40,16 @@ router.get('/unread', ah(async (req, res) => {
 router.get('/', ah(async (req, res) => {
   const r = await db.query(
     `WITH m AS (
-       SELECT id, listing_id, body, (image_id IS NOT NULL) AS has_image, created_at, read_at, delivered_at, (sender_id = $1) AS mine,
+       SELECT id, listing_id, body, (SELECT c.kind FROM chat_images c WHERE c.id = messages.image_id) AS attach, created_at, read_at, delivered_at, (sender_id = $1) AS mine,
               CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other
          FROM messages WHERE sender_id = $1 OR recipient_id = $1)
-     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, t.body, t.has_image, t.created_at, t.mine, t.read_at, t.delivered_at,
-            (SELECT COUNT(*)::int FROM m x WHERE x.listing_id = t.listing_id AND x.other = t.other AND NOT x.mine AND x.read_at IS NULL) AS unread
+     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, t.body, t.attach, t.created_at, t.mine, t.read_at, t.delivered_at,
+            (SELECT COUNT(*)::int FROM m x WHERE x.listing_id = t.listing_id AND x.other = t.other AND NOT x.mine AND x.read_at IS NULL AND x.created_at > COALESCE(h.cleared_at, 'epoch'::timestamptz)) AS unread
        FROM (SELECT DISTINCT ON (listing_id, other) * FROM m ORDER BY listing_id, other, id DESC) t
        JOIN users u ON u.id = t.other
        JOIN listings l ON l.id = t.listing_id AND l.status <> 'deleted'
-      WHERE NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = t.other)
+       LEFT JOIN chat_hidden h ON h.user_id = $1 AND h.listing_id = t.listing_id AND h.other_id = t.other
+      WHERE (h.cleared_at IS NULL OR t.created_at > h.cleared_at) AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = t.other)
       ORDER BY t.id DESC LIMIT 100`, [req.user.id]);
   res.set('Cache-Control', 'no-store').json({ threads: r.rows });
 }));
@@ -63,12 +65,15 @@ router.get('/thread', ah(async (req, res) => {
   const l = lr.rows[0];
   // conversația există doar între proprietarul anunțului și altcineva
   if (!l || !ur.rowCount || (l.user_id !== me && l.user_id !== other)) return res.status(404).json({ error: 'NEGASIT' });
+  const cleared = (await db.query('SELECT cleared_at FROM chat_hidden WHERE user_id = $1 AND listing_id = $2 AND other_id = $3', [me, listingId, other])).rows[0];
   const rows = (await db.query(
     `SELECT m.id, m.body, m.created_at, (m.sender_id = $2) AS mine, (m.read_at IS NOT NULL) AS read, (m.delivered_at IS NOT NULL) AS delivered,
-            ci.url AS image_url, ci.thumb_url AS image_thumb
+            ci.kind AS attach, ci.name AS file_name, ci.size AS file_size,
+            CASE WHEN ci.kind = 'image' THEN ci.url END AS image_url, CASE WHEN ci.kind = 'image' THEN ci.thumb_url END AS image_thumb, CASE WHEN ci.kind = 'file' THEN ci.url END AS file_url
        FROM messages m LEFT JOIN chat_images ci ON ci.id = m.image_id
       WHERE m.listing_id = $1 AND ((m.sender_id = $2 AND m.recipient_id = $3) OR (m.sender_id = $3 AND m.recipient_id = $2))
-      ORDER BY m.id DESC LIMIT 300`, [listingId, me, other])).rows.reverse();
+        AND m.created_at > COALESCE($4::timestamptz, 'epoch'::timestamptz)
+      ORDER BY m.id DESC LIMIT 300`, [listingId, me, other, cleared ? cleared.cleared_at : null])).rows.reverse();
   // deschiderea conversației = „citit": expeditorul vede bifele albastre
   const rd = await db.query('UPDATE messages SET read_at = NOW(), delivered_at = COALESCE(delivered_at, NOW()) WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND read_at IS NULL RETURNING id', [listingId, other, me]);
   if (rd.rowCount) live.send(other, 'msg_status', { with: me, listing: listingId, ids: rd.rows.map((x) => x.id), status: 'read' });
@@ -115,7 +120,7 @@ router.post('/', requireVerified, ah(async (req, res) => {
   if (dup && !imageId) return res.json({ message: dup, duplicate: true });
   const online = live.isOnline(to);
   const r = await db.query('INSERT INTO messages(listing_id, sender_id, recipient_id, body, delivered_at, image_id) VALUES($1,$2,$3,$4, CASE WHEN $5::boolean THEN NOW() END, $6) RETURNING id, created_at', [listingId, me, to, body, online, imageId]);
-  live.send(to, 'message', { id: r.rows[0].id, from: me, listing_id: listingId, body, has_image: !!imageId, created_at: r.rows[0].created_at });
+  live.send(to, 'message', { id: r.rows[0].id, from: me, listing_id: listingId, body, has_attach: !!imageId, created_at: r.rows[0].created_at });
   res.status(201).json({ message: { ...r.rows[0], delivered: online } });
 }));
 
@@ -147,12 +152,63 @@ router.post('/image', requireVerified, imgs.raw, ah(async (req, res) => {
 
 router.get('/img/:id(\\d+)', ah(async (req, res) => {
   const r = await db.query(
-    `SELECT c.data, c.thumb, c.ctype FROM chat_images c
+    `SELECT c.data, c.thumb, c.ctype, c.kind, c.name FROM chat_images c
       WHERE c.id = $1 AND c.data IS NOT NULL
         AND (c.owner_id = $2 OR EXISTS (SELECT 1 FROM messages m WHERE m.image_id = c.id AND (m.sender_id = $2 OR m.recipient_id = $2)))`, [req.params.id, req.user.id]);
   if (!r.rowCount) return res.status(404).end();
-  res.set('Content-Type', r.rows[0].ctype || 'image/webp').set('Cache-Control', 'private, max-age=86400');
-  res.send(req.query.t ? r.rows[0].thumb : r.rows[0].data);
+  const x = r.rows[0];
+  res.set('Content-Type', x.ctype || 'image/webp').set('Cache-Control', 'private, max-age=86400').set('X-Content-Type-Options', 'nosniff');
+  if (x.kind === 'file') {   // fișierele se descarcă, nu se rulează în pagină
+    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(x.name || 'fisier')}`).set('Content-Security-Policy', "default-src 'none'; sandbox");
+    return res.send(x.data);
+  }
+  res.send(req.query.t ? x.thumb : x.data);
+}));
+
+/* ---- fișiere în chat: PDF, Word, Excel, text; până la 5 MB; tipul se verifică după conținut, nu după nume ---- */
+const FILE_TYPES = {
+  pdf: 'application/pdf', doc: 'application/msword', xls: 'application/vnd.ms-excel', txt: 'text/plain; charset=utf-8',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+const rawFile = express.raw({ type: 'application/octet-stream', limit: '5mb' });
+function fileKind(b, ext) {
+  if (ext === 'pdf') return b.toString('latin1', 0, 5) === '%PDF-' ? 'pdf' : null;
+  if (ext === 'docx' || ext === 'xlsx') return b[0] === 0x50 && b[1] === 0x4b && b.includes('[Content_Types].xml') && b.includes(ext === 'docx' ? 'word/' : 'xl/') ? ext : null;
+  if (ext === 'doc' || ext === 'xls') return b.length > 8 && b.readUInt32BE(0) === 0xd0cf11e0 && b.readUInt32BE(4) === 0xa1b11ae1 ? ext : null;
+  if (ext === 'txt') return !b.subarray(0, 4096).includes(0) && b.length <= 1024 * 1024 ? 'txt' : null;
+  return null;
+}
+router.post('/file', requireVerified, rawFile, ah(async (req, res) => {
+  const me = req.user.id, buf = req.body;
+  if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'FISIER_INVALID' });
+  let name = '';
+  try { name = decodeURIComponent(String(req.get('x-filename') || '')); } catch { /* nume invalid */ }
+  name = name.replace(/[\\/\u0000-\u001f]/g, '').trim().slice(-80);
+  const ext = (name.split('.').pop() || '').toLowerCase(), k = fileKind(buf, ext);
+  if (!k) return res.status(400).json({ error: 'FISIER_INVALID' });
+  if (!upAllow('u' + me)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const used = (await db.query('SELECT COALESCE(SUM(size),0)::bigint AS n FROM chat_images WHERE owner_id = $1', [me])).rows[0].n;
+  if (Number(used) + buf.length > CHAT_QUOTA) return res.status(413).json({ error: 'SPATIU_POZE_DEPASIT' });
+  const ins = await db.query("INSERT INTO chat_images(owner_id, kind, name, ctype, size, data) VALUES($1,'file',$2,$3,$4,$5) RETURNING id", [me, name || 'fisier.' + k, FILE_TYPES[k], buf.length, buf]);
+  const row = (await db.query("UPDATE chat_images SET url = '/api/messages/img/' || id WHERE id = $1 RETURNING id, url, name, size", [ins.rows[0].id])).rows[0];
+  res.status(201).json({ image: row });
+}));
+
+/* ---- „Șterge conversația”: dispare doar de la tine; mesajele rămân pe server (verificări la raportări) ---- */
+router.post('/hide', ah(async (req, res) => {
+  const items = Array.isArray((req.body || {}).items) ? req.body.items.slice(0, 50) : [];
+  let n = 0;
+  for (const it of items) {
+    const listing = toId(it && it.listing_id), other = toId(it && it.with);
+    if (!listing || !other || other === req.user.id) continue;
+    const r = await db.query(
+      `INSERT INTO chat_hidden(user_id, listing_id, other_id, cleared_at)
+       SELECT $1, $2, $3, NOW() WHERE EXISTS (SELECT 1 FROM messages WHERE listing_id = $2 AND ((sender_id = $1 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $1)))
+       ON CONFLICT (user_id, listing_id, other_id) DO UPDATE SET cleared_at = NOW()`, [req.user.id, listing, other]);
+    n += r.rowCount;
+  }
+  res.json({ ok: true, hidden: n });
 }));
 
 /* ---- „scrie…": semnal efemer, nu se salvează nimic ---- */

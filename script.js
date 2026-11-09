@@ -7,7 +7,7 @@ const ERR = {
   PAROLA_SLABA: "Parola e prea slabă: folosește minim 8 caractere, nu o parolă comună.", TERMENI_NEACCEPTATI: "Trebuie să accepți termenii.", DATE_INVALIDE: "Completează corect toate câmpurile.",
   TITLU_INVALID: "Titlul trebuie să aibă 5-120 de caractere.", PRET_INVALID: "Preț invalid.", CATEGORIE_INVALIDA: "Alege o categorie.", ATRIBUT_LIPSA: "Completează câmpul obligatoriu", ATRIBUT_INVALID: "Valoare invalidă pentru",
   PREA_MULTE_ANUNTURI: "Ai postat prea multe anunțuri într-o oră.", EMAIL_NECONFIRMAT: "Confirmă-ți emailul înainte să publici.", RATE_LIMIT: "Prea multe cereri, încearcă mai târziu.",
-  PREA_MULTE_POZE: "Maximum 8 poze per anunț.", SPATIU_POZE_DEPASIT: "Ai depășit spațiul pentru poze.", POZA_INVALIDA: "Poza nu a putut fi citită. Încearcă JPG sau PNG.", STORAGE_EROARE: "Pozele nu se pot salva acum.",
+  PREA_MULTE_POZE: "Maximum 8 poze per anunț.", SPATIU_POZE_DEPASIT: "Ai depășit spațiul pentru poze.", FISIER_INVALID: "Fișier neacceptat. Poți trimite PDF, Word, Excel sau text, până la 5 MB.", POZA_INVALIDA: "Poza nu a putut fi citită. Încearcă JPG sau PNG.", STORAGE_EROARE: "Pozele nu se pot salva acum.",
   EMAIL_INVALID: "Scrie o adresă de email de forma nume@domeniu.", TELEFON_INVALID: "Număr de telefon invalid.",
   MESAJ_INVALID: "Scrie un mesaj de maximum 2000 de caractere.", PREA_MULTE_MESAJE: "Ai trimis prea multe mesaje. Încearcă mai târziu.", BLOCAT: "Nu poți trimite mesaje acestui utilizator.",
   BLOCAT_DE_TINE: "Ai blocat acest utilizator. Deblochează-l ca să-i scrii.", INTERZIS: "Nu ai voie să faci asta.", NEGASIT: "Nu am găsit ce căutai.", NU_SE_POATE_BLOCA: "Acest cont nu poate fi blocat."
@@ -837,20 +837,49 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => { if (live) { live.close(); live = null; } });
 window.addEventListener("pageshow", () => { if (me && !live && !liveStopped) startLive(); });
 
+const sel = { on: false, keys: new Set() };
+const tkey = (t) => t.listing_id + ":" + t.other;
+function setSel(on) {
+  sel.on = on; sel.keys.clear(); $("inboxDialog").classList.toggle("selecting", on);
+  $("inboxSelect").textContent = on ? "Anulează" : "Selectează"; $("inboxTitle").textContent = "Mesaje"; $("inboxTrash").hidden = true;
+  $("inboxList").querySelectorAll(".cp-row").forEach((r) => r.classList.remove("sel"));
+}
+function updSel() { $("inboxCount").textContent = sel.keys.size; $("inboxTrash").hidden = !sel.keys.size; $("inboxTitle").textContent = sel.on && sel.keys.size ? sel.keys.size + " selectate" : "Mesaje"; }
+function toggleSel(b, t) { const k = tkey(t); if (sel.keys.has(k)) sel.keys.delete(k); else sel.keys.add(k); b.classList.toggle("sel", sel.keys.has(k)); updSel(); }
+$("inboxSelect")?.addEventListener("click", () => setSel(!sel.on));
+$("inboxDialog")?.addEventListener("close", () => setSel(false));
+$("inboxTrash")?.addEventListener("click", async () => {
+  const n = sel.keys.size; if (!n) return;
+  if (!confirm(n === 1 ? "Ștergi conversația? Dispare doar de la tine." : `Ștergi ${n} conversații? Dispar doar de la tine.`)) return;
+  const items = [...sel.keys].map((k) => { const [l, w] = k.split(":"); return { listing_id: +l, with: +w }; });
+  try { await api("/api/messages/hide", "POST", { items }); setSel(false); await renderInbox(); refreshUnread(); }
+  catch (err) { showMessage("Eroare", errText(err)); }
+});
 async function renderInbox() {
   const { threads } = await api("/api/messages");
   $("inboxEmpty").hidden = threads.length > 0;
+  const alive = new Set(threads.map(tkey)); [...sel.keys].forEach((k) => { if (!alive.has(k)) sel.keys.delete(k); });
   $("inboxList").replaceChildren(...threads.map((t) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = "cp-row" + (t.unread ? " unread" : "");
+    const b = document.createElement("button"); b.type = "button"; b.className = "cp-row" + (t.unread ? " unread" : "") + (sel.keys.has(tkey(t)) ? " sel" : "");
     const mid = document.createElement("span"); mid.className = "cp-mid";
     const top = document.createElement("span"); top.className = "cp-top";
     const nm = document.createElement("b"); nm.textContent = t.other_name;
     const tm = document.createElement("time"); tm.textContent = inboxTime(t.created_at); top.append(nm, tm);
     const ti = document.createElement("span"); ti.className = "cp-ti"; ti.textContent = t.title;
-    const sm = document.createElement("small"); if (t.mine) sm.append(tickEl(tickState(t)), " "); sm.append(t.has_image && !t.body ? "Poză" : t.body);
+    const sm = document.createElement("small"); if (t.mine) sm.append(tickEl(tickState(t)), " "); sm.append(t.attach && !t.body ? (t.attach === "file" ? "📎 Fișier" : "📷 Poză") : t.body);
     mid.append(top, ti, sm); b.append(avatar(t.other_name, t.other), mid);
     if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; b.appendChild(d); }
-    b.addEventListener("click", () => { $("inboxDialog").close(); openChat(t.listing_id, t.other, t.title); });
+    const chk = document.createElement("span"); chk.className = "cp-chk"; chk.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'; b.prepend(chk);
+    let pressT = 0, longDone = false;
+    const cancel = () => clearTimeout(pressT);
+    b.addEventListener("pointerdown", () => { longDone = false; cancel(); pressT = setTimeout(() => { longDone = true; if (!sel.on) setSel(true); toggleSel(b, t); navigator.vibrate?.(15); }, 500); });
+    ["pointerup", "pointerleave", "pointercancel", "pointermove"].forEach((ev) => b.addEventListener(ev, cancel));
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+    b.addEventListener("click", () => {
+      if (longDone) { longDone = false; return; }
+      if (sel.on) return toggleSel(b, t);
+      $("inboxDialog").close(); openChat(t.listing_id, t.other, t.title);
+    });
     return b;
   }));
 }
@@ -893,6 +922,13 @@ async function refreshChat() {
           im.src = m.image_thumb; im.alt = "Poză trimisă"; im.loading = "lazy"; pb.appendChild(im);
           pb.addEventListener("click", () => openLightbox(pics, Math.max(0, pics.indexOf(m.image_url)), "Poză din conversație")); el.appendChild(pb);
         }
+        if (m.file_url) {
+          const a = document.createElement("a"), ext = ((m.file_name || "").split(".").pop() || "").toLowerCase();
+          a.className = "cv-file"; a.href = m.file_url; a.download = m.file_name || "fisier"; a.rel = "noopener";
+          const ic = document.createElement("i"); ic.textContent = ext.slice(0, 4).toUpperCase(); ic.dataset.ext = ext;
+          const nm = document.createElement("span"), n1 = document.createElement("b"), n2 = document.createElement("small");
+          n1.textContent = m.file_name || "Fișier"; n2.textContent = fmtSize(m.file_size) + " · Descarcă"; nm.append(n1, n2); a.append(ic, nm); el.appendChild(a);
+        }
         if (m.body) { const tx = document.createElement("span"); tx.className = "cv-txt"; tx.textContent = m.body; el.appendChild(tx); }
         t.textContent = hhmm(m.created_at); t.dateTime = m.created_at;
         if (m.mine) t.append(" ", tickEl(tickState(m)));
@@ -910,7 +946,7 @@ async function refreshChat() {
 let typSent = 0;
 /* compozitor: crește cu textul (max 5 rânduri), Enter trimite pe laptop, butonul rotund se aprinde când ai ce trimite */
 function autoGrow() {
-  const t = $("chatInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 128) + "px";
+  const t = $("chatInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 128) + "px"; t.style.overflowY = t.scrollHeight > 128 ? "auto" : "hidden";
   $("chatSend").classList.toggle("empty", !t.value.trim());
 }
 $("chatInput")?.addEventListener("input", autoGrow);
@@ -928,21 +964,39 @@ window.visualViewport?.addEventListener("scroll", fitChat);
 $("chatMore")?.addEventListener("click", (e) => { e.stopPropagation(); const p = $("chatPop"); p.hidden = !p.hidden; $("chatMore").setAttribute("aria-expanded", String(!p.hidden)); });
 document.addEventListener("click", (e) => { const p = $("chatPop"); if (p && !p.hidden && !e.target.closest(".cp-menu")) p.hidden = true; });
 $("chatAd")?.addEventListener("click", () => { if (chat) openDetail(chat.listingId); });
-$("chatAttach")?.addEventListener("click", () => $("chatFile").click());
-$("chatFile")?.addEventListener("change", async (e) => {
+const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round((n || 0) / 1024)) + " KB");
+const closeAtt = () => { const m = $("chatAttMenu"); if (m) m.hidden = true; $("chatAttach")?.setAttribute("aria-expanded", "false"); };
+$("chatAttach")?.addEventListener("click", (e) => { e.stopPropagation(); const m = $("chatAttMenu"); m.hidden = !m.hidden; $("chatAttach").setAttribute("aria-expanded", String(!m.hidden)); });
+document.addEventListener("click", (e) => { if (!e.target.closest(".cp-attwrap")) closeAtt(); });
+$("chatAttMenu")?.addEventListener("click", (e) => { const b = e.target.closest("button[data-pick]"); if (!b) return; closeAtt(); $("chatFile" + b.dataset.pick).click(); });
+async function sendAttach(c, endpoint, headers, body) {
+  const r = await fetch(endpoint, { method: "POST", headers, body });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || "upload"), { code: j.error, status: r.status });
+  await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, image_id: j.image.id, body: "" });
+  c.sig = ""; await refreshChat();
+}
+async function pickUpload(e, isDoc) {
   const c = chat, files = [...e.target.files].slice(0, 5); e.target.value = ""; if (!c || !files.length) return;
   show($("chatErr"), ""); $("chatAttach").disabled = true;
   try {
     for (const f of files) {
-      const blob = await compress(f);
-      const r = await fetch("/api/messages/image", { method: "POST", headers: { "content-type": "image/jpeg" }, body: blob });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw Object.assign(new Error(j.error || "upload"), { code: j.error, status: r.status });
-      await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, image_id: j.image.id, body: "" });
-      c.sig = ""; await refreshChat();
+      if (isDoc) {
+        if (f.size > 5 * 1048576) throw Object.assign(new Error("big"), { code: "FISIER_INVALID" });
+        await sendAttach(c, "/api/messages/file", { "content-type": "application/octet-stream", "x-filename": encodeURIComponent(f.name) }, f);
+      } else await sendAttach(c, "/api/messages/image", { "content-type": "image/jpeg" }, await compress(f));
     }
   } catch (err) { if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); } else show($("chatErr"), errText(err)); }
-  $("chatAttach").disabled = false;
+  if (chat) $("chatAttach").disabled = chat.blocked;
+}
+$("chatFileGal")?.addEventListener("change", (e) => pickUpload(e, false));
+$("chatFileCam")?.addEventListener("change", (e) => pickUpload(e, false));
+$("chatFileDoc")?.addEventListener("change", (e) => pickUpload(e, true));
+$("chatDelete")?.addEventListener("click", async () => {
+  const c = chat; if (!c) return; $("chatPop").hidden = true;
+  if (!confirm("Ștergi conversația? Dispare doar de la tine; celălalt o păstrează.")) return;
+  try { await api("/api/messages/hide", "POST", { items: [{ listing_id: c.listingId, with: c.withId }] }); $("chatDialog").close(); refreshUnread(); }
+  catch (err) { show($("chatErr"), errText(err)); }
 });
 $("chatInput")?.addEventListener("input", () => {
   const c = chat; if (!c || !$("chatInput").value.trim() || Date.now() - typSent < 2500) return;
