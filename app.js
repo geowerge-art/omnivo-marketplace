@@ -10,6 +10,7 @@ const { loadUser } = require('./authmw');
 const auth = require('./auth');
 const categories = require('./categories');
 const favorites = require('./favorites');
+const saved = require('./saved');
 const listings = require('./listings');
 const images = require('./images');
 const messages = require('./messages');
@@ -58,6 +59,7 @@ function createApp() {
   app.use('/api/admin/listings', listings.adminRouter);
   app.use('/api/messages', messages.router);
   app.use('/api/favorites', favorites.router);
+  app.use('/api/saved-searches', saved.router);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'NEGASIT' })); // niciodată index.html pentru /api/*
 

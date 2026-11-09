@@ -87,6 +87,14 @@ router.get('/mine', requireAuth, ah(async (req, res) => {
   res.json({ listings: r.rows });
 }));
 
+/* Statistici pentru anunțurile mele: vizualizări și de câte ori au fost salvate la favorite. */
+router.get('/stats', requireAuth, ah(async (req, res) => {
+  const r = await db.query(
+    `SELECT l.id, l.title, l.status, l.views, (SELECT COUNT(*)::int FROM favorites f WHERE f.listing_id = l.id) AS favs
+       FROM listings l WHERE l.user_id = $1 AND l.status <> 'deleted' ORDER BY l.created_at DESC LIMIT 200`, [req.user.id]);
+  res.json({ listings: r.rows });
+}));
+
 router.get('/:id(\\d+)', ah(async (req, res) => {
   const r = await db.query(
     `SELECT l.*, c.name AS category, p.name AS parent_category, u.nickname AS seller, u.show_phone, u.phone AS seller_phone
@@ -96,6 +104,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const l = r.rows[0], me = req.user;
   const staff = me && ['admin', 'moderator'].includes(me.role), owner = me && me.id === l.user_id;
   if (!['approved', 'sold'].includes(l.status) && !staff && !owner) return res.status(404).json({ error: 'NEGASIT' });
+  if (!owner && !staff) db.query('UPDATE listings SET views = views + 1 WHERE id = $1', [l.id]).catch(() => {});
   const defs = await db.query('SELECT key, label FROM category_attributes WHERE category_id = $1 OR category_id = (SELECT parent_id FROM categories WHERE id = $1)', [l.category_id]);
   const label = Object.fromEntries(defs.rows.map((d) => [d.key, d.label]));
   const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);

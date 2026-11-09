@@ -77,6 +77,7 @@
           <span class="eyebrow">PIAȚA OMNIVO</span>
           <h2 id="listTitle">Anunțuri recente</h2>
         </div>
+        <button type="button" class="link-btn" id="saveSearchBtn" hidden>🔔 Salvează căutarea</button>
       </div>
       <div id="products" class="products"></div>
       <p id="emptyMessage" class="empty" hidden>Nu am găsit anunțuri pentru căutarea ta.</p>
@@ -197,18 +198,16 @@
     </form>
   </dialog>
 
-  <dialog id="accountDialog" class="sheet det acc">
-    <button class="dialog-close" id="accClose" aria-label="Închide">✕</button>
-    <div class="acc-head"><span class="ad-av" id="accAv"></span><div><h2 id="accName">Contul meu</h2><small id="accSub"></small></div></div>
-    <div class="acc-tabs" role="tablist">
-      <button type="button" data-tab="mine" class="on">Anunțurile mele</button>
-      <button type="button" data-tab="favs">Favorite</button>
-      <button type="button" data-tab="msgs" id="accMsgs">Mesaje <span id="accMsgsN"></span></button>
-      <button type="button" data-tab="mod" id="accMod" hidden>Moderare</button>
+  <section id="accountPage" class="acc-page" hidden aria-label="Contul meu">
+    <div class="acc-wrap">
+      <div class="acc-user">
+        <span class="ad-av" id="accAv"></span>
+        <div class="acc-who"><b id="accName"></b><small id="accSub"></small></div>
+        <button type="button" class="back" id="accBack">← Înapoi</button>
+      </div>
+      <div id="accMain"></div>
     </div>
-    <div id="accBody" class="acc-body"></div>
-    <div class="acc-foot"><button class="ghost" id="accSettings" type="button">Setări cont și telefon</button><button class="ghost" id="accOut" type="button">Ieșire din cont</button></div>
-  </dialog>
+  </section>
 
   <dialog id="detailDialog" class="sheet det">
     <button class="dialog-close" id="detClose" aria-label="Închide">✕</button>
