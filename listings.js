@@ -53,6 +53,10 @@ router.get('/', ah(async (req, res) => {
   const add = (sql, val) => { vals.push(val); where.push(sql.split('$#').join('$' + vals.length)); };
   const q = fold(req.query.q).replace(/[^a-z0-9 ]+/g, ' ').trim();
   for (const w of q.split(/\s+/).filter(Boolean).slice(0, 6)) add("l.search_text LIKE '%' || $# || '%'", w);
+  if (req.query.ids) {   /* „Văzute recent": anunțurile cu id-urile date (doar cele încă publice) */
+    const ids = String(req.query.ids).split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 48);
+    if (ids.length) add('l.id = ANY($#::int[])', ids);
+  }
   if (req.query.category) add('(c.slug = $# OR p.slug = $#)', String(req.query.category).slice(0, 60));
   if (req.query.county) add('LOWER(l.county) = LOWER($#)', String(req.query.county).slice(0, 40));
   if (Number.isFinite(Number(req.query.min)) && req.query.min !== undefined && req.query.min !== '') add('l.price >= $#', Number(req.query.min));

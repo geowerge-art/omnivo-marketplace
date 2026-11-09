@@ -500,26 +500,51 @@ function trackInterest({ cat, w, id, title }) {
   } catch { /* fără stocare */ }
 }
 const STOP = new Set(["vand", "vind", "de", "si", "cu", "la", "pentru", "nou", "noua", "folosit", "second", "hand"]);
+/* Starea pe care o „ține minte": dacă te-ai uitat la mașini avariate, recomandările rămân avariate (potrivire pe rădăcina cuvântului din titlu). */
+const STATES = { avariat: "avariate", accidentat: "accidentate", defect: "defecte", dezmembr: "pentru dezmembrat", reparat: "reparate", impecabil: "impecabile", sigilat: "sigilate" };
 async function loadForYou() {
-  const sec = $("pentruTine"); if (!sec) return;
-  const d = readInterest(), top = Object.entries(d.cats || {}).sort((a, b) => b[1] - a[1])[0];
+  const rec = $("vazute"), sec = $("pentruTine"); if (!rec || !sec) return;
+  const d = readInterest(), seenIds = (d.seen || []).slice(0, 12);
+  /* 1. „Văzute recent": anunțurile deschise, aduse proaspăt (cele vândute sau expirate dispar singure) */
+  let viewed = [];
+  if (seenIds.length) {
+    try {
+      const r = await api("/api/listings?" + new URLSearchParams({ ids: seenIds.join(","), limit: 48 }));
+      const byId = new Map(r.listings.map((l) => [l.id, l]));
+      viewed = seenIds.map((id) => byId.get(id)).filter(Boolean);
+    } catch { /* fără server */ }
+  }
+  if (viewed.length) { $("recent").replaceChildren(...viewed.map(card)); rec.hidden = false; } else rec.hidden = true;
+  /* 2. „Recomandate": categoria dominantă din ultimele vizionări, cu aceeași stare și marcă */
+  const recent = viewed.slice(0, 5), score = {};
+  recent.forEach((l, i) => { score[l.category_slug] = (score[l.category_slug] || 0) + (5 - i); });
+  const top = Object.entries(score).sort((x, y) => y[1] - x[1])[0] || Object.entries(d.cats || {}).sort((x, y) => y[1] - x[1])[0];
   if (!top) { sec.hidden = true; return; }
-  const cat = top[0], seen = new Set(d.seen || []);
+  const cat = top[0], inCat = recent.filter((l) => l.category_slug === cat);
+  const counts = {};
+  for (const l of inCat) { const t = fold(l.title); for (const k of Object.keys(STATES)) if (t.includes(k)) counts[k] = (counts[k] || 0) + 1; }
+  const best = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
+  const state = best && best[1] * 2 >= inCat.length ? best[0] : "";           // în cel puțin jumătate din ce ai văzut
+  const brand = inCat.length ? fold(inCat[0].title).split(/[^a-z0-9]+/).find((x) => x.length >= 3 && !/^\d+$/.test(x) && !STOP.has(x) && !(x in STATES) && !Object.keys(STATES).some((k) => x.startsWith(k))) || "" : "";
+  const get = (q, limit) => api("/api/listings?" + new URLSearchParams({ category: cat, ...(q ? { q } : {}), limit })).then((r) => r.listings).catch(() => []);
   const calls = [];
-  const brand = d.last && d.last.cat === cat ? fold(d.last.title).split(/[^a-z0-9]+/).find((x) => x.length >= 3 && !/^\d+$/.test(x) && !STOP.has(x)) : "";
-  if (brand) calls.push(api("/api/listings?" + new URLSearchParams({ category: cat, q: brand, sort: "price_asc", limit: 8 })));
-  calls.push(api("/api/listings?" + new URLSearchParams({ category: cat, sort: "price_asc", limit: 12 })));
+  if (state && brand) calls.push(get(brand + " " + state, 8));
+  if (state) calls.push(get(state, 8));
+  if (brand) calls.push(get(brand, 8));
+  calls.push(get("", 12));                                                    // „de toate", ca să nu rămână gol
   try {
-    const res = await Promise.all(calls);
-    const out = [], ids = new Set();
-    for (const r of res) for (const l of r.listings) if (!ids.has(l.id) && !(d.last && l.id === d.last.id)) { ids.add(l.id); out.push(l); }
-    const list = out.filter((l) => !seen.has(l.id)).concat(out.filter((l) => seen.has(l.id))).slice(0, 6);
+    const res = await Promise.all(calls), have = new Set(viewed.map((l) => l.id)), out = [];
+    for (const r of res) for (const l of r) if (!have.has(l.id)) { have.add(l.id); out.push(l); }
+    const list = out.slice(0, 8);
     if (!list.length) { sec.hidden = true; return; }
-    $("forYouTitle").textContent = `Recomandate pentru tine · ${list[0].category || ""}${brand ? " · " + brand : ""}`;
+    const name = (inCat[0] && inCat[0].category) || list[0].category || "";
+    $("forYouTitle").textContent = `Recomandate pentru tine · ${name}${state ? " " + STATES[state] : ""}`;
     $("forYou").replaceChildren(...list.map(card)); sec.hidden = false;
   } catch { sec.hidden = true; }
 }
-$("forYouClear")?.addEventListener("click", () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; });
+const clearInterest = () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; $("vazute").hidden = true; };
+$("forYouClear")?.addEventListener("click", clearInterest);
+$("recentClear")?.addEventListener("click", clearInterest);
 loadForYou();
 
 

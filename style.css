@@ -612,3 +612,30 @@ a.phone-btn.on{display:inline-flex;align-items:center;background:#14110c;color:#
 .contact-line{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:6px}
 .contact-line .phone-btn{margin-left:0}
 a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-color:#1f9d55;color:#fff}
+
+/* carusel orizontal pentru „Văzute recent" și „Recomandate" */
+.products.rail {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.products.rail > * {
+  flex: 0 0 230px;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.products.rail .product-image {
+  height: 150px;
+}
+
+@media (max-width: 700px) {
+  .products.rail > * {
+    flex-basis: 70%;
+  }
+}
