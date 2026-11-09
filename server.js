@@ -1,25 +1,20 @@
+const config = require('./src/config');
+const db = require('./src/db');
+const migrate = require('./src/migrate');
+const { ensureAdmin } = require('./src/bootstrap');
+const { createApp } = require('./src/app');
 
-const express = require("express");
-const path = require("path");
+async function main() {
+  if (db.hasDb()) {
+    await migrate();
+    await ensureAdmin();
+    // curăță sesiunile expirate din oră în oră
+    setInterval(() => db.query('DELETE FROM sessions WHERE expires_at < NOW()').catch(() => {}), 3600000).unref();
+  } else {
+    console.warn('DATABASE_URL lipsește: pornesc fără bază de date (conturile și anunțurile nu funcționează).');
+  }
+  const server = createApp().listen(config.PORT, '0.0.0.0', () => console.log(`Omnivo rulează pe portul ${config.PORT}`));
+  process.on('SIGTERM', () => server.close(() => (db.hasDb() ? db.pool.end() : null)));
+}
 
-const app = express();
-const PORT = process.env.PORT || 10000;
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
-
-app.get("/api/status", (req, res) => {
-  res.json({
-    name: "Omnivo",
-    status: "online",
-    message: "Bine ai venit pe Omnivo!"
-  });
-});
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Omnivo ruleaza pe portul ${PORT}`);
-});
+main().catch((e) => { console.error(e); process.exit(1); });
