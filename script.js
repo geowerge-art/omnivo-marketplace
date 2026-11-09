@@ -352,11 +352,10 @@ function renderPills(list) {
   if (pillCat && !items.some((c) => c.slug === pillCat.slug)) items.unshift(pillCat);
   box.replaceChildren(...items.map(pillEl)); box.hidden = !items.length;
 }
-const rootPills = () => cats.map((c) => ({ slug: c.slug, name: c.name, parent: "" }));
 async function updatePills() {
   if (!$("searchPills") || !cats.length) return;
   const text = $("searchInput").value.trim(), seq = ++pillSeq;
-  if (text.length < 2) return renderPills(rootPills());
+  if (text.length < 2) return renderPills([]);                      // bara goală → fără pastile
   const f = fold(text), found = [];
   for (const c of cats) for (const k of [c, ...c.children]) {      // potrivire pe numele categoriei
     if (fold(k.name).split(/[^a-z0-9]+/).some((w) => w.startsWith(f)) || fold(k.name).startsWith(f)) found.push({ slug: k.slug, name: k.name, parent: k === c ? "" : c.name });
@@ -366,12 +365,12 @@ async function updatePills() {
   if (seq !== pillSeq) return;                                      // a scris între timp altceva
   const seen = new Set(), list = [];
   for (const c of [...remote, ...found]) if (!seen.has(c.slug)) { seen.add(c.slug); list.push(c); }
-  renderPills(list.length ? list.slice(0, 6) : rootPills());
+  renderPills(list.slice(0, 6));                                    // nimic potrivit → fără pastile
 }
 $("searchForm")?.addEventListener("submit", (e) => { e.preventDefault(); applySearch(true); });
 $("searchInput")?.addEventListener("input", () => {
   clearTimeout(pillTimer); pillTimer = setTimeout(updatePills, 180);
-  if (!$("searchInput").value.trim() && filter.q) applySearch(false);
+  if (!$("searchInput").value.trim()) { const had = pillCat || filter.q; pillCat = null; if (had) applySearch(false); }
 });
 $("bnSearch")?.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); $("searchInput").focus(); });
 
@@ -538,7 +537,7 @@ async function loadForYou() {
     const list = out.slice(0, 8);
     if (!list.length) { sec.hidden = true; return; }
     const name = (inCat[0] && inCat[0].category) || list[0].category || "";
-    $("forYouTitle").textContent = `Recomandate pentru tine · ${name}${state ? " " + STATES[state] : ""}`;
+    $("forYouTitle").textContent = `Anunțuri noi în ${name}${state ? " " + STATES[state] : ""}`;
     $("forYou").replaceChildren(...list.map(card)); sec.hidden = false;
   } catch { sec.hidden = true; }
 }
