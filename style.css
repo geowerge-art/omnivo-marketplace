@@ -696,3 +696,53 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
     height: 104px;
   }
 }
+
+/* ---- fereastra anunțului (stil AutoParts) ---- */
+.sheet.det { padding-top: 16px; }
+@media (min-width: 700px) { .sheet.det { width: min(100%, 720px); margin: auto; border-radius: 20px; } }
+.sheet.det h2 { font-size: 22px; line-height: 1.25; margin: 14px 38px 4px 0; }
+.ad-crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 38px 10px 0; font-size: 13px; color: var(--muted); }
+.ad-crumbs i { font-style: normal; opacity: .6; }
+.ad-gal { position: relative; border-radius: 14px; overflow: hidden; background: var(--light); }
+.ad-slider { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.ad-slider::-webkit-scrollbar { display: none; }
+.ad-slide { flex: 0 0 100%; height: min(46vh, 360px); border: 0; padding: 0; background: transparent; scroll-snap-align: center; cursor: zoom-in; }
+.ad-slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ad-gal-empty { display: grid; place-items: center; gap: 4px; height: 170px; color: var(--gold); }
+.ad-gal-empty small { color: var(--muted); }
+.ad-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(20, 17, 12, .55); color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
+.ad-nav.prev { left: 8px; } .ad-nav.next { right: 8px; }
+.ad-nav:hover { background: rgba(20, 17, 12, .8); }
+.ad-count { position: absolute; right: 10px; bottom: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(20, 17, 12, .6); color: #fff; font-size: 12px; font-weight: 700; }
+.ad-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+.ad-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .65); }
+.ad-dots i.on { background: #fff; width: 16px; border-radius: 3px; }
+.ad-price { font-size: 26px; font-weight: 800; color: var(--navy); margin: 2px 0; }
+.ad-sub { color: var(--muted); font-size: 14px; margin: 2px 0 8px; }
+.ad-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.lchip { padding: 4px 11px; border-radius: 999px; background: var(--light); border: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--navy); }
+.lchip.new { background: #e6f5ec; border-color: #bfe3cd; color: #1b6b3f; }
+.lchip.sold { background: #fdeceb; border-color: #f3c6c3; color: #b3261e; }
+.ad-h { font-size: 16px; margin: 16px 0 6px; color: var(--navy); }
+.desc { white-space: pre-wrap; line-height: 1.55; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
+.detail-grid div { background: var(--light); border-radius: 10px; padding: 8px 12px; }
+.detail-grid dt { font-size: 12px; color: var(--muted); }
+.detail-grid dd { margin: 2px 0 0; font-weight: 700; color: var(--navy); overflow-wrap: anywhere; }
+.ad-seller { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; }
+.ad-av { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #14110c; color: #e9d3a8; font-weight: 800; font-size: 18px; }
+.ad-seller small { display: block; color: var(--muted); }
+.ad-callbar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; margin: 14px -18px -28px; padding: 12px 18px 16px; background: #fff; border-top: 1px solid var(--border); }
+.ad-callbar > button, .ad-callbar > a { flex: 1 1 140px; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid #14110c; background: #14110c; color: #e9d3a8; font-weight: 700; font-size: 16px; text-decoration: none; cursor: pointer; }
+.ad-callbar > button.alt { background: #fff; color: var(--navy); border-color: var(--gold); }
+.ad-callbar > a.wa { background: #1f9d55; border-color: #1f9d55; color: #fff; }
+.ad-callbar > button:disabled { opacity: .6; }
+.ad-nophone { flex: 1 0 100%; color: var(--muted); font-size: 13px; }
+/* poza mare */
+.lightbox { border: 0; padding: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; background: rgba(10, 8, 5, .94); }
+.lightbox[open] { display: grid; place-items: center; }
+.lightbox img { max-width: 100vw; max-height: 86vh; object-fit: contain; }
+.lb-close { position: absolute; top: 10px; right: 14px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; font-size: 30px; line-height: 1; cursor: pointer; }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; font-size: 32px; line-height: 1; cursor: pointer; }
+.lb-nav.prev { left: 12px; } .lb-nav.next { right: 12px; }
+.lb-count { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; }

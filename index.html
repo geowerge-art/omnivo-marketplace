@@ -207,12 +207,28 @@
     <button class="ghost" id="accOut" type="button">Ieșire din cont</button>
   </dialog>
 
-  <dialog id="detailDialog" class="sheet">
+  <dialog id="detailDialog" class="sheet det">
     <button class="dialog-close" id="detClose" aria-label="Închide">✕</button>
-    <div id="detGallery" class="gallery"></div>
-    <h2 id="detTitle"></h2><p class="price" id="detPrice"></p><p class="muted" id="detMeta"></p><p class="det-loc" id="detLoc" hidden></p>
-    <ul id="detAttrs" class="attrs"></ul><p id="detDesc" class="desc"></p><p id="detSeller" class="seller"></p>
-    <div id="detActions" class="det-actions"></div>
+    <nav id="detCrumbs" class="ad-crumbs" aria-label="Categorie"></nav>
+    <div id="detGal" class="ad-gal"></div>
+    <h2 id="detTitle"></h2>
+    <div class="ad-price" id="detPrice"></div>
+    <p class="ad-sub" id="detSub"></p>
+    <div class="ad-chips" id="detChips"></div>
+    <p class="det-loc" id="detLoc" hidden></p>
+    <div id="detDescBox"><h3 class="ad-h">Descriere</h3><p id="detDesc" class="desc"></p></div>
+    <h3 class="ad-h">Detalii</h3>
+    <dl id="detAttrs" class="detail-grid"></dl>
+    <div class="ad-seller" id="detSeller"></div>
+    <div id="detActions" class="ad-callbar"></div>
+  </dialog>
+
+  <dialog id="lightbox" class="lightbox" aria-label="Poza anunțului">
+    <button type="button" class="lb-close" id="lbClose" aria-label="Închide">×</button>
+    <button type="button" class="lb-nav prev" id="lbPrev" aria-label="Poza anterioară">‹</button>
+    <img id="lbImg" alt="">
+    <button type="button" class="lb-nav next" id="lbNext" aria-label="Poza următoare">›</button>
+    <div class="lb-count" id="lbCount"></div>
   </dialog>
 
     <dialog id="inboxDialog" class="sheet">

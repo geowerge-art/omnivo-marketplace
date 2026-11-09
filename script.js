@@ -283,40 +283,86 @@ async function loadListings() {
   }
   box.removeAttribute("aria-busy");
 }
+/* ---- galerie + poză mare (ca în AutoParts) ---- */
+function buildGallery(images, title) {
+  const g = $("detGal"); g.replaceChildren();
+  if (!images.length) { g.className = "ad-gal ad-gal-empty"; g.innerHTML = icon("alt", 56) + "<small>Fără poze</small>"; return; }
+  g.className = "ad-gal";
+  const sl = document.createElement("div"); sl.className = "ad-slider";
+  images.forEach((u, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "ad-slide"; b.setAttribute("aria-label", `Vezi poza ${i + 1} mai mare`);
+    const im = document.createElement("img"); im.src = u; im.alt = `${title} - poza ${i + 1}`; if (i) im.loading = "lazy";
+    b.appendChild(im); b.addEventListener("click", () => openLightbox(images, i, title)); sl.appendChild(b);
+  });
+  g.appendChild(sl);
+  if (images.length < 2) return;
+  const nav = (cls, txt, d) => { const b = document.createElement("button"); b.type = "button"; b.className = "ad-nav " + cls; b.textContent = txt; b.setAttribute("aria-label", d < 0 ? "Poza anterioară" : "Poza următoare"); b.addEventListener("click", () => sl.scrollBy({ left: d * sl.clientWidth, behavior: "smooth" })); return b; };
+  const cnt = document.createElement("span"); cnt.className = "ad-count"; cnt.textContent = `1 / ${images.length}`;
+  const dots = document.createElement("div"); dots.className = "ad-dots"; dots.setAttribute("aria-hidden", "true"); dots.innerHTML = images.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("");
+  g.append(nav("prev", "‹", -1), nav("next", "›", 1), cnt, dots);
+  sl.addEventListener("scroll", () => { const i = Math.round(sl.scrollLeft / sl.clientWidth); cnt.textContent = `${i + 1} / ${images.length}`; [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i)); });
+}
+let lb = { list: [], i: 0 };
+function lbShow() { $("lbImg").src = lb.list[lb.i]; $("lbCount").textContent = `${lb.i + 1} / ${lb.list.length}`; $("lbPrev").hidden = $("lbNext").hidden = lb.list.length < 2; }
+function lbMove(d) { if (lb.list.length < 2) return; lb.i = (lb.i + d + lb.list.length) % lb.list.length; lbShow(); }
+function openLightbox(list, i, alt) { lb = { list, i }; $("lbImg").alt = alt || ""; lbShow(); if (!$("lightbox").open) $("lightbox").showModal(); }
+$("lbClose")?.addEventListener("click", () => $("lightbox").close());
+$("lbPrev")?.addEventListener("click", () => lbMove(-1));
+$("lbNext")?.addEventListener("click", () => lbMove(1));
+$("lightbox")?.addEventListener("click", (e) => { if (e.target === $("lightbox")) $("lightbox").close(); });
+$("lightbox")?.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") lbMove(-1); else if (e.key === "ArrowRight") lbMove(1); });
+{ let x0 = null; const lg = $("lightbox");
+  lg?.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  lg?.addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) lbMove(dx < 0 ? 1 : -1); }); }
+
+/* ---- fereastra anunțului ---- */
 async function openDetail(id) {
   try {
     const { listing: l } = await api("/api/listings/" + id);
-    $("detTitle").textContent = l.title; $("detPrice").textContent = price(l) + (l.negotiable ? " · negociabil" : "");
-    $("detMeta").textContent = [l.parent_category, l.category, l.condition].filter(Boolean).join(" · ");
-    $("detAttrs").replaceChildren(...l.attributes.map((a) => { const li = document.createElement("li"); li.textContent = `${a.label}: ${a.value}`; return li; }));
-    $("detDesc").textContent = l.description;
-    $("detGallery").replaceChildren(...l.images.map((u) => { const g = document.createElement("img"); g.src = u; g.alt = l.title; g.loading = "lazy"; return g; }));
-    const s = $("detSeller"); s.textContent = `Vânzător: ${l.seller || "—"}`;
-    if (l.has_phone) {
-      const b = document.createElement("button"); b.type = "button"; b.className = "phone-btn"; b.textContent = "Contact";
-      b.addEventListener("click", async () => {
-        b.disabled = true;
-        try {
-          const { phone, whatsapp } = await api(`/api/listings/${l.id}/phone`);
-          const box = document.createElement("span"); box.className = "contact-line";
-          const t = document.createElement("a"); t.href = "tel:" + phone.replace(/[^+\d]/g, ""); t.className = "phone-btn on"; t.textContent = "Sună " + fmtPhone(phone); box.appendChild(t);
-          if (whatsapp) { const w = document.createElement("a"); w.href = waLink(phone); w.target = "_blank"; w.rel = "noopener noreferrer"; w.className = "phone-btn wa"; w.textContent = "WhatsApp"; box.appendChild(w); }
-          b.replaceWith(box);
-        } catch (err) { b.disabled = false; showMessage("Eroare", errText(err)); }
-      });
-      s.appendChild(document.createTextNode(" ")); s.appendChild(b);
-    } else if (!l.mine) { const n = document.createElement("small"); n.className = "muted"; n.textContent = " · Vânzătorul nu a afișat un număr de telefon."; s.appendChild(n); }
+    const cap = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+    const date = l.created_at ? new Date(l.created_at).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" }) : "";
+    $("detCrumbs").innerHTML = [l.parent_category, l.category].filter(Boolean).map((t) => `<span></span>`).join("<i>›</i>");
+    [...$("detCrumbs").querySelectorAll("span")].forEach((sp, i) => { sp.textContent = [l.parent_category, l.category].filter(Boolean)[i]; });
+    buildGallery(l.images || [], l.title);
+    $("detTitle").textContent = l.title;
+    $("detPrice").textContent = price(l);
+    $("detSub").textContent = [l.city, l.county, date].filter(Boolean).join(" · ");
+    const chips = $("detChips"); chips.replaceChildren();
+    const chip = (t, cls) => { const s = document.createElement("span"); s.className = "lchip" + (cls ? " " + cls : ""); s.textContent = t; chips.appendChild(s); };
+    if (l.status === "sold") chip("Vândut", "sold"); if (l.condition) chip(cap(l.condition), l.condition === "nou" ? "new" : ""); if (l.negotiable) chip("Preț negociabil");
     const loc = $("detLoc"), place = [l.address, l.city, l.county].filter(Boolean).join(", ");
     loc.replaceChildren(); loc.hidden = !place;
-    if (place) {
-      loc.append(place + " · ");
-      const m = document.createElement("a"); m.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(place + ", România"); m.target = "_blank"; m.rel = "noopener noreferrer"; m.textContent = "Vezi pe hartă"; loc.appendChild(m);
-    }
+    if (place) { loc.append("📍 " + place + " · "); const m = document.createElement("a"); m.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(place + ", România"); m.target = "_blank"; m.rel = "noopener noreferrer"; m.textContent = "Vezi pe hartă"; loc.appendChild(m); }
+    $("detDesc").textContent = l.description || ""; $("detDescBox").hidden = !l.description;
+    const rows = [...(l.condition ? [["Stare", cap(l.condition)]] : []), ...l.attributes.map((a) => [a.label, a.value]), ["Localitate", [l.city, l.county].filter(Boolean).join(", ")], ["Tip vânzător", l.seller_type === "firma" ? "Firmă" : "Persoană fizică"], ["Publicat", date], ["ID anunț", "#" + l.id]].filter((r) => r[1]);
+    $("detAttrs").replaceChildren(...rows.map(([k, v]) => { const d = document.createElement("div"), dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = k; dd.textContent = v; d.append(dt, dd); return d; }));
+    const sc = $("detSeller"); sc.replaceChildren();
+    const av = document.createElement("span"); av.className = "ad-av"; av.textContent = (l.seller || "V").charAt(0).toUpperCase();
+    const who = document.createElement("div"), nm = document.createElement("b"), mt = document.createElement("small");
+    nm.textContent = l.seller || "Vânzător"; mt.textContent = [l.seller_type === "firma" ? "Firmă" : "Persoană fizică", l.county].filter(Boolean).join(" · ");
+    who.append(nm, mt); sc.append(av, who);
+    /* bara de contact: mereu vizibilă jos, cu telefon, WhatsApp și mesaj */
     const act = $("detActions"); act.replaceChildren();
-    const add = (txt, fn, alt) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (alt) b.className = "alt"; b.addEventListener("click", () => { $("detailDialog").close(); fn(); }); act.appendChild(b); };
-    if (l.mine) { if (l.status !== "blocked") add("Editează anunțul", () => openEdit(l)); }
-    else if (l.seller_id && ["approved", "sold"].includes(l.status)) add("Trimite mesaj vânzătorului", () => (me ? openChat(l.id, l.seller_id, l.title) : openAuth()));
-    open("detailDialog");
+    const live = ["approved", "sold"].includes(l.status);
+    const btn = (txt, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls; b.addEventListener("click", fn); act.appendChild(b); return b; };
+    if (l.mine) { if (l.status !== "blocked") btn("✎ Editează anunțul", () => { $("detailDialog").close(); openEdit(l); }); }
+    else if (live) {
+      if (l.has_phone && l.status !== "sold") {
+        const call = btn("📞 Contact", async () => {
+          call.disabled = true;
+          try {
+            const { phone, whatsapp } = await api(`/api/listings/${l.id}/phone`);
+            const t = document.createElement("a"); t.href = "tel:" + phone.replace(/[^+\d]/g, ""); t.className = "call"; t.textContent = "📞 " + fmtPhone(phone);
+            const nodes = [t];
+            if (whatsapp) { const w = document.createElement("a"); w.href = waLink(phone); w.target = "_blank"; w.rel = "noopener noreferrer"; w.className = "wa"; w.textContent = "WhatsApp"; nodes.push(w); }
+            call.replaceWith(...nodes);
+          } catch (err) { call.disabled = false; showMessage("Eroare", errText(err)); }
+        }, "call");
+      }
+      if (l.seller_id) btn("✉️ Trimite mesaj", () => { $("detailDialog").close(); me ? openChat(l.id, l.seller_id, l.title) : openAuth(); }, l.has_phone && l.status !== "sold" ? "alt" : "call");
+      if (!l.has_phone && l.status !== "sold") { const n = document.createElement("small"); n.className = "ad-nophone"; n.textContent = "Vânzătorul nu a afișat telefonul. Scrie-i un mesaj."; act.prepend(n); }
+    }
+    open("detailDialog"); $("detailDialog").scrollTop = 0;
   } catch (err) { showMessage("Eroare", errText(err)); }
 }
 
