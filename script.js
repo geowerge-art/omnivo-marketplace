@@ -441,6 +441,10 @@ function card(l) {
   const a = document.createElement("article"); a.className = "product"; a.tabIndex = 0;
   const im = document.createElement("div"); im.className = "product-image";
   if (l.thumb) { const g = document.createElement("img"); g.src = l.thumb; g.alt = l.title; g.loading = "lazy"; im.appendChild(g); } else im.innerHTML = icon(iconOf[l.category_slug] || "alt", 60);
+  if (l.condition) {   // „Nou” / „Folosit”; la piese auto „Second-hand”
+    const cd = document.createElement("span"); cd.className = "cond " + l.condition;
+    cd.textContent = l.condition === "nou" ? "Nou" : (l.category_slug === "piese-auto" ? "Second-hand" : "Folosit"); im.appendChild(cd);
+  }
   if (mode === "public") im.appendChild(favBtn(l.id));
   const info = document.createElement("div"); info.className = "product-info";
   const h = document.createElement("h3"); h.textContent = l.title;
@@ -611,7 +615,69 @@ $("searchInput")?.addEventListener("input", () => {
   clearTimeout(pillTimer); pillTimer = setTimeout(updatePills, 180);
   if (!$("searchInput").value.trim()) { const had = pillCat || filter.q; pillCat = null; if (had) applySearch(false); }
 });
-$("bnSearch")?.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); $("searchInput").focus(); });
+/* ---- pagina de căutare pe tot ecranul (ca „Adaugă anunț”; model: AutoParts #searchOverlay) ---- */
+const REC_KEY = "omnivoRecentSearches";
+let spCat = null, spSeq = 0, spTimer = null, spClosedAt = 0;
+const spRecent = () => { try { return (JSON.parse(localStorage.getItem(REC_KEY)) || []).filter((x) => typeof x === "string" && x.trim()).slice(0, 10); } catch { return []; } };
+const spSave = (q) => { try { localStorage.setItem(REC_KEY, JSON.stringify([q, ...spRecent().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 10))); } catch { /* fără istoric */ } };
+function spItem(ico, text, sub, onPick) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "sp-item";
+  const i = document.createElement("span"); i.className = "sp-ico"; i.setAttribute("aria-hidden", "true"); i.textContent = ico;
+  const t = document.createElement("span"); t.className = "sp-txt"; t.textContent = text;
+  if (sub) { const s = document.createElement("small"); s.textContent = sub; t.appendChild(s); }
+  const a = document.createElement("em"); a.setAttribute("aria-hidden", "true"); a.textContent = "↖";
+  b.append(i, t, a); b.addEventListener("click", onPick); return b;
+}
+function spRenderCats() {
+  const box = $("spCats"); if (!box) return;
+  const mk = (label, slug) => { const b = document.createElement("button"); b.type = "button"; const on = (spCat ? spCat.slug : null) === slug; b.className = "pill" + (on ? " on" : ""); b.setAttribute("aria-pressed", on ? "true" : "false"); b.textContent = label; b.addEventListener("click", () => { spCat = slug ? { slug, name: label, parent: "" } : null; spRenderCats(); spRefresh(); }); return b; };
+  box.replaceChildren(mk("Toate", null), ...cats.map((c) => mk(c.name, c.slug)));
+}
+function spSubmit(q, cat) {
+  q = String(q || "").trim(); if (!q && !cat) return;
+  if (q) spSave(q);
+  $("searchDialog").close(); spClosedAt = Date.now();
+  if (!$("accountPage").hidden) accLeave();
+  $("searchInput").value = q; pillCat = cat || null; updatePills(); applySearch(true);
+}
+function spRefresh() {
+  const q = $("spInput").value.trim(), list = $("spList"), head = $("spRecentHead");
+  $("spClear").hidden = !$("spInput").value; clearTimeout(spTimer);
+  if (q.length < 2) {
+    spSeq++; const rec = spRecent(); head.hidden = !rec.length;
+    list.replaceChildren(...(rec.length ? rec.map((x) => spItem("↺", x, "", () => spSubmit(x, spCat))) : [Object.assign(document.createElement("p"), { className: "sp-empty", textContent: "Nu ai căutări recente." })]));
+    return;
+  }
+  head.hidden = true;
+  const own = [spItem("⌕", `Caută „${q}”`, spCat ? spCat.name : "Toate categoriile", () => spSubmit(q, spCat))];
+  list.replaceChildren(...own);
+  const seq = ++spSeq;
+  spTimer = setTimeout(async () => {
+    const f = fold(q), found = [];
+    for (const c of cats) for (const k of [c, ...c.children]) if (fold(k.name).split(/[^a-z0-9]+/).some((w) => w.startsWith(f))) found.push({ slug: k.slug, name: k.name, parent: k === c ? "" : c.name });
+    let remote = []; try { remote = (await api("/api/categories/suggest?title=" + encodeURIComponent(q))).suggestions.map((x) => ({ slug: x.slug, name: x.name, parent: x.parent })); } catch { /* fără sugestii */ }
+    if (seq !== spSeq) return;
+    const seen = new Set(), rows = [];
+    for (const c of [...remote, ...found]) if (!seen.has(c.slug)) { seen.add(c.slug); rows.push(spItem("▦", c.name, c.parent ? `în ${c.parent}` : "Categorie", () => spSubmit("", c))); }
+    list.replaceChildren(...own, ...rows.slice(0, 6));
+  }, 160);
+}
+function openSearchPage(value) {
+  if (!$("searchDialog")) return;
+  $("spInput").value = value || ""; spCat = pillCat || null;
+  if (!cats.length) loadCats();
+  spRenderCats(); spRefresh(); open("searchDialog"); $("spInput").focus();
+}
+$("spClose")?.addEventListener("click", () => { $("searchDialog").close(); spClosedAt = Date.now(); });
+$("spForm")?.addEventListener("submit", (e) => { e.preventDefault(); spSubmit($("spInput").value, spCat); });
+$("spInput")?.addEventListener("input", spRefresh);
+$("spClear")?.addEventListener("click", () => { $("spInput").value = ""; spRefresh(); $("spInput").focus(); });
+$("spRecentClear")?.addEventListener("click", () => { try { localStorage.removeItem(REC_KEY); } catch { /* nimic */ } spRefresh(); });
+$("bnSearch")?.addEventListener("click", () => openSearchPage($("searchInput").value.trim()));
+$("searchInput")?.addEventListener("focus", () => {   // pe telefon, bara de pe prima pagină deschide pagina de căutare
+  if (Date.now() - spClosedAt < 600 || !matchMedia("(max-width:760px)").matches || $("searchDialog").open) return;
+  $("searchInput").blur(); openSearchPage($("searchInput").value.trim());
+});
 
 /* ---- poze: comprimare în browser (max 1600 px, JPEG), previzualizare, încărcare una câte una ---- */
 const photos = [];

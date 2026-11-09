@@ -165,6 +165,21 @@
 </form>
 </dialog>
 
+  <dialog id="searchDialog" class="sheet sell-page search-page" aria-label="Căutare">
+    <div class="sell-top"><button class="dialog-close" id="spClose" aria-label="Închide">✕</button><h2>Caută</h2></div>
+    <div class="sp-body">
+      <form id="spForm" class="sp-box" role="search">
+        <svg class="search-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg>
+        <input id="spInput" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" maxlength="100" placeholder="Ce anume cauți?" aria-label="Ce anume cauți?">
+        <button type="button" class="sp-clear" id="spClear" aria-label="Șterge textul" hidden>✕</button>
+        <button type="submit" class="primary sp-go">Caută</button>
+      </form>
+      <div id="spCats" class="sp-cats" role="group" aria-label="Categorie"></div>
+      <div class="sp-recent-head" id="spRecentHead"><b>Căutări recente</b><button type="button" class="link-btn" id="spRecentClear">Șterge</button></div>
+      <div id="spList" class="sp-items" aria-live="polite"></div>
+    </div>
+  </dialog>
+
   <dialog id="authDialog" class="sheet">
     <button class="dialog-close" id="authClose" aria-label="Închide">✕</button>
     <div class="tabs"><button type="button" id="tabLogin" class="on">Intră în cont</button><button type="button" id="tabReg">Cont nou</button></div>
