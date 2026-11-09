@@ -16,8 +16,8 @@
       <a href="#categorii">Categorii</a>
       <a href="#anunturi">Anunțuri</a>
       <button id="loginButton">Contul meu</button>
-      <button class="sell-button" id="sellButton">+ Adaugă anunț</button>
     </nav>
+    <button type="button" class="hdr-plus" id="sellButton" aria-label="Adaugă anunț" title="Adaugă anunț">+</button>
   </header>
 
   <main>
@@ -180,6 +180,13 @@
     </div>
   </dialog>
 
+  <dialog id="promoDialog" class="sheet promo-sheet" aria-label="Promovează anunțul">
+    <h2 id="promoTitle">Promovează anunțul</h2>
+    <p class="muted" id="promoText">Anunțul promovat apare primul în listă, cu insigna „Promovat”.</p>
+    <div class="promo-plans" id="promoPlans"></div>
+    <button type="button" class="ghost" id="promoCancel">Renunță</button>
+  </dialog>
+
   <dialog id="authDialog" class="sheet">
     <button class="dialog-close" id="authClose" aria-label="Închide">✕</button>
     <div class="tabs"><button type="button" id="tabLogin" class="on">Intră în cont</button><button type="button" id="tabReg">Cont nou</button></div>
@@ -228,11 +235,11 @@
   <dialog id="detailDialog" class="sheet det">
     <div class="sell-top det-top"><button class="dialog-close" id="detClose" aria-label="Închide">✕</button><nav id="detCrumbs" class="ad-crumbs" aria-label="Categorie"></nav></div>
     <div id="detGal" class="ad-gal"></div>
+    <div class="ad-chips" id="detChips"></div>
     <div class="det-body">
       <h2 id="detTitle"></h2>
       <div class="ad-price" id="detPrice"></div>
       <p class="ad-sub" id="detSub"></p>
-      <div class="ad-chips" id="detChips"></div>
       <p class="det-loc" id="detLoc" hidden></p>
       <div id="detDescBox"><h3 class="ad-h">Descriere</h3><p id="detDesc" class="desc"></p></div>
       <h3 class="ad-h">Detalii</h3>
@@ -243,10 +250,10 @@
   </dialog>
 
   <dialog id="lightbox" class="lightbox" aria-label="Poza anunțului">
-    <button type="button" class="lb-close" id="lbClose" aria-label="Închide">×</button>
-    <button type="button" class="lb-nav prev" id="lbPrev" aria-label="Poza anterioară">‹</button>
+    <button type="button" class="lb-close" id="lbClose" aria-label="Închide"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+    <button type="button" class="lb-nav prev" id="lbPrev" aria-label="Poza anterioară"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
     <img id="lbImg" alt="">
-    <button type="button" class="lb-nav next" id="lbNext" aria-label="Poza următoare">›</button>
+    <button type="button" class="lb-nav next" id="lbNext" aria-label="Poza următoare"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
     <div class="lb-count" id="lbCount"></div>
   </dialog>
 

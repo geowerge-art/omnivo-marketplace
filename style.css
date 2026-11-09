@@ -919,3 +919,37 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
   #detailDialog.det { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; border-radius: 0; }
 }
 @media (min-width: 761px) { .sheet.det { overflow: hidden auto; } .sheet.det .ad-slide { height: 420px; } }
+
+/* ---- plusul din antet (laptop); pe telefon există + în bara de jos ---- */
+.header nav { margin-left: auto; }
+.hdr-plus { flex: none; width: 42px; height: 42px; margin-left: 22px; border: 0; border-radius: 50%; background: #14110c; color: #e9d3a8; font-size: 28px; line-height: 1; display: grid; place-items: center; cursor: pointer; box-shadow: 0 4px 12px rgba(20, 17, 12, .25); }
+.hdr-plus:hover { background: var(--gold); color: #14110c; }
+@media (max-width: 760px) { .hdr-plus { display: none; } }
+
+/* ---- săgețile din galerie: centrate, doar unde există mouse (pe telefon se trage cu degetul) ---- */
+.ad-nav { display: grid; place-items: center; padding: 0; width: 36px; height: 36px; font-size: 0; }
+@media (hover: none) { .ad-nav { display: none; } }
+
+/* ---- poza mare: încape în ecran, ✕ și săgețile rămân în interior ---- */
+.lightbox { position: fixed; inset: 0; margin: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; overflow: hidden; border-radius: 0; }
+.lightbox[open] { display: flex; align-items: center; justify-content: center; }
+.lightbox img { max-width: 100%; max-height: calc(100dvh - 120px); width: auto; height: auto; object-fit: contain; }
+.lb-close { top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; display: grid; place-items: center; padding: 0; z-index: 2; background: rgba(255, 255, 255, .2); }
+.lb-nav { display: grid; place-items: center; padding: 0; width: 44px; height: 44px; z-index: 2; }
+.lb-count { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+@media (hover: none) { .lb-nav { display: none; } }
+
+/* ---- pastilele chiar sub poză, pe un singur rând ---- */
+.sheet.det .ad-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0; padding: 12px 18px 0; gap: 8px; scrollbar-width: none; }
+.sheet.det .ad-chips::-webkit-scrollbar { display: none; }
+.sheet.det .ad-chips .lchip { flex: none; white-space: nowrap; }
+.lchip.promo { background: #fff4d6; color: #8a6414; border-color: #e6c877; }
+.sheet.det .det-body { padding-top: 10px; }
+
+/* ---- promovare ---- */
+.promo-tag { position: absolute; left: 8px; top: 8px; z-index: 1; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #14110c; color: #e9d3a8; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
+.acc-st.promo { background: #fff4d6; color: #8a6414; }
+.acc-acts button.promo { border-color: var(--gold); color: #8a6414; font-weight: 700; }
+.promo-sheet { padding: 22px 18px calc(22px + env(safe-area-inset-bottom, 0px)); }
+.promo-plans { display: grid; gap: 10px; margin: 14px 0; }
+.promo-plans button { width: 100%; min-height: 52px; margin: 0; }

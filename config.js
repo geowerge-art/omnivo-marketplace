@@ -16,6 +16,8 @@ module.exports = {
   REQUIRE_VERIFIED_EMAIL: env.REQUIRE_VERIFIED_EMAIL === 'true',
   // 'approved' = anunțurile apar imediat; 'pending' = intră în moderare (când ai panou de admin în frontend)
   NEW_LISTING_STATUS: env.NEW_LISTING_STATUS === 'pending' ? 'pending' : 'approved',
+  // promovarea anunțurilor: 'free' = gratuită (cu limite), 'off' = oprită (până adaugi plăți)
+  PROMO_MODE: env.PROMO_MODE === 'off' ? 'off' : 'free',
   SESSION_DAYS: 30,
   SESSION_SHORT_HOURS: 12
 };

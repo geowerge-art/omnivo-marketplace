@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const COUNTIES = ["Alba","Arad","Argeș","Bacău","Bihor","Bistrița-Năsăud","Botoșani","Brașov","Brăila","București","Buzău","Caraș-Severin","Călărași","Cluj","Constanța","Covasna","Dâmbovița","Dolj","Galați","Giurgiu","Gorj","Harghita","Hunedoara","Ialomița","Iași","Ilfov","Maramureș","Mehedinți","Mureș","Neamț","Olt","Prahova","Satu Mare","Sălaj","Sibiu","Suceava","Teleorman","Timiș","Tulcea","Vaslui","Vâlcea","Vrancea"];
 const ERR = {
+  REACTUALIZARE_PREA_DEVREME: "Poți reactualiza un anunț o singură dată la 24 de ore.", PROMOVARE_INDISPONIBILA: "Promovarea nu este disponibilă acum.", PREA_MULTE_PROMOVARI: "Poți avea cel mult 3 anunțuri promovate în același timp.", PROMOVARE_INVALIDA: "Alege 3, 7 sau 30 de zile.",
   INVALID_LOGIN: "Email, nickname sau parolă greșite.", LOGIN_RATE_LIMIT: "Prea multe încercări. Mai încearcă peste câteva minute.", CONT_BLOCAT: "Contul este blocat.",
   EMAIL_EXISTS: "Există deja un cont cu acest email.", NICKNAME_EXISTS: "Nickname-ul este luat.", NICKNAME_INVALID: "Nickname invalid (3-24 caractere: litere, cifre, . _ -).",
   PAROLA_SLABA: "Parola e prea slabă: folosește minim 8 caractere, nu o parolă comună.", TERMENI_NEACCEPTATI: "Trebuie să accepți termenii.", DATE_INVALIDE: "Completează corect toate câmpurile.",
@@ -300,7 +301,7 @@ function accMenu() {
   [["Anunțuri", () => accGo("mine")], ["Favorite", () => accGo("favs")], ["Căutări", () => accGo("saved")], ["Mesaje", openInbox]].forEach(([t, fn]) => { const b = document.createElement("button"); b.type = "button"; b.className = "facet"; b.textContent = t; b.addEventListener("click", fn); quick.appendChild(b); });
   const secs = document.createElement("div"); secs.className = "acc-sections";
   secs.append(
-    accSection("VÂND", [accItem("📦 Anunțurile mele", () => accGo("mine"), "", "accCntMine"), accItem("➕ Adaugă anunț", openSell), accItem("📊 Statistici anunțuri", () => accGo("stats"))]),
+    accSection("VÂND", [accItem("📦 Anunțurile mele", () => accGo("mine"), "", "accCntMine"), accItem("📣 Anunțuri promovate", () => { accFilter = "promo"; accGo("mine"); }), accItem("📊 Statistici anunțuri", () => accGo("stats"))]),
     accSection("CUMPĂR", [accItem("♡ Favorite", () => accGo("favs"), favIds.size || ""), accItem("🔔 Căutări salvate", () => accGo("saved"))]),
     accSection("CONVERSAȚII", [accItem("✉️ Mesaje", openInbox, unread || "", "accMsgsN")]),
     accSection("SETĂRI", [accItem("⚙️ Date generale și telefon", openSettings)])
@@ -375,14 +376,15 @@ async function renderStats(box) {
 }
 
 function drawMine(box) {
-  const cnt = (k) => accMine.filter((l) => k === "all" || l.status === k).length;
+  const inF = (l, k) => k === "all" || (k === "promo" ? l.promoted : l.status === k);
+  const cnt = (k) => accMine.filter((l) => inF(l, k)).length;
   const chips = document.createElement("div"); chips.className = "acc-chips";
-  [["all", "Toate"], ["approved", "Active"], ["pending", "În moderare"], ["sold", "Vândute"], ["rejected", "Respinse"]].forEach(([k, t]) => {
+  [["all", "Toate"], ["approved", "Active"], ["promo", "Promovate"], ["pending", "În moderare"], ["sold", "Vândute"], ["rejected", "Respinse"]].forEach(([k, t]) => {
     if (k !== "all" && k !== "approved" && !cnt(k)) return;
     const b = document.createElement("button"); b.type = "button"; b.className = "acc-chip" + (accFilter === k ? " on" : ""); b.textContent = `${t} (${cnt(k)})`;
     b.addEventListener("click", () => { accFilter = k; drawMine(box); }); chips.appendChild(b);
   });
-  const list = accMine.filter((l) => accFilter === "all" || l.status === accFilter);
+  const list = accMine.filter((l) => inF(l, accFilter));
   const out = [chips];
   if (!list.length) {
     out.push(note(accMine.length ? "Niciun anunț în această categorie." : "Nu ai publicat niciun anunț încă."));
@@ -390,6 +392,24 @@ function drawMine(box) {
   } else out.push(...list.map((l) => mineRow(l, box)));
   box.replaceChildren(...out);
 }
+function openPromo(l) {
+  const until = l.promoted ? new Date(l.promoted_until).toLocaleDateString("ro-RO", { day: "numeric", month: "long" }) : "";
+  $("promoTitle").textContent = l.promoted ? "Prelungește promovarea" : "Promovează anunțul";
+  $("promoText").textContent = `„${l.title}” apare primul în listă, cu insigna „Promovat”.` + (until ? ` Acum este promovat până pe ${until}; zilele noi se adaugă după.` : "");
+  const box = $("promoPlans"); box.replaceChildren();
+  [[3, "3 zile"], [7, "7 zile"], [30, "30 de zile"]].forEach(([d, t]) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = t;
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { await api(`/api/listings/${l.id}/promote`, "POST", { days: d }); $("promoDialog").close(); showMessage("Promovat", `Anunțul este promovat ${t}.`); renderAcc(); loadListings(); }
+      catch (err) { $("promoDialog").close(); showMessage("Eroare", errText(err)); }
+      b.disabled = false;
+    });
+    box.appendChild(b);
+  });
+  open("promoDialog");
+}
+$("promoCancel")?.addEventListener("click", () => $("promoDialog").close());
 function mineRow(l, box) {
   const r = document.createElement("div"); r.className = "acc-row";
   const th = document.createElement("div"); th.className = "acc-thumb";
@@ -401,11 +421,14 @@ function mineRow(l, box) {
   const [lab, cls] = ST[l.status] || [l.status, ""]; const s = document.createElement("span"); s.className = "acc-st " + cls; s.textContent = lab;
   const d = document.createElement("small"); d.textContent = new Date(l.created_at).toLocaleDateString("ro-RO");
   meta.append(s, d);
+  if (l.promoted) { const pr = document.createElement("span"); pr.className = "acc-st promo"; pr.textContent = "⭐ Promovat până pe " + new Date(l.promoted_until).toLocaleDateString("ro-RO", { day: "numeric", month: "short" }); meta.appendChild(pr); }
   const acts = document.createElement("div"); acts.className = "acc-acts";
   const act = (txt, fn, cls2) => { const b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls2) b.className = cls2; b.addEventListener("click", async (e) => { e.stopPropagation(); b.disabled = true; try { await fn(); } catch (err) { showMessage("Eroare", errText(err)); } b.disabled = false; }); acts.appendChild(b); };
   if (l.status !== "blocked") act("✎ Editează", async () => { const { listing } = await api("/api/listings/" + l.id); openEdit(listing); });
   if (l.status === "approved") act("✓ Vândut", async () => { await api(`/api/listings/${l.id}/status`, "PATCH", { status: "sold" }); renderAcc(); loadListings(); });
   if (l.status === "sold") act("↺ Repune la vânzare", async () => { await api(`/api/listings/${l.id}/status`, "PATCH", { status: "approved" }); renderAcc(); loadListings(); });
+  if (l.status === "approved") act("↑ Reactualizează", async () => { await api(`/api/listings/${l.id}/bump`, "POST"); showMessage("Reactualizat", "Anunțul a urcat în capul listei."); renderAcc(); loadListings(); });
+  if (l.status === "approved") act(l.promoted ? "📣 Prelungește promovarea" : "📣 Promovează", async () => openPromo(l), "promo");
   act("🗑 Șterge", async () => { if (!confirm(`Ștergi anunțul „${l.title}”?`)) return; await api("/api/listings/" + l.id, "DELETE"); renderAcc(); loadListings(); }, "danger");
   mid.append(t, p, meta, acts); r.append(th, mid);
   [th, t, p].forEach((el) => el.addEventListener("click", () => openDetail(l.id)));
@@ -445,6 +468,7 @@ function card(l) {
     const cd = document.createElement("span"); cd.className = "cond " + l.condition;
     cd.textContent = l.condition === "nou" ? "Nou" : (l.category_slug === "piese-auto" ? "Second-hand" : "Folosit"); im.appendChild(cd);
   }
+  if (l.promoted) { const pt = document.createElement("span"); pt.className = "promo-tag"; pt.textContent = "⭐ Promovat"; im.appendChild(pt); }
   if (mode === "public") im.appendChild(favBtn(l.id));
   const info = document.createElement("div"); info.className = "product-info";
   const h = document.createElement("h3"); h.textContent = l.title;
@@ -492,12 +516,13 @@ function buildGallery(images, title) {
   });
   g.appendChild(sl);
   if (images.length < 2) return;
-  const nav = (cls, txt, d) => { const b = document.createElement("button"); b.type = "button"; b.className = "ad-nav " + cls; b.textContent = txt; b.setAttribute("aria-label", d < 0 ? "Poza anterioară" : "Poza următoare"); b.addEventListener("click", () => sl.scrollBy({ left: d * sl.clientWidth, behavior: "smooth" })); return b; };
+  const nav = (cls, txt, d) => { const b = document.createElement("button"); b.type = "button"; b.className = "ad-nav " + cls; b.innerHTML = d < 0 ? CHEV_L : CHEV_R; b.setAttribute("aria-label", d < 0 ? "Poza anterioară" : "Poza următoare"); b.addEventListener("click", () => sl.scrollBy({ left: d * sl.clientWidth, behavior: "smooth" })); return b; };
   const cnt = document.createElement("span"); cnt.className = "ad-count"; cnt.textContent = `1 / ${images.length}`;
   const dots = document.createElement("div"); dots.className = "ad-dots"; dots.setAttribute("aria-hidden", "true"); dots.innerHTML = images.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("");
   g.append(nav("prev", "‹", -1), nav("next", "›", 1), cnt, dots);
   sl.addEventListener("scroll", () => { const i = Math.round(sl.scrollLeft / sl.clientWidth); cnt.textContent = `${i + 1} / ${images.length}`; [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i)); });
 }
+const CHEV_L = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>', CHEV_R = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 let lb = { list: [], i: 0 };
 function lbShow() { $("lbImg").src = lb.list[lb.i]; $("lbCount").textContent = `${lb.i + 1} / ${lb.list.length}`; $("lbPrev").hidden = $("lbNext").hidden = lb.list.length < 2; }
 function lbMove(d) { if (lb.list.length < 2) return; lb.i = (lb.i + d + lb.list.length) % lb.list.length; lbShow(); }
@@ -525,7 +550,7 @@ async function openDetail(id) {
     $("detSub").textContent = [l.city, l.county, date].filter(Boolean).join(" · ");
     const chips = $("detChips"); chips.replaceChildren();
     const chip = (t, cls) => { const s = document.createElement("span"); s.className = "lchip" + (cls ? " " + cls : ""); s.textContent = t; chips.appendChild(s); };
-    if (l.status === "sold") chip("Vândut", "sold"); if (l.condition) chip(cap(l.condition), l.condition === "nou" ? "new" : ""); if (l.negotiable) chip("Preț negociabil");
+    if (l.status === "sold") chip("Vândut", "sold"); if (l.condition) chip(l.condition === "nou" ? "Nou" : (fold(l.category || "") === "piese auto" ? "Second-hand" : "Folosit"), l.condition === "nou" ? "new" : ""); if (l.promoted_until && new Date(l.promoted_until) > new Date()) chip("⭐ Promovat", "promo"); if (l.negotiable) chip("Preț negociabil");
     const loc = $("detLoc"), place = [l.address, l.city, l.county].filter(Boolean).join(", ");
     loc.replaceChildren(); loc.hidden = !place;
     if (place) { loc.append("📍 " + place + " · "); const m = document.createElement("a"); m.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(place + ", România"); m.target = "_blank"; m.rel = "noopener noreferrer"; m.textContent = "Vezi pe hartă"; loc.appendChild(m); }
