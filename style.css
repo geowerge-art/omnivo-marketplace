@@ -491,3 +491,13 @@ dialog h2 {
   .bn-sell{color:var(--blue)}
   .bn-plus{display:grid!important;place-items:center;width:42px;height:42px;margin-top:-18px;border-radius:50%;background:var(--blue);color:#fff;font-size:26px!important;box-shadow:0 6px 16px rgba(23,105,224,.4)}
 }
+
+/* --- formulare, carduri, detaliu --- */
+.sheet label{display:block;margin-top:10px}.sheet select,.sheet textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font:inherit;font-size:16px;margin:6px 0;background:#fff}
+.sheet{max-height:92vh;overflow-y:auto}.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.row2 input,.row2 select{margin:6px 0}
+.check{display:flex!important;gap:8px;align-items:center;font-weight:500!important;min-height:44px}.check input{width:auto!important;height:auto!important;margin:0!important}
+.primary,.ghost{width:100%;min-height:50px;border-radius:12px;font-weight:700;font-size:16px;margin-top:12px;border:1px solid var(--blue)}.primary{background:var(--blue);color:#fff}.ghost{background:#fff;color:var(--blue)}
+.err{color:#b3261e;font-weight:600;margin:8px 0}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 10px}.tabs button{min-height:44px;border:0;border-bottom:3px solid var(--border);background:none;font-weight:700;color:var(--muted)}.tabs .on{border-color:var(--blue);color:var(--blue)}
+.price{font-size:24px;font-weight:800;color:var(--blue);margin:6px 0}.attrs{list-style:none;display:grid;gap:4px;margin:10px 0}.attrs li{background:var(--light);padding:8px 12px;border-radius:10px}.desc{white-space:pre-wrap;margin:10px 0}.seller a{font-weight:700;color:var(--blue)}
+.card-actions{display:flex;gap:8px;padding:0 14px 14px}.card-actions button{flex:1;min-height:44px;border-radius:10px;border:1px solid var(--blue);background:#fff;color:var(--blue);font-weight:600}
+.product{cursor:pointer}.tag{display:inline-block;font-size:12px;background:var(--light);color:var(--muted);padding:2px 8px;border-radius:10px}

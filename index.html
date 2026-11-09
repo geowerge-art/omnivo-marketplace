@@ -55,35 +55,10 @@
       <div class="section-heading">
         <div>
           <span class="eyebrow">PIAȚA OMNIVO</span>
-          <h2>Anunțuri recente</h2>
+          <h2 id="listTitle">Anunțuri recente</h2>
         </div>
       </div>
-      <div id="products" class="products">
-        <article class="product">
-          <div class="product-image">📱</div>
-          <div class="product-info">
-            <h3>Telefon mobil</h3>
-            <p>Exemplu de anunț Omnivo</p>
-            <strong>750 lei</strong>
-          </div>
-        </article>
-        <article class="product">
-          <div class="product-image">🪑</div>
-          <div class="product-info">
-            <h3>Scaun modern</h3>
-            <p>Exemplu de anunț Omnivo</p>
-            <strong>180 lei</strong>
-          </div>
-        </article>
-        <article class="product">
-          <div class="product-image">🚲</div>
-          <div class="product-info">
-            <h3>Bicicletă</h3>
-            <p>Exemplu de anunț Omnivo</p>
-            <strong>500 lei</strong>
-          </div>
-        </article>
-      </div>
+      <div id="products" class="products"></div>
       <p id="emptyMessage" class="empty" hidden>Nu am găsit anunțuri pentru căutarea ta.</p>
     </section>
 
@@ -118,12 +93,59 @@
   <dialog id="sellDialog" class="sheet">
     <button class="dialog-close" id="sellClose" aria-label="Închide">✕</button>
     <h2>Adaugă un anunț</h2>
-    <label for="sellTitle">Ce vinzi?</label>
-    <input id="sellTitle" maxlength="120" placeholder="ex: iPhone 13, 128GB" autocomplete="off">
-    <p id="sellHint" class="muted">Scrie titlul și îți sugerăm categoria.</p>
-    <div id="sellChips" class="chips"></div>
-    <p id="sellPicked" class="picked" hidden></p>
-    <p class="muted">Publicarea completă (poze, preț, descriere) vine în pasul următor.</p>
+    <form id="sellForm" novalidate>
+      <label for="sellTitle">Ce vinzi?</label>
+      <input id="sellTitle" name="title" maxlength="120" placeholder="ex: iPhone 13, 128GB" autocomplete="off" required>
+      <div id="sellChips" class="chips"></div>
+      <label for="sellCat">Categorie</label>
+      <select id="sellCat" name="category_id" required><option value="">Alege categoria…</option></select>
+      <div id="sellAttrs"></div>
+      <div class="row2">
+        <div><label for="sellPrice">Preț</label><input id="sellPrice" name="price" type="number" inputmode="decimal" min="0" placeholder="0"></div>
+        <div><label for="sellCur">Moneda</label><select id="sellCur" name="currency"><option value="RON">lei</option><option value="EUR">€</option></select></div>
+      </div>
+      <div class="row2">
+        <div><label for="sellCond">Stare</label><select id="sellCond" name="condition"><option value="folosit">Folosit</option><option value="nou">Nou</option></select></div>
+        <div><label for="sellCounty">Județ</label><select id="sellCounty" name="county"></select></div>
+      </div>
+      <label for="sellDesc">Descriere</label>
+      <textarea id="sellDesc" name="description" rows="4" maxlength="4000" placeholder="Detalii despre produs"></textarea>
+      <label class="check"><input type="checkbox" name="negotiable"> Preț negociabil</label>
+      <p id="sellErr" class="err" hidden></p>
+      <button class="primary" type="submit" id="sellSubmit">Publică anunțul</button>
+    </form>
+  </dialog>
+
+  <dialog id="authDialog" class="sheet">
+    <button class="dialog-close" id="authClose" aria-label="Închide">✕</button>
+    <div class="tabs"><button type="button" id="tabLogin" class="on">Intră în cont</button><button type="button" id="tabReg">Cont nou</button></div>
+    <form id="loginForm" novalidate>
+      <label for="lgId">Email sau nickname</label><input id="lgId" autocomplete="username" required>
+      <label for="lgPw">Parola</label><input id="lgPw" type="password" autocomplete="current-password" required>
+      <p class="err" id="lgErr" hidden></p><button class="primary" type="submit">Intră</button>
+    </form>
+    <form id="regForm" novalidate hidden>
+      <label for="rgName">Nume</label><input id="rgName" autocomplete="name" required>
+      <label for="rgNick">Nickname (3-24: litere, cifre, . _ -)</label><input id="rgNick" autocomplete="nickname" required>
+      <label for="rgEmail">Email</label><input id="rgEmail" type="email" autocomplete="email" required>
+      <label for="rgPw">Parola (minim 8 caractere)</label><input id="rgPw" type="password" autocomplete="new-password" required>
+      <label class="check"><input type="checkbox" id="rgTerms"> Sunt de acord cu termenii și condițiile</label>
+      <p class="err" id="rgErr" hidden></p><button class="primary" type="submit">Creează cont</button>
+    </form>
+  </dialog>
+
+  <dialog id="accountDialog" class="sheet">
+    <button class="dialog-close" id="accClose" aria-label="Închide">✕</button>
+    <h2 id="accName">Contul meu</h2>
+    <button class="primary" id="accMine" type="button">Anunțurile mele</button>
+    <button class="primary" id="accMod" type="button" hidden>Moderare anunțuri</button>
+    <button class="ghost" id="accOut" type="button">Ieșire din cont</button>
+  </dialog>
+
+  <dialog id="detailDialog" class="sheet">
+    <button class="dialog-close" id="detClose" aria-label="Închide">✕</button>
+    <h2 id="detTitle"></h2><p class="price" id="detPrice"></p><p class="muted" id="detMeta"></p>
+    <ul id="detAttrs" class="attrs"></ul><p id="detDesc" class="desc"></p><p id="detSeller" class="seller"></p>
   </dialog>
 
   <dialog id="messageDialog">

@@ -11,6 +11,8 @@ module.exports = {
   RESEND_API_KEY: env.RESEND_API_KEY || '',
   RESEND_FROM: env.RESEND_FROM || '',
   REQUIRE_VERIFIED_EMAIL: env.REQUIRE_VERIFIED_EMAIL === 'true',
+  // 'approved' = anunțurile apar imediat; 'pending' = intră în moderare (când ai panou de admin în frontend)
+  NEW_LISTING_STATUS: env.NEW_LISTING_STATUS === 'pending' ? 'pending' : 'approved',
   SESSION_DAYS: 30,
   SESSION_SHORT_HOURS: 12
 };

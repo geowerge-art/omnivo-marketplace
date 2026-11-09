@@ -9,6 +9,7 @@ const { ah, originCheck, errorHandler } = require('./common');
 const { loadUser } = require('./authmw');
 const auth = require('./auth');
 const categories = require('./categories');
+const listings = require('./listings');
 
 function createApp() {
   const app = express();
@@ -48,6 +49,8 @@ function createApp() {
 
   app.use('/api/auth', auth.router);
   app.use('/api/categories', categories.router);
+  app.use('/api/listings', listings.router);
+  app.use('/api/admin/listings', listings.adminRouter);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'NEGASIT' })); // niciodată index.html pentru /api/*
 
