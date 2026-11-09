@@ -21,15 +21,12 @@
   </header>
 
   <main>
-    <section class="hero">
-      <span class="eyebrow">BINE AI VENIT PE OMNIVO</span>
-      <h1>Tot ce cauți.<br>Într-un singur loc.</h1>
-      <p>Cumpără și vinde simplu, rapid și sigur.</p>
-      <form id="searchForm" class="search">
-        <input id="searchInput" type="search" placeholder="Ce cauți astăzi?">
-        <button type="submit">Caută</button>
+    <section class="searchbar">
+      <form id="searchForm" class="search" role="search">
+        <svg class="search-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg>
+        <input id="searchInput" type="search" placeholder="Caută" aria-label="Caută" autocomplete="off" enterkeyhint="search">
+        <button type="submit" aria-label="Caută"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg></button>
       </form>
-      <div class="hero-note">Anunțuri din toată România</div>
     </section>
 
     <section class="section" id="categorii">
