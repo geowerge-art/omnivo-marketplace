@@ -37,14 +37,14 @@
         </div>
       </div>
       <div class="categories">
-        <a href="#anunturi">🚗 <span>Auto și moto</span></a>
-        <a href="#anunturi">📱 <span>Electronice</span></a>
-        <a href="#anunturi">🏠 <span>Casă și grădină</span></a>
-        <a href="#anunturi">👕 <span>Modă</span></a>
-        <a href="#anunturi">🛠️ <span>Servicii</span></a>
-        <a href="#anunturi">⚽ <span>Sport și timp liber</span></a>
-        <a href="#anunturi">🪑 <span>Mobilă</span></a>
-        <a href="#anunturi">🧸 <span>Copii și jucării</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="auto-moto"></i><span>Auto și moto</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="electronice"></i><span>Electronice</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="casa-gradina"></i><span>Casă și grădină</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="moda"></i><span>Modă</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="servicii"></i><span>Servicii</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="sport-timp-liber"></i><span>Sport și timp liber</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="mobila"></i><span>Mobilă</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="copii-jucarii"></i><span>Copii și jucării</span></a>
       </div>
     </section>
 
@@ -74,11 +74,11 @@
 
 
   <nav class="bottom-nav" aria-label="Navigare principală">
-    <a href="/" class="bn-item"><span>🏠</span>Acasă</a>
-    <button type="button" class="bn-item" id="bnCats"><span>☰</span>Categorii</button>
-    <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span class="bn-plus">+</span>Adaugă</button>
-    <button type="button" class="bn-item" id="bnSearch"><span>🔍</span>Caută</button>
-    <button type="button" class="bn-item" id="bnAccount"><span>👤</span>Cont<i class="bn-badge" id="bnBadge" hidden></i></button>
+    <a href="/" class="bn-item"><span data-ic="acasa"></span>Acasă</a>
+    <button type="button" class="bn-item" id="bnCats"><span data-ic="meniu"></span>Categorii</button>
+    <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span class="bn-plus" data-ic="plus"></span>Adaugă</button>
+    <button type="button" class="bn-item" id="bnSearch"><span data-ic="lupa"></span>Caută</button>
+    <button type="button" class="bn-item" id="bnAccount"><span data-ic="cont"></span>Cont<i class="bn-badge" id="bnBadge" hidden></i></button>
   </nav>
 
   <div class="scrim" id="scrim" hidden></div>
@@ -93,6 +93,7 @@
     <form id="sellForm" novalidate>
       <label for="sellTitle">Ce vinzi?</label>
       <input id="sellTitle" name="title" maxlength="120" placeholder="ex: iPhone 13, 128GB" autocomplete="off" required>
+      <p id="sellAuto" class="auto-note" hidden></p>
       <div id="sellChips" class="chips"></div>
       <label for="sellCat">Categorie</label>
       <select id="sellCat" name="category_id" required><option value="">Alege categoria…</option></select>
@@ -180,6 +181,7 @@
     <p id="dialogText"></p>
   </dialog>
 
+  <script src="/icons.js"></script>
   <script src="/script.js"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@ const ERR = {
   MESAJ_INVALID: "Scrie un mesaj de maximum 2000 de caractere.", PREA_MULTE_MESAJE: "Ai trimis prea multe mesaje. Încearcă mai târziu.", BLOCAT: "Nu poți trimite mesaje acestui utilizator.",
   BLOCAT_DE_TINE: "Ai blocat acest utilizator. Deblochează-l ca să-i scrii.", INTERZIS: "Nu ai voie să faci asta.", NEGASIT: "Nu am găsit ce căutai.", NU_SE_POATE_BLOCA: "Acest cont nu poate fi blocat."
 };
+let catManual = false;
 let me = null, cats = [], iconOf = {}, mode = "public", filter = {};
 let editing = null, existing = [];            // editarea unui anunț: id-ul și pozele deja salvate
 let chat = null, chatTimer = null, unreadTimer = null, unread = 0;
@@ -35,6 +36,9 @@ $("closeDialog")?.addEventListener("click", () => $("messageDialog").close());
 [["sellClose", "sellDialog"], ["authClose", "authDialog"], ["accClose", "accountDialog"], ["detClose", "detailDialog"], ["inboxClose", "inboxDialog"], ["chatClose", "chatDialog"]].forEach(([b, d]) => $(b)?.addEventListener("click", () => $(d).close()));
 $("menuButton")?.addEventListener("click", () => $("mainMenu").classList.toggle("open"));
 
+/* ---- pictograme ---- */
+document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.dataset.ic, el.classList.contains("cat-ic") ? 42 : 24); });
+
 /* ---- categorii, sertar, formular ---- */
 function setDrawer(on) { $("drawer").hidden = !on; $("scrim").hidden = !on; document.body.style.overflow = on ? "hidden" : ""; }
 function pickCategory(slug, name) { filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
@@ -43,21 +47,21 @@ async function loadCats() {
   try { cats = (await api("/api/categories")).categories; } catch { return; }
   const sel = $("sellCat"), list = $("drawerList"); list.innerHTML = "";
   for (const c of cats) {
-    iconOf[c.slug] = c.icon;
+    iconOf[c.slug] = c.slug;
     const kids = c.children.length ? c.children : [];
     const li = document.createElement("li"), b = document.createElement("b");
-    b.textContent = `${c.icon || ""} ${c.name}`; b.style.cursor = "pointer";
+    b.innerHTML = icon(c.slug, 22); b.append(" " + c.name); b.className = "drawer-cat"; b.style.cursor = "pointer";
     b.addEventListener("click", () => { setDrawer(false); pickCategory(c.slug, c.name); }); li.appendChild(b);
     const og = document.createElement("optgroup"); og.label = c.name;
     for (const k of kids.length ? kids : [c]) {
-      iconOf[k.slug] = c.icon;
+      iconOf[k.slug] = c.slug;
       if (kids.length) { const a = document.createElement("a"); a.href = "#anunturi"; a.textContent = k.name; a.addEventListener("click", () => { setDrawer(false); pickCategory(k.slug, k.name); }); li.appendChild(a); }
       const o = document.createElement("option"); o.value = k.id; o.textContent = k.name; og.appendChild(o);
     }
     sel.appendChild(og); list.appendChild(li);
   }
   document.querySelectorAll("#categorii .categories a").forEach((a) => a.addEventListener("click", (e) => {
-    e.preventDefault(); const n = a.textContent.trim().replace(/^\S+\s/, ""); const c = cats.find((x) => fold(x.name) === fold(n)); if (c) pickCategory(c.slug, c.name);
+    e.preventDefault(); const n = a.querySelector("span").textContent.trim(); const c = cats.find((x) => fold(x.name) === fold(n)); if (c) pickCategory(c.slug, c.name);
   }));
 }
 $("bnCats")?.addEventListener("click", () => { setDrawer(true); if (!cats.length) loadCats(); });
@@ -77,23 +81,31 @@ function renderAttrs() {
     f.id = "at-" + d.key; f.dataset.attr = d.key; box.appendChild(f);
   }
 }
-$("sellCat")?.addEventListener("change", renderAttrs);
+$("sellCat")?.addEventListener("change", () => { catManual = true; $("sellAuto").hidden = true; renderAttrs(); });
 
+/* Categoria se alege singură din cuvintele titlului (ca în autoparts); dacă o schimbi tu, nu mai intervine. */
+function setCatAuto(s) {
+  $("sellCat").value = s.id; renderAttrs();
+  const n = $("sellAuto"); n.textContent = `✨ Categorie aleasă automat: ${s.parent} › ${s.name}. Poți schimba dacă nu e corectă.`; n.hidden = false;
+}
 let timer;
 $("sellTitle")?.addEventListener("input", (e) => {
   clearTimeout(timer); const t = e.target.value.trim();
-  if (t.length < 3) { $("sellChips").innerHTML = ""; return; }
+  if (t.length < 3) { $("sellChips").innerHTML = ""; $("sellAuto").hidden = true; return; }
   timer = setTimeout(async () => {
     try {
       const { suggestions } = await api("/api/categories/suggest?title=" + encodeURIComponent(t));
       $("sellChips").innerHTML = "";
+      if (!suggestions.length) { if (!catManual) $("sellAuto").hidden = true; return; }
+      if (!catManual && !editing) setCatAuto(suggestions[0]);
       for (const s of suggestions) {
+        if (Number($("sellCat").value) === s.id) continue;
         const b = document.createElement("button"); b.type = "button"; b.textContent = `${s.parent} › ${s.name}`;
-        b.addEventListener("click", () => { $("sellCat").value = s.id; renderAttrs(); $("sellChips").innerHTML = ""; });
+        b.addEventListener("click", () => { $("sellCat").value = s.id; catManual = true; $("sellAuto").hidden = true; renderAttrs(); $("sellChips").innerHTML = ""; });
         $("sellChips").appendChild(b);
       }
     } catch { /* fără sugestii */ }
-  }, 350);
+  }, 300);
 });
 
 $("sellForm")?.addEventListener("submit", async (e) => {
@@ -127,13 +139,13 @@ $("sellForm")?.addEventListener("submit", async (e) => {
 
 /* ---- editarea unui anunț existent: același formular, precompletat ---- */
 function resetSell() {
-  editing = null; existing = [];
+  editing = null; existing = []; catManual = false; $("sellAuto").hidden = true;
   $("sellHead").textContent = "Adaugă un anunț"; $("sellSubmit").textContent = "Publică anunțul";
   photos.forEach((p) => URL.revokeObjectURL(p.url)); photos.length = 0;
   $("sellForm").reset(); $("sellAttrs").innerHTML = ""; $("sellChips").innerHTML = ""; show($("sellErr"), "");
   renderExisting(); renderPrev();
 }
-$("sellDialog")?.addEventListener("close", () => { if (editing) resetSell(); });
+$("sellDialog")?.addEventListener("close", () => { catManual = false; $("sellAuto").hidden = true; if (editing) resetSell(); });
 function renderExisting() {
   const box = $("sellExisting"); box.hidden = !existing.length;
   box.replaceChildren(...existing.map((im, i) => {
@@ -193,7 +205,7 @@ $("accMod").addEventListener("click", () => { mode = "admin"; $("listTitle").tex
 function card(l) {
   const a = document.createElement("article"); a.className = "product"; a.tabIndex = 0;
   const im = document.createElement("div"); im.className = "product-image";
-  if (l.thumb) { const g = document.createElement("img"); g.src = l.thumb; g.alt = l.title; g.loading = "lazy"; im.appendChild(g); } else im.textContent = iconOf[l.category_slug] || "📦";
+  if (l.thumb) { const g = document.createElement("img"); g.src = l.thumb; g.alt = l.title; g.loading = "lazy"; im.appendChild(g); } else im.innerHTML = icon(iconOf[l.category_slug] || "alt", 60);
   const info = document.createElement("div"); info.className = "product-info";
   const h = document.createElement("h3"); h.textContent = l.title;
   const p = document.createElement("p"); p.textContent = [l.county, l.category].filter(Boolean).join(" · ");

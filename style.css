@@ -506,3 +506,17 @@ dialog h2 {
 
 .header nav button.sell-button{background:#14110c;color:#e9d3a8;padding:12px 20px}
 .header nav button.sell-button:hover{background:var(--gold);color:#14110c}
+
+/* pictograme */
+.cat-ic{flex:none;width:56px;height:56px;display:grid;place-items:center;border-radius:16px;background:#14110c;color:#d4b483;font-style:normal;transition:.2s}
+.categories a:hover .cat-ic{background:var(--gold);color:#14110c}
+.categories a:hover{border-color:var(--gold)}
+.product-image{color:var(--gold)}
+.drawer-cat{display:flex!important;align-items:center;gap:10px}
+.drawer-cat .ico{color:var(--gold);flex:none}
+.bn-item span[data-ic]{display:grid;place-items:center;height:24px}
+.bn-item .ico{width:24px;height:24px}
+.bn-sell{color:var(--blue)}
+.bn-plus .ico{width:24px;height:24px;stroke-width:2.2}
+.auto-note{background:#f6edd9;border:1px solid #e9d3a8;color:#7a5a28;border-radius:10px;padding:8px 12px;font-size:14px;margin:8px 0}
+@media (max-width:650px){.cat-ic{width:44px;height:44px;border-radius:13px}.cat-ic .ico{width:34px;height:34px}}
