@@ -65,9 +65,28 @@ async function loadCats() {
   document.querySelectorAll("#categorii .categories a").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault(); const n = a.querySelector("span").textContent.trim(); const c = cats.find((x) => fold(x.name) === fold(n)); if (c) pickCategory(c.slug, c.name);
   }));
-  updatePills();
+  buildCatPanel(); updatePills();
 }
 $("bnCats")?.addEventListener("click", () => { setDrawer(true); if (!cats.length) loadCats(); });
+$("bnChat")?.addEventListener("click", () => (me ? openInbox() : openAuth("Intră în cont ca să vezi mesajele.")));
+
+/* telefon: lista completă de categorii se deschide pe loc, în secțiunea „Categorii populare", și se închide când apeși în altă parte */
+function closeCatPanel() { const p = $("catPanel"); if (!p || p.hidden) return; p.hidden = true; $("catToggle").setAttribute("aria-expanded", "false"); }
+function buildCatPanel() {
+  const ul = $("catPanelList"); if (!ul) return; ul.replaceChildren();
+  for (const c of cats) {
+    const li = document.createElement("li"), b = document.createElement("button"); b.type = "button"; b.className = "cat-row"; b.innerHTML = icon(c.slug, 22); b.append(" " + c.name);
+    b.addEventListener("click", () => { closeCatPanel(); pickCategory(c.slug, c.name); }); li.appendChild(b);
+    if (c.children.length) {
+      const sub = document.createElement("div"); sub.className = "cat-subs";
+      for (const k of c.children) { const a = document.createElement("button"); a.type = "button"; a.textContent = k.name; a.addEventListener("click", () => { closeCatPanel(); pickCategory(k.slug, k.name); }); sub.appendChild(a); }
+      li.appendChild(sub);
+    }
+    ul.appendChild(li);
+  }
+}
+$("catToggle")?.addEventListener("click", () => { const p = $("catPanel"), open = p.hidden; if (open && !cats.length) loadCats(); p.hidden = !open; $("catToggle").setAttribute("aria-expanded", String(open)); });
+document.addEventListener("click", (e) => { if (!e.target.closest("#catPanel, #catToggle")) closeCatPanel(); });
 $("drawerClose")?.addEventListener("click", () => setDrawer(false));
 $("scrim")?.addEventListener("click", () => setDrawer(false));
 
@@ -229,7 +248,7 @@ function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră 
 function openAuth() { open("authDialog"); }
 const tab = (reg) => { $("loginForm").hidden = reg; $("regForm").hidden = !reg; $("tabLogin").classList.toggle("on", !reg); $("tabReg").classList.toggle("on", reg); };
 $("tabLogin").addEventListener("click", () => tab(false)); $("tabReg").addEventListener("click", () => tab(true));
-function renderUnread() { $("loginButton").textContent = me ? me.nickname + (unread ? ` (${unread})` : "") : "Contul meu"; if ($("accMsgsN")) { $("accMsgsN").textContent = unread ? String(unread) : ""; $("accMsgsN").hidden = !unread; } const bd = $("bnBadge"); if (bd) { bd.hidden = !unread; bd.textContent = unread > 9 ? "9+" : unread; } }
+function renderUnread() { if ($("accMsgsN")) { $("accMsgsN").textContent = unread ? String(unread) : ""; $("accMsgsN").hidden = !unread; } ["bnBadge", "hdrBadge"].forEach((k) => { const bd = $(k); if (bd) { bd.hidden = !unread; bd.textContent = unread > 9 ? "9+" : unread; } }); }
 async function refreshUnread() { if (!me) return; try { unread = (await api("/api/messages/unread")).unread; renderUnread(); } catch { /* insigna rămâne cum era */ } }
 function setMe(u) {
   me = u; unread = 0; renderUnread(); clearInterval(unreadTimer);
@@ -296,7 +315,7 @@ function accSection(title, items) {
   const s = document.createElement("summary"); s.textContent = title; d.appendChild(s); d.append(...items); return d;
 }
 function accMenu() {
-  const staff = ["admin", "moderator"].includes(me.role);
+  const isAdmin = me.role === "admin", isMod = me.role === "moderator";
   const quick = document.createElement("nav"); quick.className = "acc-quick"; quick.setAttribute("aria-label", "Scurtături cont");
   [["Anunțuri", () => accGo("mine")], ["Favorite", () => accGo("favs")], ["Căutări", () => accGo("saved")], ["Mesaje", openInbox]].forEach(([t, fn]) => { const b = document.createElement("button"); b.type = "button"; b.className = "facet"; b.textContent = t; b.addEventListener("click", fn); quick.appendChild(b); });
   const secs = document.createElement("div"); secs.className = "acc-sections";
@@ -306,9 +325,12 @@ function accMenu() {
     accSection("CONVERSAȚII", [accItem("✉️ Mesaje", openInbox, unread || "", "accMsgsN")]),
     accSection("SETĂRI", [accItem("⚙️ Date generale și telefon", openSettings)])
   );
-  if (staff) secs.appendChild(accSection("MODERARE", [accItem("🛡 Moderare anunțuri", () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); })]));
+  const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
+  if (isMod) secs.appendChild(accSection("MODERARE", [accItem("🛡 Moderare anunțuri", goModeration)]));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
-  $("accMain").replaceChildren(quick, secs, out);
+  const last = [quick, secs, out];
+  if (isAdmin) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", goModeration); last.push(ad); }   // ultima linie, doar admin
+  $("accMain").replaceChildren(...last);
   api("/api/listings/mine").then((r) => { accMine = r.listings; const n = accMine.filter((l) => l.status === "approved").length, w = accMine.filter((l) => l.status === "pending").length, c = $("accCntMine"); if (c) { c.textContent = n + (w ? ` · ${w} în moderare` : ""); c.hidden = !accMine.length; } }).catch(() => {});
 }
 function accShow(view) {
@@ -457,7 +479,9 @@ $("setForm").addEventListener("submit", async (e) => {
     me = r.user; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; $("setOk").textContent = "Salvat."; $("setOk").hidden = false;
   } catch (err) { show($("setErr"), errText(err)); }
 });
-["loginButton", "bnAccount"].forEach((i) => $(i)?.addEventListener("click", openAccount));
+["hdrAccount", "bnAccount"].forEach((i) => $(i)?.addEventListener("click", openAccount));
+$("hdrChat")?.addEventListener("click", () => (me ? openInbox() : openAuth("Intră în cont ca să vezi mesajele.")));
+$("hdrSearch")?.addEventListener("click", () => openSearchPage($("searchInput").value.trim()));
 
 /* ---- lista de anunțuri ---- */
 function card(l) {

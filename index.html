@@ -11,13 +11,18 @@
 <body>
   <header class="header">
     <a class="logo" href="/">omnivo<span>.ro</span></a>
+    <a class="hdr-home" href="/" aria-label="Acasă" title="Acasă"><span data-ic="acasa"></span></a>
     <button class="menu-button" id="menuButton" aria-label="Meniu">☰</button>
     <nav id="mainMenu">
       <a href="#categorii">Categorii</a>
       <a href="#anunturi">Anunțuri</a>
-      <button id="loginButton">Contul meu</button>
     </nav>
-    <button type="button" class="hdr-plus" id="sellButton" aria-label="Adaugă anunț" title="Adaugă anunț">+</button>
+    <div class="hdr-actions" role="navigation" aria-label="Contul meu">
+      <button type="button" class="hdr-btn" id="hdrChat"><span data-ic="chat"></span>Chat<i class="bn-badge" id="hdrBadge" hidden></i></button>
+      <button type="button" class="hdr-btn hdr-add" id="sellButton" aria-label="Adaugă anunț"><b>+</b>Adaugă</button>
+      <button type="button" class="hdr-btn" id="hdrSearch"><span data-ic="lupa"></span>Caută</button>
+      <button type="button" class="hdr-btn" id="hdrAccount"><span data-ic="cont"></span>Cont</button>
+    </div>
   </header>
 
   <main>
@@ -59,6 +64,8 @@
           <h2>Categorii populare</h2>
         </div>
       </div>
+      <button type="button" class="cat-toggle" id="catToggle" aria-expanded="false" aria-controls="catPanel"><span data-ic="meniu"></span>Toate categoriile<i aria-hidden="true">▾</i></button>
+      <div class="cat-panel" id="catPanel" hidden><ul id="catPanelList"></ul></div>
       <div class="categories">
         <a href="#anunturi"><i class="cat-ic" data-ic="auto-moto" style="--c:#e03a3e"></i><span>Auto și moto</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="electronice" style="--c:#2f6fed"></i><span>Electronice</span></a>
@@ -99,10 +106,10 @@
 
   <nav class="bottom-nav" aria-label="Navigare principală">
     <a href="/" class="bn-item"><span data-ic="acasa"></span>Acasă</a>
-    <button type="button" class="bn-item" id="bnCats"><span data-ic="meniu"></span>Categorii</button>
+    <button type="button" class="bn-item" id="bnChat"><span data-ic="chat"></span>Chat<i class="bn-badge" id="bnBadge" hidden></i></button>
     <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span class="bn-plus">+</span>Adaugă</button>
     <button type="button" class="bn-item" id="bnSearch"><span data-ic="lupa"></span>Caută</button>
-    <button type="button" class="bn-item" id="bnAccount"><span data-ic="cont"></span>Cont<i class="bn-badge" id="bnBadge" hidden></i></button>
+    <button type="button" class="bn-item" id="bnAccount"><span data-ic="cont"></span>Cont</button>
   </nav>
 
   <div class="scrim" id="scrim" hidden></div>
