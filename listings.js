@@ -50,7 +50,7 @@ async function parse(b) {
 /* ---- public: listare cu filtre ---- */
 router.get('/', ah(async (req, res) => {
   const where = ["l.status = 'approved'", 'l.expires_at > NOW()'], vals = [];
-  const add = (sql, val) => { vals.push(val); where.push(sql.replace('$#', '$' + vals.length)); };
+  const add = (sql, val) => { vals.push(val); where.push(sql.split('$#').join('$' + vals.length)); };
   const q = fold(req.query.q).replace(/[^a-z0-9 ]+/g, ' ').trim();
   for (const w of q.split(/\s+/).filter(Boolean).slice(0, 6)) add("l.search_text LIKE '%' || $# || '%'", w);
   if (req.query.category) add('(c.slug = $# OR p.slug = $#)', String(req.query.category).slice(0, 60));
