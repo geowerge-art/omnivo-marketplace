@@ -985,3 +985,29 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
   .cat-subs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 16px 14px; }
   .cat-subs button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--light); color: var(--navy); font: inherit; font-size: 14px; cursor: pointer; }
 }
+
+/* ---- telefon: categoriile populare pe un singur rând care se derulează lateral, totul mai sus și simetric ---- */
+@media (max-width: 760px) {
+  #categorii.section { padding: 16px 5%; }
+  #categorii .section-heading { margin-bottom: 10px; }
+  #categorii .section-heading h2 { font-size: 22px; margin-top: 2px; }
+  .cat-toggle { margin-bottom: 10px; }
+  #categorii .categories {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin: 0 -5%;
+    padding: 0 5%;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 5%;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  #categorii .categories::-webkit-scrollbar { display: none; }
+  #categorii .categories a { flex: 0 0 82px; padding: 6px 2px; gap: 6px; scroll-snap-align: start; }
+  #categorii .categories a:hover { transform: none; }
+  #categorii .cat-ic { width: 60px; height: 60px; }
+  #categorii .cat-ic .ico { width: 34px; height: 34px; }
+  #categorii .categories a span { font-size: 12px; }
+}
