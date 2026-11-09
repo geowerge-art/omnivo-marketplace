@@ -37,7 +37,7 @@ $("closeDialog")?.addEventListener("click", () => $("messageDialog").close());
 $("menuButton")?.addEventListener("click", () => $("mainMenu").classList.toggle("open"));
 
 /* ---- pictograme ---- */
-document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.dataset.ic, el.classList.contains("cat-ic") ? 42 : 24); });
+document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.dataset.ic, el.classList.contains("cat-ic") ? 44 : 24); });
 
 /* ---- categorii, sertar, formular ---- */
 function setDrawer(on) { $("drawer").hidden = !on; $("scrim").hidden = !on; document.body.style.overflow = on ? "hidden" : ""; }
