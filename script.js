@@ -80,16 +80,35 @@ function renderAttrs() {
     else { f = document.createElement("input"); f.type = d.type === "number" ? "number" : "text"; if (d.type === "number") f.inputMode = "numeric"; }
     f.id = "at-" + d.key; f.dataset.attr = d.key; box.appendChild(f);
   }
+  curDefs = defs; $("sellAutoAttrs").hidden = true;
+  if (!editing) fillAttrs();
+}
+let curDefs = [], attrTimer;
+$("sellAttrs")?.addEventListener("input", (e) => { if (e.target.dataset.attr) e.target.dataset.manual = "1"; });
+$("sellAttrs")?.addEventListener("change", (e) => { if (e.target.dataset.attr) e.target.dataset.manual = "1"; });
+/* Completează marca, modelul, anul, memoria etc. din titlu, fără să atingă ce ai scris tu. */
+function fillAttrs() {
+  if (!window.autofillAttrs || editing) return;
+  const found = autofillAttrs($("sellTitle").value, curDefs), done = [];
+  for (const d of curDefs) {
+    const el = document.querySelector(`#sellAttrs [data-attr="${CSS.escape(d.key)}"]`); if (!el || el.dataset.manual) continue;
+    const v = found[d.key];
+    if (v !== undefined && v !== "") { el.value = v; el.dataset.auto = "1"; if (el.value === String(v)) done.push(`${d.label.replace(/ \(.*\)/, "")}: ${v}`); }
+    else if (el.dataset.auto) { el.value = ""; delete el.dataset.auto; }
+  }
+  const n = $("sellAutoAttrs");
+  n.textContent = done.length ? "✨ Completat automat: " + done.join(" · ") + ". Verifică și corectează dacă e nevoie." : ""; n.hidden = !done.length;
 }
 $("sellCat")?.addEventListener("change", () => { catManual = true; $("sellAuto").hidden = true; renderAttrs(); });
 
 /* Categoria se alege singură din cuvintele titlului (ca în autoparts); dacă o schimbi tu, nu mai intervine. */
 function setCatAuto(s) {
-  $("sellCat").value = s.id; renderAttrs();
+  if (Number($("sellCat").value) !== s.id) { $("sellCat").value = s.id; renderAttrs(); }
   const n = $("sellAuto"); n.textContent = `✨ Categorie aleasă automat: ${s.parent} › ${s.name}. Poți schimba dacă nu e corectă.`; n.hidden = false;
 }
 let timer;
 $("sellTitle")?.addEventListener("input", (e) => {
+  clearTimeout(attrTimer); attrTimer = setTimeout(fillAttrs, 250);
   clearTimeout(timer); const t = e.target.value.trim();
   if (t.length < 3) { $("sellChips").innerHTML = ""; $("sellAuto").hidden = true; return; }
   timer = setTimeout(async () => {
