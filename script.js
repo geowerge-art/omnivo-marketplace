@@ -22,7 +22,7 @@ async function api(url, method = "GET", body) {
   return d;
 }
 const PW = { TOO_SHORT: "Parola trebuie să aibă minim 8 caractere.", TOO_LONG: "Parola e prea lungă (maximum 72 de caractere).", COMMON: "Parola e prea comună. Alege alta.", ONLY_DIGITS: "Parola nu poate fi doar cifre. Adaugă litere sau fă-o mai lungă (12+).", REPEATED: "Parola nu poate fi același caracter repetat.", CONTAINS_EMAIL: "Parola nu trebuie să conțină începutul adresei de email.", CONTAINS_NICKNAME: "Parola nu trebuie să conțină nickname-ul." };
-const errText = (e) => (e.code === "PAROLA_SLABA" && PW[e.reason] ? PW[e.reason] : ERR[e.code] ? ERR[e.code] + (e.field ? ` „${e.field}”.` : "") : e.status === 503 ? "Serviciul nu e disponibil acum." : "A apărut o eroare. Încearcă din nou.");
+const errText = (e) => (e.code === "PAROLA_SLABA" && PW[e.reason] ? PW[e.reason] : ERR[e.code] ? ERR[e.code] + (e.field ? ` „${e.field}”.` : "") : e.status === 503 ? "Serviciul nu e disponibil acum." : `A apărut o eroare. Încearcă din nou. (cod: ${e.status || "fără răspuns de la server"}${e.code ? " · " + e.code : ""})`);
 const price = (l) => (l.price == null ? "Preț la cerere" : `${Number(l.price).toLocaleString("ro-RO")} ${l.currency === "EUR" ? "€" : "lei"}`);
 const open = (id) => { const d = $(id); if (!d.open) d.showModal(); };
 const fold = (t) => t.toLocaleLowerCase("ro").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
