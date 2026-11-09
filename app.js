@@ -10,6 +10,7 @@ const { loadUser } = require('./authmw');
 const auth = require('./auth');
 const categories = require('./categories');
 const listings = require('./listings');
+const images = require('./images');
 
 function createApp() {
   const app = express();
@@ -23,7 +24,7 @@ function createApp() {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
@@ -49,6 +50,8 @@ function createApp() {
 
   app.use('/api/auth', auth.router);
   app.use('/api/categories', categories.router);
+  app.use('/api/listings', images.router);
+  app.use('/api/images', images.publicRouter);
   app.use('/api/listings', listings.router);
   app.use('/api/admin/listings', listings.adminRouter);
 

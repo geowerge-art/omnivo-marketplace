@@ -5,7 +5,8 @@ const ERR = {
   EMAIL_EXISTS: "Există deja un cont cu acest email.", NICKNAME_EXISTS: "Nickname-ul este luat.", NICKNAME_INVALID: "Nickname invalid (3-24 caractere: litere, cifre, . _ -).",
   PAROLA_SLABA: "Parola e prea slabă: folosește minim 8 caractere, nu o parolă comună.", TERMENI_NEACCEPTATI: "Trebuie să accepți termenii.", DATE_INVALIDE: "Completează corect toate câmpurile.",
   TITLU_INVALID: "Titlul trebuie să aibă 5-120 de caractere.", PRET_INVALID: "Preț invalid.", CATEGORIE_INVALIDA: "Alege o categorie.", ATRIBUT_LIPSA: "Completează câmpul obligatoriu", ATRIBUT_INVALID: "Valoare invalidă pentru",
-  PREA_MULTE_ANUNTURI: "Ai postat prea multe anunțuri într-o oră.", EMAIL_NECONFIRMAT: "Confirmă-ți emailul înainte să publici.", RATE_LIMIT: "Prea multe cereri, încearcă mai târziu."
+  PREA_MULTE_ANUNTURI: "Ai postat prea multe anunțuri într-o oră.", EMAIL_NECONFIRMAT: "Confirmă-ți emailul înainte să publici.", RATE_LIMIT: "Prea multe cereri, încearcă mai târziu.",
+  PREA_MULTE_POZE: "Maximum 8 poze per anunț.", SPATIU_POZE_DEPASIT: "Ai depășit spațiul pentru poze.", POZA_INVALIDA: "Poza nu a putut fi citită. Încearcă JPG sau PNG.", STORAGE_EROARE: "Pozele nu se pot salva acum."
 };
 let me = null, cats = [], iconOf = {}, mode = "public", filter = {};
 
@@ -95,12 +96,18 @@ $("sellForm")?.addEventListener("submit", async (e) => {
   document.querySelectorAll("#sellAttrs [data-attr]").forEach((el) => { attributes[el.dataset.attr] = el.value; });
   $("sellSubmit").disabled = true;
   try {
-    await api("/api/listings", "POST", {
+    const created = await api("/api/listings", "POST", {
       title: f.get("title"), category_id: f.get("category_id"), price: f.get("price"), currency: f.get("currency"), condition: f.get("condition"),
       county: f.get("county"), description: f.get("description"), negotiable: f.get("negotiable") === "on", attributes
     });
+    let failed = 0;
+    for (let i = 0; i < photos.length; i++) {
+      show($("sellProg"), `Se încarcă poza ${i + 1} din ${photos.length}…`);
+      try { await uploadPhoto(created.listing.id, photos[i].blob); } catch { failed++; }
+    }
+    show($("sellProg"), ""); photos.length = 0; renderPrev();
     e.target.reset(); $("sellAttrs").innerHTML = ""; $("sellDialog").close();
-    showMessage("Anunț trimis", "Anunțul tău a fost salvat. Dacă nu apare imediat, așteaptă aprobarea.");
+    showMessage("Anunț trimis", failed ? `Anunțul e salvat, dar ${failed} poze nu s-au încărcat.` : "Anunțul tău a fost salvat. Dacă nu apare imediat, așteaptă aprobarea.");
     mode = "public"; filter = {}; loadListings();
   } catch (err) { if (err.status === 401) { $("sellDialog").close(); openAuth(); } else show($("sellErr"), errText(err)); }
   $("sellSubmit").disabled = false;
@@ -131,7 +138,8 @@ $("accMod").addEventListener("click", () => { mode = "admin"; $("listTitle").tex
 /* ---- lista de anunțuri ---- */
 function card(l) {
   const a = document.createElement("article"); a.className = "product"; a.tabIndex = 0;
-  const im = document.createElement("div"); im.className = "product-image"; im.textContent = iconOf[l.category_slug] || "📦";
+  const im = document.createElement("div"); im.className = "product-image";
+  if (l.thumb) { const g = document.createElement("img"); g.src = l.thumb; g.alt = l.title; g.loading = "lazy"; im.appendChild(g); } else im.textContent = iconOf[l.category_slug] || "📦";
   const info = document.createElement("div"); info.className = "product-info";
   const h = document.createElement("h3"); h.textContent = l.title;
   const p = document.createElement("p"); p.textContent = [l.county, l.category].filter(Boolean).join(" · ");
@@ -170,6 +178,7 @@ async function openDetail(id) {
     $("detMeta").textContent = [l.parent_category, l.category, l.condition, [l.city, l.county].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
     $("detAttrs").replaceChildren(...l.attributes.map((a) => { const li = document.createElement("li"); li.textContent = `${a.label}: ${a.value}`; return li; }));
     $("detDesc").textContent = l.description;
+    $("detGallery").replaceChildren(...l.images.map((u) => { const g = document.createElement("img"); g.src = u; g.alt = l.title; g.loading = "lazy"; return g; }));
     const s = $("detSeller"); s.textContent = `Vânzător: ${l.seller || "—"}`;
     if (l.phone) { const a = document.createElement("a"); a.href = "tel:" + l.phone.replace(/[^+\d]/g, ""); a.textContent = ` · ${l.phone}`; s.appendChild(a); }
     open("detailDialog");
@@ -180,5 +189,38 @@ async function openDetail(id) {
 $("searchForm")?.addEventListener("submit", (e) => { e.preventDefault(); filter = { q: $("searchInput").value.trim() }; mode = "public"; $("listTitle").textContent = filter.q ? `Rezultate pentru „${filter.q}”` : "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); });
 $("searchInput")?.addEventListener("input", () => { if (!$("searchInput").value.trim() && filter.q) { filter = {}; loadListings(); } });
 $("bnSearch")?.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); $("searchInput").focus(); });
+
+/* ---- poze: comprimare în browser (max 1600 px, JPEG), previzualizare, încărcare una câte una ---- */
+const photos = [];
+async function compress(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
+  if (!bmp) throw Object.assign(new Error("POZA_INVALIDA"), { code: "POZA_INVALIDA" });
+  const s = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height); // fundal alb: PNG-urile transparente nu ies negre
+  return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("POZA_INVALIDA"))), "image/jpeg", 0.82));
+}
+function renderPrev() {
+  $("sellPrev").replaceChildren(...photos.map((p, i) => {
+    const d = document.createElement("div"), g = document.createElement("img"), b = document.createElement("button");
+    g.src = p.url; g.alt = `Poza ${i + 1}`; b.type = "button"; b.textContent = "✕"; b.setAttribute("aria-label", "Șterge poza");
+    b.addEventListener("click", () => { URL.revokeObjectURL(p.url); photos.splice(i, 1); renderPrev(); });
+    d.append(g, b); if (i === 0) { const t = document.createElement("span"); t.textContent = "Principală"; d.appendChild(t); } return d;
+  }));
+  $("sellPhotoBtn").textContent = photos.length ? `📷 Adaugă încă (${photos.length}/8)` : "📷 Adaugă poze";
+}
+$("sellPhotoBtn")?.addEventListener("click", () => $("sellPhotos").click());
+$("sellPhotos")?.addEventListener("change", async (e) => {
+  show($("sellErr"), ""); let bad = 0;
+  for (const f of [...e.target.files].slice(0, 8 - photos.length)) {
+    try { const blob = await compress(f); photos.push({ blob, url: URL.createObjectURL(blob) }); renderPrev(); } catch { bad++; }
+  }
+  if (bad) show($("sellErr"), ERR.POZA_INVALIDA);
+  e.target.value = "";
+});
+async function uploadPhoto(id, blob) {
+  const r = await fetch(`/api/listings/${id}/images`, { method: "POST", headers: { "content-type": "image/jpeg" }, body: blob });
+  if (!r.ok) throw new Error("upload");
+}
 
 (async () => { try { setMe((await api("/api/me")).user); } catch { /* fără server */ } await loadCats(); loadListings(); })();

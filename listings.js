@@ -13,7 +13,8 @@ const createAllow = createThrottle(30, 60 * 60 * 1000); // max 30 anunțuri/oră
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.created_at,
-                       c.slug AS category_slug, c.name AS category, p.name AS parent_category
+                       c.slug AS category_slug, c.name AS category, p.name AS parent_category,
+                       (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb
                   FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id`;
 
 /* Validează corpul cererii după categorie și atributele ei. Întoarce { error } sau { v }. */
@@ -82,7 +83,9 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   if (!['approved', 'sold'].includes(l.status) && !staff && !owner) return res.status(404).json({ error: 'NEGASIT' });
   const defs = await db.query('SELECT key, label FROM category_attributes WHERE category_id = $1 OR category_id = (SELECT parent_id FROM categories WHERE id = $1)', [l.category_id]);
   const label = Object.fromEntries(defs.rows.map((d) => [d.key, d.label]));
+  const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);
   res.json({ listing: {
+    images: imgs.rows.map((i) => i.url),
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
     category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type,

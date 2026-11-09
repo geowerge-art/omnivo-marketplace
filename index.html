@@ -110,6 +110,11 @@
       </div>
       <label for="sellDesc">Descriere</label>
       <textarea id="sellDesc" name="description" rows="4" maxlength="4000" placeholder="Detalii despre produs"></textarea>
+      <label>Poze (până la 8)</label>
+      <input id="sellPhotos" type="file" accept="image/*" multiple hidden>
+      <button type="button" class="ghost" id="sellPhotoBtn">📷 Adaugă poze</button>
+      <div id="sellPrev" class="prev"></div>
+      <p id="sellProg" class="muted" hidden></p>
       <label class="check"><input type="checkbox" name="negotiable"> Preț negociabil</label>
       <p id="sellErr" class="err" hidden></p>
       <button class="primary" type="submit" id="sellSubmit">Publică anunțul</button>
@@ -144,6 +149,7 @@
 
   <dialog id="detailDialog" class="sheet">
     <button class="dialog-close" id="detClose" aria-label="Închide">✕</button>
+    <div id="detGallery" class="gallery"></div>
     <h2 id="detTitle"></h2><p class="price" id="detPrice"></p><p class="muted" id="detMeta"></p>
     <ul id="detAttrs" class="attrs"></ul><p id="detDesc" class="desc"></p><p id="detSeller" class="seller"></p>
   </dialog>

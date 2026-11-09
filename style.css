@@ -492,6 +492,15 @@ dialog h2 {
   .bn-plus{display:grid!important;place-items:center;width:42px;height:42px;margin-top:-18px;border-radius:50%;background:var(--blue);color:#fff;font-size:26px!important;box-shadow:0 6px 16px rgba(23,105,224,.4)}
 }
 
+/* --- poze --- */
+.prev{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.prev div{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--light)}
+.prev img{width:100%;height:100%;object-fit:cover}
+.prev button{position:absolute;top:2px;right:2px;width:30px;height:30px;border:0;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:15px}
+.prev span{position:absolute;left:4px;bottom:4px;background:var(--blue);color:#fff;font-size:11px;padding:1px 6px;border-radius:8px}
+.gallery{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;margin:8px 0}
+.gallery img{flex:0 0 100%;max-height:46vh;object-fit:contain;background:var(--light);border-radius:12px;scroll-snap-align:center}
+.product-image img{width:100%;height:100%;object-fit:cover;display:block}
 /* --- formulare, carduri, detaliu --- */
 .sheet label{display:block;margin-top:10px}.sheet select,.sheet textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font:inherit;font-size:16px;margin:6px 0;background:#fff}
 .sheet{max-height:92vh;overflow-y:auto}.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.row2 input,.row2 select{margin:6px 0}
