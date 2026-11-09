@@ -223,6 +223,7 @@
       <label for="setPhone">Telefon</label><input id="setPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="ex: 0722 123 456">
       <label class="check"><input type="checkbox" id="setShowPhone"> Arată telefonul pe anunțurile mele (se afișează doar la apăsarea „Arată numărul”)</label>
       <label class="check"><input type="checkbox" id="setWa"> Am WhatsApp pe acest număr</label>
+      <label class="check"><input type="checkbox" id="setPresence" checked> Arată celorlalți când sunt online și când scriu un mesaj</label>
       <p class="err" id="setErr" hidden></p><p class="muted" id="setOk" hidden></p>
       <button class="primary" type="submit">Salvează</button>
     </form>
@@ -274,7 +275,7 @@
   <dialog id="chatDialog" class="sheet">
     <button class="dialog-close" id="chatClose" aria-label="Închide">✕</button>
     <h2 id="chatTitle">Conversație</h2>
-    <p class="muted" id="chatWith"></p>
+    <p class="muted chat-sub"><span id="chatWith"></span><span id="chatPresence" class="cv-presence" aria-live="polite"></span></p>
     <div id="chatLog" class="chat-log" aria-live="polite"></div>
     <form id="chatForm" class="chat-form" novalidate>
       <textarea id="chatInput" rows="2" maxlength="2000" placeholder="Scrie un mesaj…" aria-label="Mesaj"></textarea>

@@ -251,9 +251,9 @@ $("tabLogin").addEventListener("click", () => tab(false)); $("tabReg").addEventL
 function renderUnread() { if ($("accMsgsN")) { $("accMsgsN").textContent = unread ? String(unread) : ""; $("accMsgsN").hidden = !unread; } ["bnBadge", "hdrBadge"].forEach((k) => { const bd = $(k); if (bd) { bd.hidden = !unread; bd.textContent = unread > 9 ? "9+" : unread; } }); }
 async function refreshUnread() { if (!me) return; try { unread = (await api("/api/messages/unread")).unread; renderUnread(); } catch { /* insigna rămâne cum era */ } }
 function setMe(u) {
-  me = u; unread = 0; renderUnread(); clearInterval(unreadTimer);
+  me = u; unread = 0; renderUnread(); clearInterval(unreadTimer); stopLive();
   loadFavIds();
-  if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); }
+  if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); startLive(); }
 }
 async function authSubmit(e, url, body, errEl) {
   e.preventDefault(); show(errEl, "");
@@ -468,6 +468,7 @@ async function renderFavs(box) {
 }
 function openSettings() {
   $("setName").value = me.name || ""; $("setPhone").value = me.phone || ""; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; show($("setErr"), ""); $("setOk").hidden = true;
+  api("/api/messages/prefs").then((p) => { $("setPresence").checked = p.show_presence !== false; }).catch(() => {});
   open("settingsDialog");
 }
 $("setClose").addEventListener("click", () => $("settingsDialog").close());
@@ -476,6 +477,7 @@ $("setForm").addEventListener("submit", async (e) => {
   const phone = $("setPhone").value.trim();
   try {
     const r = await api("/api/auth/me", "PATCH", { name: $("setName").value, phone, show_phone: $("setShowPhone").checked && !!phone, whatsapp: $("setWa").checked && !!phone });
+    await api("/api/messages/prefs", "PUT", { show_presence: $("setPresence").checked });
     me = r.user; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; $("setOk").textContent = "Salvat."; $("setOk").hidden = false;
   } catch (err) { show($("setErr"), errText(err)); }
 });
@@ -763,30 +765,82 @@ async function uploadPhoto(id, blob) {
 
 /* ---- mesagerie: căsuță + conversație (reîmprospătare la 8 s cât e deschisă) ---- */
 const when = (t) => new Date(t).toLocaleString("ro-RO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+/* ---- bife ca pe WhatsApp: ✓ trimis, ✓✓ livrat, ✓✓ albastre = citit ---- */
+const tickState = (m) => (m.read || m.read_at ? "read" : m.delivered || m.delivered_at ? "delivered" : "sent");
+function tickEl(st) {
+  const t = document.createElement("span"); t.className = "cv-ticks " + st; t.dataset.st = st; t.textContent = st === "sent" ? "✓" : "✓✓";
+  t.setAttribute("aria-label", st === "read" ? "Citit" : st === "delivered" ? "Livrat" : "Trimis"); return t;
+}
+function setTicks(ids, st) {
+  (ids || []).forEach((id) => {
+    const t = document.querySelector(`.bubble[data-mid="${Number(id)}"] .cv-ticks`); if (!t) return;
+    if (t.dataset.st === "read" || (t.dataset.st === "delivered" && st === "delivered")) return;
+    t.replaceWith(tickEl(st));
+  });
+}
+const presText = (p) => (!p || p.hidden ? "" : p.online ? "online" : "offline");
+let typTimer = null;
+function setPresence(p) {
+  const el = $("chatPresence"); if (!el) return;
+  const t = presText(p); el.className = "cv-presence" + (p && !p.hidden && p.online ? " online" : ""); el.dataset.base = t; el.textContent = t ? " · " + t : ""; clearTimeout(typTimer);
+}
+
+/* ---- timp real (SSE): mesaje noi, bife, online, „scrie…" ---- */
+let live = null, liveStopped = true, liveSleep = null;
+function startLive() {
+  if (!window.EventSource || !me || live) return;
+  liveStopped = false;
+  live = new EventSource("/api/stream");
+  const on = (k, fn) => live.addEventListener(k, (ev) => { try { fn(JSON.parse(ev.data)); } catch { /* semnal invalid */ } });
+  on("message", (d) => {
+    refreshUnread();
+    if (chat && chat.listingId === d.listing_id && chat.withId === d.from) { chat.sig = ""; refreshChat(); }
+    else if ($("inboxDialog").open) renderInbox();
+  });
+  on("msg_status", (d) => { setTicks(d.ids, d.status); if ($("inboxDialog").open) renderInbox(); });
+  on("presence", (d) => { if (chat && d.uid === chat.withId) setPresence({ online: d.online }); });
+  on("typing", (d) => {
+    if (!chat || d.from !== chat.withId || (d.listing && d.listing !== chat.listingId)) return;
+    const el = $("chatPresence"); el.className = "cv-presence typing"; el.textContent = " · scrie…";
+    clearTimeout(typTimer); typTimer = setTimeout(() => { el.className = "cv-presence" + (el.dataset.base === "online" ? " online" : ""); el.textContent = el.dataset.base ? " · " + el.dataset.base : ""; }, 4000);
+  });
+  live.addEventListener("error", () => { if (live && live.readyState === 2) { live.close(); live = null; if (!liveStopped) setTimeout(startLive, 5000); } });
+}
+function stopLive() { liveStopped = true; clearTimeout(liveSleep); if (live) { live.close(); live = null; } }
+/* aplicația în fundal > 3 secunde: închidem conexiunea (ceilalți te văd „offline"); la revenire reconectăm și recuperăm ce s-a pierdut */
+document.addEventListener("visibilitychange", () => {
+  clearTimeout(liveSleep);
+  if (document.hidden) { liveSleep = setTimeout(() => { if (document.hidden && live) { live.close(); live = null; } }, 3000); return; }
+  if (me && !live && !liveStopped) { startLive(); refreshUnread(); if (chat) { chat.sig = ""; refreshChat(); } }
+});
+window.addEventListener("pagehide", () => { if (live) { live.close(); live = null; } });
+window.addEventListener("pageshow", () => { if (me && !live && !liveStopped) startLive(); });
+
+async function renderInbox() {
+  const { threads } = await api("/api/messages");
+  $("inboxEmpty").hidden = threads.length > 0;
+  $("inboxList").replaceChildren(...threads.map((t) => {
+    const b = document.createElement("button"), h = document.createElement("b"), sm = document.createElement("small");
+    b.type = "button"; if (t.unread) b.className = "unread";
+    h.textContent = `${t.other_name} · ${t.title}`;
+    if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; h.prepend(d); }
+    if (t.mine) sm.append(tickEl(tickState(t)), " Tu: "); sm.append(t.body); b.append(h, sm);
+    b.addEventListener("click", () => { $("inboxDialog").close(); openChat(t.listing_id, t.other, t.title); });
+    return b;
+  }));
+}
 async function openInbox() {
   if (!me) return openAuth();
-  try {
-    const { threads } = await api("/api/messages");
-    $("inboxEmpty").hidden = threads.length > 0;
-    $("inboxList").replaceChildren(...threads.map((t) => {
-      const b = document.createElement("button"), h = document.createElement("b"), sm = document.createElement("small");
-      b.type = "button"; if (t.unread) b.className = "unread";
-      h.textContent = `${t.other_name} · ${t.title}`;
-      if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; h.prepend(d); }
-      sm.textContent = (t.mine ? "Tu: " : "") + t.body; b.append(h, sm);
-      b.addEventListener("click", () => { $("inboxDialog").close(); openChat(t.listing_id, t.other, t.title); });
-      return b;
-    }));
-    open("inboxDialog");
-  } catch (err) { if (err.status === 401) { setMe(null); openAuth(); } else showMessage("Eroare", errText(err)); }
+  try { await renderInbox(); open("inboxDialog"); }
+  catch (err) { if (err.status === 401) { setMe(null); openAuth(); } else showMessage("Eroare", errText(err)); }
 }
 
 async function openChat(listingId, withId, title) {
   chat = { listingId, withId, sig: "", blocked: false, first: true };
-  $("chatTitle").textContent = title || "Conversație"; $("chatWith").textContent = ""; $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
+  $("chatTitle").textContent = title || "Conversație"; $("chatWith").textContent = ""; setPresence(null); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
   open("chatDialog"); $("chatInput").focus();
   await refreshChat();
-  clearInterval(chatTimer); chatTimer = setInterval(() => { if (!document.hidden) refreshChat(); }, 8000);
+  clearInterval(chatTimer); chatTimer = setInterval(() => { if (!document.hidden) refreshChat(); }, live ? 20000 : 8000);   // cu conexiune live, interogarea e doar plasă de siguranță
 }
 async function refreshChat() {
   const c = chat; if (!c) return;
@@ -795,14 +849,18 @@ async function refreshChat() {
     if (chat !== c) return;                       // între timp s-a închis sau s-a deschis alta
     c.first = false; c.blocked = d.blocked_by_me;
     $("chatTitle").textContent = d.listing.title; $("chatWith").textContent = `Cu ${d.other.nickname}` + (c.blocked ? " · blocat de tine" : "");
+    if (!$("chatPresence").classList.contains("typing")) setPresence(d.presence);
     $("chatBlock").textContent = c.blocked ? "Deblochează utilizatorul" : "Blochează utilizatorul";
     $("chatInput").disabled = $("chatSend").disabled = c.blocked;
-    const sig = d.messages.length + ":" + (d.messages.length ? d.messages[d.messages.length - 1].id : 0);
+    const mine = d.messages.filter((m) => m.mine), last = d.messages.length ? d.messages[d.messages.length - 1].id : 0;
+    const sig = `${d.messages.length}:${last}:${mine.filter((m) => m.read).length}:${mine.filter((m) => m.delivered).length}`;
     if (sig !== c.sig) {
       c.sig = sig; const log = $("chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
       log.replaceChildren(...d.messages.map((m) => {
         const el = document.createElement("div"), t = document.createElement("time");
-        el.className = "bubble" + (m.mine ? " mine" : ""); el.append(m.body); t.textContent = when(m.created_at); t.dateTime = m.created_at; el.appendChild(t); return el;
+        el.className = "bubble" + (m.mine ? " mine" : ""); el.dataset.mid = m.id; el.append(m.body); t.textContent = when(m.created_at); t.dateTime = m.created_at;
+        if (m.mine) t.append(" ", tickEl(tickState(m)));
+        el.appendChild(t); return el;
       }));
       if (atEnd || !log.dataset.seen) log.scrollTop = log.scrollHeight; log.dataset.seen = "1";
     }
@@ -812,6 +870,11 @@ async function refreshChat() {
     else if (c.first) show($("chatErr"), errText(err));
   }
 }
+let typSent = 0;
+$("chatInput")?.addEventListener("input", () => {
+  const c = chat; if (!c || !$("chatInput").value.trim() || Date.now() - typSent < 2500) return;
+  typSent = Date.now(); api("/api/messages/typing", "POST", { to: c.withId, listing_id: c.listingId }).catch(() => {});
+});
 $("chatForm")?.addEventListener("submit", async (e) => {
   e.preventDefault(); const c = chat, body = $("chatInput").value.trim(); if (!c || !body) return;
   show($("chatErr"), ""); $("chatSend").disabled = true;

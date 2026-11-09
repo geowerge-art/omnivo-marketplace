@@ -1028,3 +1028,14 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
   .cat-toggle .ico { width: 20px; height: 20px; }
   .cat-toggle i { display: none; }
 }
+
+/* ---- chat: bife, online, „scrie…" ---- */
+.cv-ticks { display: inline-block; margin-left: 2px; font-size: 12px; font-weight: 800; letter-spacing: -2px; color: #9a9486; vertical-align: baseline; }
+.cv-ticks.read { color: #2f8cf0; }
+.bubble.mine .cv-ticks { color: inherit; opacity: .6; }
+.bubble.mine .cv-ticks.read { color: #5cb0ff; opacity: 1; }
+.inbox small .cv-ticks { margin-right: 2px; font-size: 13px; }
+.chat-sub { display: flex; flex-wrap: wrap; align-items: baseline; }
+.cv-presence { font-weight: 600; color: var(--muted); }
+.cv-presence.online { color: #1f9d55; }
+.cv-presence.typing { color: #1f9d55; font-style: italic; }

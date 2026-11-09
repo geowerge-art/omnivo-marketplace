@@ -3,12 +3,14 @@ const db = require('./db');
 const { ah, requireDb } = require('./common');
 const { requireAuth, requireVerified } = require('./authmw');
 const { createThrottle } = require('./security');
+const live = require('./live');
 
 const router = express.Router();
 router.use(requireDb, requireAuth);
 
 const sendAllow = createThrottle(60, 60 * 60 * 1000);  // max 60 mesaje/oră per utilizator
 const blockAllow = createThrottle(60, 60 * 60 * 1000);
+const typingAllow = createThrottle(90, 60 * 1000);
 const MAX_BODY = 2000, MAX_BLOCKS = 200;
 
 const toId = (v) => (/^\d{1,10}$/.test(String(v)) ? Number(v) : null);
@@ -34,10 +36,10 @@ router.get('/unread', ah(async (req, res) => {
 router.get('/', ah(async (req, res) => {
   const r = await db.query(
     `WITH m AS (
-       SELECT id, listing_id, body, created_at, read_at, (sender_id = $1) AS mine,
+       SELECT id, listing_id, body, created_at, read_at, delivered_at, (sender_id = $1) AS mine,
               CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other
          FROM messages WHERE sender_id = $1 OR recipient_id = $1)
-     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, t.body, t.created_at, t.mine,
+     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, t.body, t.created_at, t.mine, t.read_at, t.delivered_at,
             (SELECT COUNT(*)::int FROM m x WHERE x.listing_id = t.listing_id AND x.other = t.other AND NOT x.mine AND x.read_at IS NULL) AS unread
        FROM (SELECT DISTINCT ON (listing_id, other) * FROM m ORDER BY listing_id, other, id DESC) t
        JOIN users u ON u.id = t.other
@@ -59,14 +61,16 @@ router.get('/thread', ah(async (req, res) => {
   // conversația există doar între proprietarul anunțului și altcineva
   if (!l || !ur.rowCount || (l.user_id !== me && l.user_id !== other)) return res.status(404).json({ error: 'NEGASIT' });
   const rows = (await db.query(
-    `SELECT id, body, created_at, (sender_id = $2) AS mine FROM messages
+    `SELECT id, body, created_at, (sender_id = $2) AS mine, (read_at IS NOT NULL) AS read, (delivered_at IS NOT NULL) AS delivered FROM messages
       WHERE listing_id = $1 AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
       ORDER BY id DESC LIMIT 300`, [listingId, me, other])).rows.reverse();
-  await db.query('UPDATE messages SET read_at = NOW() WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND read_at IS NULL', [listingId, other, me]);
+  // deschiderea conversației = „citit": expeditorul vede bifele albastre
+  const rd = await db.query('UPDATE messages SET read_at = NOW(), delivered_at = COALESCE(delivered_at, NOW()) WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND read_at IS NULL RETURNING id', [listingId, other, me]);
+  if (rd.rowCount) live.send(other, 'msg_status', { with: me, listing: listingId, ids: rd.rows.map((x) => x.id), status: 'read' });
   const bs = await blockState(me, other);
   res.set('Cache-Control', 'no-store').json({
     listing: { id: l.id, title: l.title, status: l.status },
-    other: ur.rows[0], messages: rows, blocked_by_me: bs.byMe
+    other: ur.rows[0], messages: rows, blocked_by_me: bs.byMe, presence: await live.presenceOf(other)
   });
 }));
 
@@ -100,8 +104,32 @@ router.post('/', requireVerified, ah(async (req, res) => {
     "SELECT id, created_at FROM messages WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND body = $4 AND created_at > NOW() - INTERVAL '8 seconds' ORDER BY id DESC LIMIT 1",
     [listingId, me, to, body])).rows[0];
   if (dup) return res.json({ message: dup, duplicate: true });
-  const r = await db.query('INSERT INTO messages(listing_id, sender_id, recipient_id, body) VALUES($1,$2,$3,$4) RETURNING id, created_at', [listingId, me, to, body]);
-  res.status(201).json({ message: r.rows[0] });
+  const online = live.isOnline(to);
+  const r = await db.query('INSERT INTO messages(listing_id, sender_id, recipient_id, body, delivered_at) VALUES($1,$2,$3,$4, CASE WHEN $5::boolean THEN NOW() END) RETURNING id, created_at', [listingId, me, to, body, online]);
+  live.send(to, 'message', { id: r.rows[0].id, from: me, listing_id: listingId, body, created_at: r.rows[0].created_at });
+  res.status(201).json({ message: { ...r.rows[0], delivered: online } });
+}));
+
+/* ---- „scrie…": semnal efemer, nu se salvează nimic ---- */
+router.post('/typing', ah(async (req, res) => {
+  const to = toId((req.body || {}).to), listing = toId((req.body || {}).listing_id);
+  if (!to || to === req.user.id) return res.status(400).json({ error: 'DESTINATAR_INVALID' });
+  if (!typingAllow('u' + req.user.id)) return res.json({ ok: true });
+  const me = (await db.query('SELECT show_presence FROM users WHERE id = $1', [req.user.id])).rows[0];
+  if (me && me.show_presence === false) return res.json({ ok: true });
+  const bs = await blockState(req.user.id, to);
+  if (!bs.byMe && !bs.byThem) live.send(to, 'typing', { from: req.user.id, listing });
+  res.json({ ok: true });
+}));
+
+/* ---- „Arată când sunt online și când scriu" ---- */
+router.get('/prefs', ah(async (req, res) => {
+  const u = (await db.query('SELECT show_presence FROM users WHERE id = $1', [req.user.id])).rows[0];
+  res.set('Cache-Control', 'no-store').json({ show_presence: !u || u.show_presence !== false });
+}));
+router.put('/prefs', ah(async (req, res) => {
+  await db.query('UPDATE users SET show_presence = $2 WHERE id = $1', [req.user.id, (req.body || {}).show_presence !== false]);
+  res.json({ ok: true });
 }));
 
 /* ---- blocare / deblocare ---- */

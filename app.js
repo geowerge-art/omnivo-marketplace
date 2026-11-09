@@ -14,6 +14,7 @@ const saved = require('./saved');
 const listings = require('./listings');
 const images = require('./images');
 const messages = require('./messages');
+const live = require('./live');
 
 function createApp() {
   const app = express();
@@ -58,6 +59,7 @@ function createApp() {
   app.use('/api/listings', listings.router);
   app.use('/api/admin/listings', listings.adminRouter);
   app.use('/api/messages', messages.router);
+  app.use('/api/stream', live.router);
   app.use('/api/favorites', favorites.router);
   app.use('/api/saved-searches', saved.router);
 
