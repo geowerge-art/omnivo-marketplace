@@ -41,7 +41,7 @@ document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.
 
 /* ---- categorii, sertar, formular ---- */
 function setDrawer(on) { $("drawer").hidden = !on; $("scrim").hidden = !on; document.body.style.overflow = on ? "hidden" : ""; }
-function pickCategory(slug, name) { filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
+function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
 
 async function loadCats() {
   try { cats = (await api("/api/categories")).categories; } catch { return; }
@@ -212,7 +212,7 @@ function card(l) {
   const s = document.createElement("strong"); s.textContent = price(l);
   info.append(h, p, s); a.append(im, info);
   if (mode !== "public" && l.status !== "approved") { const t = document.createElement("span"); t.className = "tag"; t.textContent = l.status; info.appendChild(t); }
-  a.addEventListener("click", () => openDetail(l.id));
+  a.addEventListener("click", () => { trackInterest({ cat: l.category_slug, w: 3, id: l.id, title: l.title }); openDetail(l.id); });
   if (mode === "public") return a;
   const box = document.createElement("div"); box.className = "card-actions";
   const btn = (txt, fn) => { const b = document.createElement("button"); b.textContent = txt; b.addEventListener("click", async (e) => { e.stopPropagation(); try { await fn(); loadListings(); } catch (err) { showMessage("Eroare", errText(err)); } }); box.appendChild(b); };
@@ -372,3 +372,38 @@ $("chatDialog")?.addEventListener("close", () => { clearInterval(chatTimer); cha
 })();
 
 (async () => { try { setMe((await api("/api/me")).user); } catch { /* fără server */ } await loadCats(); loadListings(); })();
+
+
+/* ---- recomandări din ce ai văzut (rămân doar în browserul tău) ---- */
+const INT_KEY = "omnivo_interest";
+function readInterest() { try { return JSON.parse(localStorage.getItem(INT_KEY)) || { cats: {} }; } catch { return { cats: {} }; } }
+function trackInterest({ cat, w, id, title }) {
+  try {
+    const d = readInterest(); d.cats = d.cats || {};
+    if (cat) d.cats[cat] = (d.cats[cat] || 0) + w;
+    if (id) { d.last = { id, cat, title: String(title || "").slice(0, 120) }; d.seen = [id, ...(d.seen || []).filter((x) => x !== id)].slice(0, 30); }
+    localStorage.setItem(INT_KEY, JSON.stringify(d));
+  } catch { /* fără stocare */ }
+}
+const STOP = new Set(["vand", "vind", "de", "si", "cu", "la", "pentru", "nou", "noua", "folosit", "second", "hand"]);
+async function loadForYou() {
+  const sec = $("pentruTine"); if (!sec) return;
+  const d = readInterest(), top = Object.entries(d.cats || {}).sort((a, b) => b[1] - a[1])[0];
+  if (!top) { sec.hidden = true; return; }
+  const cat = top[0], seen = new Set(d.seen || []);
+  const calls = [];
+  const brand = d.last && d.last.cat === cat ? fold(d.last.title).split(/[^a-z0-9]+/).find((x) => x.length >= 3 && !/^\d+$/.test(x) && !STOP.has(x)) : "";
+  if (brand) calls.push(api("/api/listings?" + new URLSearchParams({ category: cat, q: brand, sort: "price_asc", limit: 8 })));
+  calls.push(api("/api/listings?" + new URLSearchParams({ category: cat, sort: "price_asc", limit: 12 })));
+  try {
+    const res = await Promise.all(calls);
+    const out = [], ids = new Set();
+    for (const r of res) for (const l of r.listings) if (!ids.has(l.id) && !(d.last && l.id === d.last.id)) { ids.add(l.id); out.push(l); }
+    const list = out.filter((l) => !seen.has(l.id)).concat(out.filter((l) => seen.has(l.id))).slice(0, 6);
+    if (!list.length) { sec.hidden = true; return; }
+    $("forYouTitle").textContent = `Recomandate pentru tine · ${list[0].category || ""}${brand ? " · " + brand : ""}`;
+    $("forYou").replaceChildren(...list.map(card)); sec.hidden = false;
+  } catch { sec.hidden = true; }
+}
+$("forYouClear")?.addEventListener("click", () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; });
+loadForYou();
