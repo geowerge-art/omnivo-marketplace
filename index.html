@@ -100,6 +100,32 @@
     <small>© 2026 Omnivo. Toate drepturile rezervate.</small>
   </footer>
 
+
+  <nav class="bottom-nav" aria-label="Navigare principală">
+    <a href="/" class="bn-item"><span>🏠</span>Acasă</a>
+    <button type="button" class="bn-item" id="bnCats"><span>☰</span>Categorii</button>
+    <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span class="bn-plus">+</span>Adaugă</button>
+    <button type="button" class="bn-item" id="bnSearch"><span>🔍</span>Caută</button>
+    <button type="button" class="bn-item" id="bnAccount"><span>👤</span>Cont</button>
+  </nav>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" aria-label="Categorii" hidden>
+    <div class="drawer-head"><strong>Categorii</strong><button type="button" id="drawerClose" aria-label="Închide">✕</button></div>
+    <ul id="drawerList" class="drawer-list"><li class="muted">Se încarcă…</li></ul>
+  </aside>
+
+  <dialog id="sellDialog" class="sheet">
+    <button class="dialog-close" id="sellClose" aria-label="Închide">✕</button>
+    <h2>Adaugă un anunț</h2>
+    <label for="sellTitle">Ce vinzi?</label>
+    <input id="sellTitle" maxlength="120" placeholder="ex: iPhone 13, 128GB" autocomplete="off">
+    <p id="sellHint" class="muted">Scrie titlul și îți sugerăm categoria.</p>
+    <div id="sellChips" class="chips"></div>
+    <p id="sellPicked" class="picked" hidden></p>
+    <p class="muted">Publicarea completă (poze, preț, descriere) vine în pasul următor.</p>
+  </dialog>
+
   <dialog id="messageDialog">
     <button class="dialog-close" id="closeDialog">✕</button>
     <h2 id="dialogTitle">Omnivo</h2>

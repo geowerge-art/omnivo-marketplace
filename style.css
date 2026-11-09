@@ -464,3 +464,30 @@ dialog h2 {
     font-size: 36px;
   }
 }
+
+/* --- meniu telefon --- */
+.bottom-nav{display:none}
+.scrim{position:fixed;inset:0;background:rgba(10,20,40,.45);z-index:70}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(86vw,340px);background:#fff;z-index:80;overflow-y:auto;padding:0 0 90px;box-shadow:6px 0 30px rgba(0,0,0,.2)}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff}
+.drawer-head button{border:0;background:none;font-size:22px;min-width:44px;min-height:44px}
+.drawer-list,.drawer-list ul{list-style:none}
+.drawer-list>li>b{display:block;padding:14px 18px 6px;color:var(--navy)}
+.drawer-list a{display:block;padding:12px 18px 12px 34px;min-height:44px;color:var(--text);font-size:15px}
+.drawer-list a:active{background:var(--light)}
+.sheet{border:0;border-radius:20px 20px 0 0;padding:22px 18px 28px;width:min(100%,560px);margin:auto auto 0}
+.sheet input{width:100%;height:50px;border:1px solid var(--border);border-radius:12px;padding:0 14px;font-size:16px;margin:6px 0}
+.sheet label{font-weight:700;color:var(--navy)}
+.muted{color:var(--muted);font-size:14px;margin:6px 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.chips button{min-height:44px;padding:0 14px;border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:22px;font-weight:600}
+.picked{background:var(--light);border-radius:12px;padding:10px 14px;font-weight:700;color:var(--navy)}
+@media(max-width:760px){
+  .header nav,.menu-button{display:none}
+  body{padding-bottom:calc(68px + env(safe-area-inset-bottom,0px))}
+  .bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--border)}
+  .bn-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:54px;border:0;background:none;font-size:11px;font-weight:600;color:var(--muted)}
+  .bn-item span{font-size:20px;line-height:1}
+  .bn-sell{color:var(--blue)}
+  .bn-plus{display:grid!important;place-items:center;width:42px;height:42px;margin-top:-18px;border-radius:50%;background:var(--blue);color:#fff;font-size:26px!important;box-shadow:0 6px 16px rgba(23,105,224,.4)}
+}
