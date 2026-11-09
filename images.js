@@ -103,4 +103,4 @@ publicRouter.get('/:id(\\d+)', requireDb, ah(async (req, res) => {
   res.send(req.query.t ? x.thumb : x.data);
 }));
 
-module.exports = { router, publicRouter };
+module.exports = { router, publicRouter, kind, process, put, STORAGE, raw };

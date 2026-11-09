@@ -4,6 +4,8 @@ const { ah, requireDb } = require('./common');
 const { requireAuth, requireVerified } = require('./authmw');
 const { createThrottle } = require('./security');
 const live = require('./live');
+const crypto = require('crypto');
+const imgs = require('./images');
 
 const router = express.Router();
 router.use(requireDb, requireAuth);
@@ -11,7 +13,8 @@ router.use(requireDb, requireAuth);
 const sendAllow = createThrottle(60, 60 * 60 * 1000);  // max 60 mesaje/oră per utilizator
 const blockAllow = createThrottle(60, 60 * 60 * 1000);
 const typingAllow = createThrottle(90, 60 * 1000);
-const MAX_BODY = 2000, MAX_BLOCKS = 200;
+const MAX_BODY = 2000, MAX_BLOCKS = 200, CHAT_QUOTA = 40 * 1024 * 1024;
+const upAllow = createThrottle(40, 60 * 60 * 1000);   // max 40 poze/oră per utilizator
 
 const toId = (v) => (/^\d{1,10}$/.test(String(v)) ? Number(v) : null);
 
@@ -36,10 +39,10 @@ router.get('/unread', ah(async (req, res) => {
 router.get('/', ah(async (req, res) => {
   const r = await db.query(
     `WITH m AS (
-       SELECT id, listing_id, body, created_at, read_at, delivered_at, (sender_id = $1) AS mine,
+       SELECT id, listing_id, body, (image_id IS NOT NULL) AS has_image, created_at, read_at, delivered_at, (sender_id = $1) AS mine,
               CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other
          FROM messages WHERE sender_id = $1 OR recipient_id = $1)
-     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, t.body, t.created_at, t.mine, t.read_at, t.delivered_at,
+     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, t.body, t.has_image, t.created_at, t.mine, t.read_at, t.delivered_at,
             (SELECT COUNT(*)::int FROM m x WHERE x.listing_id = t.listing_id AND x.other = t.other AND NOT x.mine AND x.read_at IS NULL) AS unread
        FROM (SELECT DISTINCT ON (listing_id, other) * FROM m ORDER BY listing_id, other, id DESC) t
        JOIN users u ON u.id = t.other
@@ -61,9 +64,11 @@ router.get('/thread', ah(async (req, res) => {
   // conversația există doar între proprietarul anunțului și altcineva
   if (!l || !ur.rowCount || (l.user_id !== me && l.user_id !== other)) return res.status(404).json({ error: 'NEGASIT' });
   const rows = (await db.query(
-    `SELECT id, body, created_at, (sender_id = $2) AS mine, (read_at IS NOT NULL) AS read, (delivered_at IS NOT NULL) AS delivered FROM messages
-      WHERE listing_id = $1 AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
-      ORDER BY id DESC LIMIT 300`, [listingId, me, other])).rows.reverse();
+    `SELECT m.id, m.body, m.created_at, (m.sender_id = $2) AS mine, (m.read_at IS NOT NULL) AS read, (m.delivered_at IS NOT NULL) AS delivered,
+            ci.url AS image_url, ci.thumb_url AS image_thumb
+       FROM messages m LEFT JOIN chat_images ci ON ci.id = m.image_id
+      WHERE m.listing_id = $1 AND ((m.sender_id = $2 AND m.recipient_id = $3) OR (m.sender_id = $3 AND m.recipient_id = $2))
+      ORDER BY m.id DESC LIMIT 300`, [listingId, me, other])).rows.reverse();
   // deschiderea conversației = „citit": expeditorul vede bifele albastre
   const rd = await db.query('UPDATE messages SET read_at = NOW(), delivered_at = COALESCE(delivered_at, NOW()) WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND read_at IS NULL RETURNING id', [listingId, other, me]);
   if (rd.rowCount) live.send(other, 'msg_status', { with: me, listing: listingId, ids: rd.rows.map((x) => x.id), status: 'read' });
@@ -78,8 +83,8 @@ router.get('/thread', ah(async (req, res) => {
    Cumpărătorul scrie vânzătorului anunțului. Vânzătorul poate doar să răspundă cuiva care i-a scris deja,
    ca să nu poată trimite mesaje nesolicitate. */
 router.post('/', requireVerified, ah(async (req, res) => {
-  const b = req.body || {}, body = String(b.body || '').trim(), listingId = toId(b.listing_id), me = req.user.id;
-  if (!listingId || !body || body.length > MAX_BODY) return res.status(400).json({ error: 'MESAJ_INVALID' });
+  const b = req.body || {}, body = String(b.body || '').trim(), listingId = toId(b.listing_id), me = req.user.id, imageId = b.image_id ? toId(b.image_id) : null;
+  if (!listingId || (!body && !imageId) || body.length > MAX_BODY || (b.image_id && !imageId)) return res.status(400).json({ error: 'MESAJ_INVALID' });
   const l = (await db.query('SELECT id, user_id, status FROM listings WHERE id = $1', [listingId])).rows[0];
   if (!l || !l.user_id || l.status === 'deleted') return res.status(404).json({ error: 'NEGASIT' });
 
@@ -99,15 +104,55 @@ router.post('/', requireVerified, ah(async (req, res) => {
   if (bs.byMe) return res.status(403).json({ error: 'BLOCAT_DE_TINE' });
   if (bs.byThem) return res.status(403).json({ error: 'BLOCAT' });
 
+  if (imageId) {   // poza trebuie să fie încărcată de tine și nefolosită încă
+    const ok = await db.query('SELECT 1 FROM chat_images c WHERE c.id = $1 AND c.owner_id = $2 AND NOT EXISTS (SELECT 1 FROM messages WHERE image_id = c.id)', [imageId, me]);
+    if (!ok.rowCount) return res.status(400).json({ error: 'POZA_INVALIDA' });
+  }
   // dublă apăsare: același mesaj în aceeași conversație în ultimele 8 secunde nu se salvează a doua oară
   const dup = (await db.query(
     "SELECT id, created_at FROM messages WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND body = $4 AND created_at > NOW() - INTERVAL '8 seconds' ORDER BY id DESC LIMIT 1",
     [listingId, me, to, body])).rows[0];
-  if (dup) return res.json({ message: dup, duplicate: true });
+  if (dup && !imageId) return res.json({ message: dup, duplicate: true });
   const online = live.isOnline(to);
-  const r = await db.query('INSERT INTO messages(listing_id, sender_id, recipient_id, body, delivered_at) VALUES($1,$2,$3,$4, CASE WHEN $5::boolean THEN NOW() END) RETURNING id, created_at', [listingId, me, to, body, online]);
-  live.send(to, 'message', { id: r.rows[0].id, from: me, listing_id: listingId, body, created_at: r.rows[0].created_at });
+  const r = await db.query('INSERT INTO messages(listing_id, sender_id, recipient_id, body, delivered_at, image_id) VALUES($1,$2,$3,$4, CASE WHEN $5::boolean THEN NOW() END, $6) RETURNING id, created_at', [listingId, me, to, body, online, imageId]);
+  live.send(to, 'message', { id: r.rows[0].id, from: me, listing_id: listingId, body, has_image: !!imageId, created_at: r.rows[0].created_at });
   res.status(201).json({ message: { ...r.rows[0], delivered: online } });
+}));
+
+/* ---- poze în chat: JPG / PNG / WebP, recodate pe server (fără GPS), miniatură 480 px + poză 1280 px ---- */
+router.post('/image', requireVerified, imgs.raw, ah(async (req, res) => {
+  const me = req.user.id, buf = req.body, k = Buffer.isBuffer(buf) && imgs.kind(buf);
+  if (!k) return res.status(400).json({ error: 'POZA_INVALIDA' });
+  if (!upAllow('u' + me)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  // curățenie: pozele încărcate dar netrimise de peste o zi
+  db.query("DELETE FROM chat_images c WHERE c.owner_id = $1 AND c.created_at < NOW() - INTERVAL '1 day' AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.image_id = c.id)", [me]).catch(() => {});
+  const used = (await db.query('SELECT COALESCE(SUM(size),0)::bigint AS n FROM chat_images WHERE owner_id = $1', [me])).rows[0].n;
+  if (Number(used) + buf.length > CHAT_QUOTA) return res.status(413).json({ error: 'SPATIU_POZE_DEPASIT' });
+  let p;
+  try { p = await imgs.process(buf, k); } catch { return res.status(400).json({ error: 'POZA_INVALIDA' }); }
+  const size = p.full.length + p.thumb.length;
+  let row;
+  if (imgs.STORAGE) {
+    const base = `chat/u${me}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+    let url, thumbUrl;
+    try { url = await imgs.put(`${base}.${p.ext}`, p.full, p.type); thumbUrl = await imgs.put(`${base}-t.${p.ext}`, p.thumb, p.type); }
+    catch (e) { console.error('storage:', e.message); return res.status(502).json({ error: 'STORAGE_EROARE' }); }
+    row = (await db.query('INSERT INTO chat_images(owner_id, url, thumb_url, size) VALUES($1,$2,$3,$4) RETURNING id, url, thumb_url', [me, url, thumbUrl, size])).rows[0];
+  } else {   // fără Supabase: în Postgres, servite doar celor doi din conversație
+    const ins = await db.query("INSERT INTO chat_images(owner_id, ctype, size, data, thumb) VALUES($1,$2,$3,$4,$5) RETURNING id", [me, p.type, size, p.full, p.thumb]);
+    row = (await db.query("UPDATE chat_images SET url = '/api/messages/img/' || id, thumb_url = '/api/messages/img/' || id || '?t=1' WHERE id = $1 RETURNING id, url, thumb_url", [ins.rows[0].id])).rows[0];
+  }
+  res.status(201).json({ image: row });
+}));
+
+router.get('/img/:id(\\d+)', ah(async (req, res) => {
+  const r = await db.query(
+    `SELECT c.data, c.thumb, c.ctype FROM chat_images c
+      WHERE c.id = $1 AND c.data IS NOT NULL
+        AND (c.owner_id = $2 OR EXISTS (SELECT 1 FROM messages m WHERE m.image_id = c.id AND (m.sender_id = $2 OR m.recipient_id = $2)))`, [req.params.id, req.user.id]);
+  if (!r.rowCount) return res.status(404).end();
+  res.set('Content-Type', r.rows[0].ctype || 'image/webp').set('Cache-Control', 'private, max-age=86400');
+  res.send(req.query.t ? r.rows[0].thumb : r.rows[0].data);
 }));
 
 /* ---- „scrie…": semnal efemer, nu se salvează nimic ---- */

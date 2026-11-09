@@ -111,7 +111,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);
   res.json({ listing: {
     images: imgs.rows.map((i) => i.url),
-    seller_id: l.user_id, mine: !!owner,
+    seller_id: l.user_id, mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
     // datele brute de care are nevoie formularul de editare; le primește doar proprietarul
     edit: owner ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,

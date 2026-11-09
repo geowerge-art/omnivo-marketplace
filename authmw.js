@@ -24,6 +24,7 @@ async function loadUser(req, res, next) {
       req.user = r.rows[0];
       if (Date.now() - new Date(r.rows[0].last_seen_at).getTime() > 10 * 60 * 1000) {
         db.query('UPDATE sessions SET last_seen_at = NOW() WHERE id = $1', [r.rows[0].session_id]).catch(() => {});
+        db.query('UPDATE users SET last_seen = NOW() WHERE id = $1', [r.rows[0].id]).catch(() => {});   // „ultima dată online” și când doar navighează
       }
     }
   } catch (e) { console.error('loadUser:', e.message); }

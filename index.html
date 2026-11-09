@@ -265,24 +265,37 @@
     <div class="lb-count" id="lbCount"></div>
   </dialog>
 
-    <dialog id="inboxDialog" class="sheet">
-    <button class="dialog-close" id="inboxClose" aria-label="Închide">✕</button>
-    <h2>Mesaje</h2>
+  <dialog id="inboxDialog" class="chatpage" aria-label="Mesaje">
+    <header class="cp-head">
+      <button type="button" class="cp-back" id="inboxClose" aria-label="Înapoi"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Mesaje</h2>
+    </header>
     <div id="inboxList" class="inbox"></div>
-    <p id="inboxEmpty" class="muted" hidden>Nu ai nicio conversație încă. Scrie unui vânzător din pagina unui anunț.</p>
+    <p id="inboxEmpty" class="muted cp-empty" hidden>Nu ai nicio conversație încă. Scrie unui vânzător din pagina unui anunț.</p>
   </dialog>
 
-  <dialog id="chatDialog" class="sheet">
-    <button class="dialog-close" id="chatClose" aria-label="Închide">✕</button>
-    <h2 id="chatTitle">Conversație</h2>
-    <p class="muted chat-sub"><span id="chatWith"></span><span id="chatPresence" class="cv-presence" aria-live="polite"></span></p>
+  <dialog id="chatDialog" class="chatpage" aria-label="Conversație">
+    <header class="cp-head">
+      <button type="button" class="cp-back" id="chatClose" aria-label="Înapoi"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <span class="cp-av" id="chatAv" aria-hidden="true">?</span>
+      <div class="cp-who">
+        <b id="chatWith">Conversație</b>
+        <small id="chatPresence" class="cv-presence" aria-live="polite"></small>
+      </div>
+      <div class="cp-menu">
+        <button type="button" class="cp-more" id="chatMore" aria-label="Mai multe" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
+        <div class="cp-pop" id="chatPop" hidden><button type="button" id="chatBlock">Blochează utilizatorul</button></div>
+      </div>
+    </header>
+    <button type="button" class="cp-ad" id="chatAd"><span class="cp-ad-t" id="chatTitle">Anunț</span><i>›</i></button>
     <div id="chatLog" class="chat-log" aria-live="polite"></div>
-    <form id="chatForm" class="chat-form" novalidate>
-      <textarea id="chatInput" rows="2" maxlength="2000" placeholder="Scrie un mesaj…" aria-label="Mesaj"></textarea>
-      <button class="primary" type="submit" id="chatSend">Trimite</button>
+    <p id="chatErr" class="err cp-err" hidden></p>
+    <form id="chatForm" class="cp-bar" novalidate>
+      <input type="file" id="chatFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+      <button type="button" class="cp-ic" id="chatAttach" aria-label="Trimite poze"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 2.5-2.5L20 18"/></svg></button>
+      <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Scrie un mesaj…" aria-label="Mesaj" enterkeyhint="send"></textarea>
+      <button type="submit" class="cp-send" id="chatSend" aria-label="Trimite"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button>
     </form>
-    <p id="chatErr" class="err" hidden></p>
-    <button type="button" class="link-btn" id="chatBlock">Blochează utilizatorul</button>
   </dialog>
 
   <dialog id="messageDialog">

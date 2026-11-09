@@ -587,7 +587,10 @@ async function openDetail(id) {
     const av = document.createElement("span"); av.className = "ad-av"; av.textContent = (l.seller || "V").charAt(0).toUpperCase();
     const who = document.createElement("div"), nm = document.createElement("b"), mt = document.createElement("small");
     nm.textContent = l.seller || "Vânzător"; mt.textContent = [l.seller_type === "firma" ? "Firmă" : "Persoană fizică", l.county].filter(Boolean).join(" · ");
-    who.append(nm, mt); sc.append(av, who);
+    who.append(nm, mt);
+    { const sp = l.seller_presence;   // „online acum” / „văzut azi la 21:40”; lipsește dacă vânzătorul și-a ascuns prezența
+      if (sp && !sp.hidden) { const pr = document.createElement("small"); pr.className = "ad-pres" + (sp.online ? " online" : ""); pr.textContent = sp.online ? "online acum" : seenText(sp.last_seen); who.appendChild(pr); } }
+    sc.append(av, who);
     /* bara de contact: mereu vizibilă jos, cu telefon, WhatsApp și mesaj */
     const act = $("detActions"); act.replaceChildren();
     const live = ["approved", "sold"].includes(l.status);
@@ -778,11 +781,29 @@ function setTicks(ids, st) {
     t.replaceWith(tickEl(st));
   });
 }
-const presText = (p) => (!p || p.hidden ? "" : p.online ? "online" : "offline");
+const sameDay = (a, b) => a.toDateString() === b.toDateString();
+const hhmm = (t) => new Date(t).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+function dayLabel(t) {
+  const d = new Date(t), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
+  return sameDay(d, n) ? "Azi" : sameDay(d, y) ? "Ieri" : d.toLocaleDateString("ro-RO", { day: "numeric", month: "long", ...(d.getFullYear() === n.getFullYear() ? {} : { year: "numeric" }) });
+}
+const inboxTime = (t) => { const d = new Date(t), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); return sameDay(d, n) ? hhmm(t) : sameDay(d, y) ? "Ieri" : d.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" }); };
+/* „văzut azi la 21:40” / „văzut ieri la 18:05” / „văzut 3 nov.” */
+function seenText(ts) {
+  if (!ts) return "offline";
+  const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
+  if (sameDay(d, n)) return "văzut azi la " + hhmm(ts);
+  if (sameDay(d, y)) return "văzut ieri la " + hhmm(ts);
+  return "văzut " + d.toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+}
+window.seenText = seenText;
+const presText = (p) => (!p || p.hidden ? "" : p.online ? "online" : seenText(p.last_seen));
+const AVC = ["#b8935a", "#8f6d38", "#a07a4a", "#7d6a52", "#c2a06b", "#9a7b4f"];
+const avatar = (name, id) => { const a = document.createElement("span"); a.className = "cp-av"; a.textContent = String(name || "?").charAt(0).toUpperCase(); a.style.background = AVC[Math.abs(Number(id) || 0) % AVC.length]; return a; };
 let typTimer = null;
 function setPresence(p) {
   const el = $("chatPresence"); if (!el) return;
-  const t = presText(p); el.className = "cv-presence" + (p && !p.hidden && p.online ? " online" : ""); el.dataset.base = t; el.textContent = t ? " · " + t : ""; clearTimeout(typTimer);
+  const t = presText(p); el.className = "cv-presence" + (p && !p.hidden && p.online ? " online" : ""); el.dataset.base = t; el.textContent = t; clearTimeout(typTimer);
 }
 
 /* ---- timp real (SSE): mesaje noi, bife, online, „scrie…" ---- */
@@ -798,11 +819,11 @@ function startLive() {
     else if ($("inboxDialog").open) renderInbox();
   });
   on("msg_status", (d) => { setTicks(d.ids, d.status); if ($("inboxDialog").open) renderInbox(); });
-  on("presence", (d) => { if (chat && d.uid === chat.withId) setPresence({ online: d.online }); });
+  on("presence", (d) => { if (chat && d.uid === chat.withId) setPresence({ online: d.online, last_seen: new Date().toISOString() }); });
   on("typing", (d) => {
     if (!chat || d.from !== chat.withId || (d.listing && d.listing !== chat.listingId)) return;
-    const el = $("chatPresence"); el.className = "cv-presence typing"; el.textContent = " · scrie…";
-    clearTimeout(typTimer); typTimer = setTimeout(() => { el.className = "cv-presence" + (el.dataset.base === "online" ? " online" : ""); el.textContent = el.dataset.base ? " · " + el.dataset.base : ""; }, 4000);
+    const el = $("chatPresence"); el.className = "cv-presence typing"; el.textContent = "scrie…";
+    clearTimeout(typTimer); typTimer = setTimeout(() => { el.className = "cv-presence" + (el.dataset.base === "online" ? " online" : ""); el.textContent = el.dataset.base || ""; }, 4000);
   });
   live.addEventListener("error", () => { if (live && live.readyState === 2) { live.close(); live = null; if (!liveStopped) setTimeout(startLive, 5000); } });
 }
@@ -820,11 +841,15 @@ async function renderInbox() {
   const { threads } = await api("/api/messages");
   $("inboxEmpty").hidden = threads.length > 0;
   $("inboxList").replaceChildren(...threads.map((t) => {
-    const b = document.createElement("button"), h = document.createElement("b"), sm = document.createElement("small");
-    b.type = "button"; if (t.unread) b.className = "unread";
-    h.textContent = `${t.other_name} · ${t.title}`;
-    if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; h.prepend(d); }
-    if (t.mine) sm.append(tickEl(tickState(t)), " Tu: "); sm.append(t.body); b.append(h, sm);
+    const b = document.createElement("button"); b.type = "button"; b.className = "cp-row" + (t.unread ? " unread" : "");
+    const mid = document.createElement("span"); mid.className = "cp-mid";
+    const top = document.createElement("span"); top.className = "cp-top";
+    const nm = document.createElement("b"); nm.textContent = t.other_name;
+    const tm = document.createElement("time"); tm.textContent = inboxTime(t.created_at); top.append(nm, tm);
+    const ti = document.createElement("span"); ti.className = "cp-ti"; ti.textContent = t.title;
+    const sm = document.createElement("small"); if (t.mine) sm.append(tickEl(tickState(t)), " "); sm.append(t.has_image && !t.body ? "Poză" : t.body);
+    mid.append(top, ti, sm); b.append(avatar(t.other_name, t.other), mid);
+    if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; b.appendChild(d); }
     b.addEventListener("click", () => { $("inboxDialog").close(); openChat(t.listing_id, t.other, t.title); });
     return b;
   }));
@@ -837,8 +862,8 @@ async function openInbox() {
 
 async function openChat(listingId, withId, title) {
   chat = { listingId, withId, sig: "", blocked: false, first: true };
-  $("chatTitle").textContent = title || "Conversație"; $("chatWith").textContent = ""; setPresence(null); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
-  open("chatDialog"); $("chatInput").focus();
+  $("chatTitle").textContent = title || "Anunț"; $("chatWith").textContent = "Conversație"; $("chatAv").textContent = "?"; $("chatPop").hidden = true; setPresence(null); fitChat(); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
+  open("chatDialog"); fitChat(); autoGrow();
   await refreshChat();
   clearInterval(chatTimer); chatTimer = setInterval(() => { if (!document.hidden) refreshChat(); }, live ? 20000 : 8000);   // cu conexiune live, interogarea e doar plasă de siguranță
 }
@@ -848,20 +873,32 @@ async function refreshChat() {
     const d = await api(`/api/messages/thread?listing=${c.listingId}&with=${c.withId}`);
     if (chat !== c) return;                       // între timp s-a închis sau s-a deschis alta
     c.first = false; c.blocked = d.blocked_by_me;
-    $("chatTitle").textContent = d.listing.title; $("chatWith").textContent = `Cu ${d.other.nickname}` + (c.blocked ? " · blocat de tine" : "");
+    $("chatTitle").textContent = d.listing.title; $("chatWith").textContent = d.other.nickname + (c.blocked ? " · blocat" : ""); const av = avatar(d.other.nickname, d.other.id); $("chatAv").textContent = av.textContent; $("chatAv").style.background = av.style.background;
     if (!$("chatPresence").classList.contains("typing")) setPresence(d.presence);
     $("chatBlock").textContent = c.blocked ? "Deblochează utilizatorul" : "Blochează utilizatorul";
-    $("chatInput").disabled = $("chatSend").disabled = c.blocked;
+    $("chatInput").disabled = $("chatSend").disabled = $("chatAttach").disabled = c.blocked;
     const mine = d.messages.filter((m) => m.mine), last = d.messages.length ? d.messages[d.messages.length - 1].id : 0;
     const sig = `${d.messages.length}:${last}:${mine.filter((m) => m.read).length}:${mine.filter((m) => m.delivered).length}`;
     if (sig !== c.sig) {
       c.sig = sig; const log = $("chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
-      log.replaceChildren(...d.messages.map((m) => {
+      const pics = d.messages.filter((m) => m.image_url).map((m) => m.image_url); let lastDay = "";
+      const nodes = [];
+      for (const m of d.messages) {
+        const day = new Date(m.created_at).toDateString();
+        if (day !== lastDay) { lastDay = day; const sp = document.createElement("div"); sp.className = "cv-day"; const sb = document.createElement("span"); sb.textContent = dayLabel(m.created_at); sp.appendChild(sb); nodes.push(sp); }
         const el = document.createElement("div"), t = document.createElement("time");
-        el.className = "bubble" + (m.mine ? " mine" : ""); el.dataset.mid = m.id; el.append(m.body); t.textContent = when(m.created_at); t.dateTime = m.created_at;
+        el.className = "bubble" + (m.mine ? " mine" : "") + (m.image_thumb ? " has-img" : ""); el.dataset.mid = m.id;
+        if (m.image_thumb) {
+          const pb = document.createElement("button"), im = document.createElement("img"); pb.type = "button"; pb.className = "cv-img"; pb.setAttribute("aria-label", "Deschide poza");
+          im.src = m.image_thumb; im.alt = "Poză trimisă"; im.loading = "lazy"; pb.appendChild(im);
+          pb.addEventListener("click", () => openLightbox(pics, Math.max(0, pics.indexOf(m.image_url)), "Poză din conversație")); el.appendChild(pb);
+        }
+        if (m.body) { const tx = document.createElement("span"); tx.className = "cv-txt"; tx.textContent = m.body; el.appendChild(tx); }
+        t.textContent = hhmm(m.created_at); t.dateTime = m.created_at;
         if (m.mine) t.append(" ", tickEl(tickState(m)));
-        el.appendChild(t); return el;
-      }));
+        el.appendChild(t); nodes.push(el);
+      }
+      log.replaceChildren(...nodes);
       if (atEnd || !log.dataset.seen) log.scrollTop = log.scrollHeight; log.dataset.seen = "1";
     }
     refreshUnread();
@@ -871,6 +908,42 @@ async function refreshChat() {
   }
 }
 let typSent = 0;
+/* compozitor: crește cu textul (max 5 rânduri), Enter trimite pe laptop, butonul rotund se aprinde când ai ce trimite */
+function autoGrow() {
+  const t = $("chatInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 128) + "px";
+  $("chatSend").classList.toggle("empty", !t.value.trim());
+}
+$("chatInput")?.addEventListener("input", autoGrow);
+$("chatInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(hover:hover) and (pointer:fine)").matches) { e.preventDefault(); $("chatForm").requestSubmit(); }
+});
+/* când apare tastatura pe telefon, pagina de chat se micșorează la ce se vede: bara de scris rămâne deasupra tastaturii */
+function fitChat() {
+  const el = $("chatDialog"), v = window.visualViewport; if (!el) return;
+  if (v && el.open && v.height < innerHeight - 80) { el.style.height = v.height + "px"; el.style.top = v.offsetTop + "px"; } else { el.style.height = ""; el.style.top = ""; }
+  const log = $("chatLog"); if (el.open && log) log.scrollTop = log.scrollHeight;
+}
+window.visualViewport?.addEventListener("resize", fitChat);
+window.visualViewport?.addEventListener("scroll", fitChat);
+$("chatMore")?.addEventListener("click", (e) => { e.stopPropagation(); const p = $("chatPop"); p.hidden = !p.hidden; $("chatMore").setAttribute("aria-expanded", String(!p.hidden)); });
+document.addEventListener("click", (e) => { const p = $("chatPop"); if (p && !p.hidden && !e.target.closest(".cp-menu")) p.hidden = true; });
+$("chatAd")?.addEventListener("click", () => { if (chat) openDetail(chat.listingId); });
+$("chatAttach")?.addEventListener("click", () => $("chatFile").click());
+$("chatFile")?.addEventListener("change", async (e) => {
+  const c = chat, files = [...e.target.files].slice(0, 5); e.target.value = ""; if (!c || !files.length) return;
+  show($("chatErr"), ""); $("chatAttach").disabled = true;
+  try {
+    for (const f of files) {
+      const blob = await compress(f);
+      const r = await fetch("/api/messages/image", { method: "POST", headers: { "content-type": "image/jpeg" }, body: blob });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(j.error || "upload"), { code: j.error, status: r.status });
+      await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, image_id: j.image.id, body: "" });
+      c.sig = ""; await refreshChat();
+    }
+  } catch (err) { if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); } else show($("chatErr"), errText(err)); }
+  $("chatAttach").disabled = false;
+});
 $("chatInput")?.addEventListener("input", () => {
   const c = chat; if (!c || !$("chatInput").value.trim() || Date.now() - typSent < 2500) return;
   typSent = Date.now(); api("/api/messages/typing", "POST", { to: c.withId, listing_id: c.listingId }).catch(() => {});
@@ -878,19 +951,19 @@ $("chatInput")?.addEventListener("input", () => {
 $("chatForm")?.addEventListener("submit", async (e) => {
   e.preventDefault(); const c = chat, body = $("chatInput").value.trim(); if (!c || !body) return;
   show($("chatErr"), ""); $("chatSend").disabled = true;
-  try { await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, body }); $("chatInput").value = ""; c.sig = ""; await refreshChat(); }
+  try { await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, body }); $("chatInput").value = ""; autoGrow(); c.sig = ""; await refreshChat(); $("chatInput").focus(); }
   catch (err) { if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); } else show($("chatErr"), errText(err)); }
   if (chat) $("chatSend").disabled = chat.blocked;
 });
 $("chatBlock")?.addEventListener("click", async () => {
-  const c = chat; if (!c) return;
+  const c = chat; if (!c) return; $("chatPop").hidden = true;
   try {
     if (c.blocked) await api(`/api/messages/block/${c.withId}`, "DELETE");
     else { if (!confirm("Blochezi acest utilizator? Nu vă veți mai putea scrie.")) return; await api("/api/messages/block", "POST", { user_id: c.withId }); }
     c.sig = ""; await refreshChat();
   } catch (err) { show($("chatErr"), errText(err)); }
 });
-$("chatDialog")?.addEventListener("close", () => { clearInterval(chatTimer); chat = null; refreshUnread(); });
+$("chatDialog")?.addEventListener("close", () => { clearInterval(chatTimer); chat = null; $("chatPop").hidden = true; fitChat(); refreshUnread(); });
 
 /* link din email: /#verifica-email=TOKEN */
 (async () => {
