@@ -14,6 +14,10 @@ const STRONG_PARTS = new Set(('far faruri bara capota aripa usa usi portiera ogl
 const DUAL_PARTS = new Set('motor motorul cutie interior scaune caroserie bord volan'.split(' '));
 
 /* Specificații care descriu un vehicul întreg (tari) sau doar îl sugerează (slabe). */
+/* Cuvântul care numește obiectul vândut („televizor”, „laptop”) decide mai mult decât marca („samsung”, „lenovo”). */
+const HEAD = { telefoane: 'telefon smartphone iphone', 'tv-audio': 'televizor televizoare soundbar', laptopuri: 'laptop notebook macbook',
+  console: 'consola playstation xbox', electrocasnice: 'frigider aragaz aspirator cuptor uscator congelator', biciclete: 'bicicleta trotineta',
+  canapele: 'canapea fotoliu', carucioare: 'carucior', jucarii: 'jucarie lego' };
 const SPEC_STRONG = [
   /\b\d{2,3}\s?(cp|hp|cai)\b/, /\b(tdi|tdci|dci|hdi|cdi|crdi|tsi|tfsi|fsi|jtd|jtdm|multijet|cdti|bluehdi|ecoboost|ecotec|vtec|mpi|d4d|tce|dti|skyactiv)\b/,
   /\b\d[\d. ]{1,8}\s?km\b/, /\b(inmatriculat|neinmatriculat|itp|rca|proprietar|avariat|accidentat|fiscal)\b/, /\beuro ?[3-6]\b/
@@ -67,6 +71,8 @@ function detect(title, leaves) {
       else if (k.length >= 4 && w.length >= 4 && (w.startsWith(k) || k.startsWith(w))) add(l.slug, 2);
     }
   }
+
+  for (const [slug, words] of Object.entries(HEAD)) for (const w of words.split(' ')) if (tokens.includes(w)) add(slug, 3);
 
   /* Piesă sau mașină întreagă? */
   strongParts += tokens.filter((w) => STRONG_PARTS.has(w)).length;

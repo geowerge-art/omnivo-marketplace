@@ -37,6 +37,9 @@ const CASES = [
   ['Bicicletă MTB 26', 'biciclete'],
   ['Canapea colțar piele', 'canapele'],
   ['Instalator electrician', 'reparatii-constructii'],
+  ['Televizor samsung', 'tv-audio'],
+  ['Telefon Samsung A52', 'telefoane'],
+  ['Ford focus 1.6 tdi 109 cp', 'autoturisme'],
   ['Ford focus 2 an 2016 motor 1.6', 'autoturisme'],
   ['Opel Astra 2004 cutie manuala 1.6 benzina', 'autoturisme'],
   ['Vand masina', 'autoturisme']

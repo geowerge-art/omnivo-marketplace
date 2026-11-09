@@ -111,58 +111,59 @@
     <ul id="drawerList" class="drawer-list"><li class="muted">Se încarcă…</li></ul>
   </aside>
 
-  <dialog id="sellDialog" class="sheet">
-    <button class="dialog-close" id="sellClose" aria-label="Închide">✕</button>
-    <h2 id="sellHead">Adaugă un anunț</h2>
-    <form id="sellForm" novalidate>
-      <label for="sellTitle">Ce vinzi?</label>
-      <input id="sellTitle" name="title" maxlength="120" placeholder="ex: iPhone 13, 128GB" autocomplete="off" required>
-      <p id="sellAuto" class="auto-note" hidden></p>
-      <div id="sellChips" class="chips"></div>
-      <label for="sellCat">Categorie</label>
-      <select id="sellCat" name="category_id" required><option value="">Alege categoria…</option></select>
-      <p id="sellAutoAttrs" class="auto-note" hidden></p>
-      <div id="sellAttrs"></div>
-      <div class="row2">
-        <div><label for="sellPrice">Preț</label><input id="sellPrice" name="price" type="number" inputmode="decimal" min="0" placeholder="0"></div>
-        <div><label for="sellCur">Moneda</label><select id="sellCur" name="currency"><option value="RON">lei</option><option value="EUR">€</option></select></div>
-      </div>
-      <div class="row2">
-        <div><label for="sellCond">Stare</label><select id="sellCond" name="condition"><option value="folosit">Folosit</option><option value="nou">Nou</option></select></div>
-        <div><label for="sellCounty">Județ</label><select id="sellCounty" name="county"></select></div>
-      </div>
-      <div class="row2">
-        <div><label for="sellCity">Oraș / localitate</label><input id="sellCity" name="city" list="cityList" maxlength="60" autocomplete="off" placeholder="ex: Alba Iulia"><datalist id="cityList"></datalist></div>
-        <div><label for="sellAddr">Zonă / adresă (opțional)</label><input id="sellAddr" name="address" maxlength="120" autocomplete="off" placeholder="ex: Cartier Cetate, str. Unirii"></div>
-      </div>
-      <p class="muted">Adresa e vizibilă public. Scrie doar zona sau strada dacă vrei să te găsească ușor.</p>
-      <label for="sellDesc">Descriere</label>
-      <textarea id="sellDesc" name="description" rows="4" maxlength="4000" placeholder="Detalii despre produs"></textarea>
-      <label>Poze (până la 8)</label>
-      <div id="sellExisting" class="prev" hidden></div>
-      <input id="sellPhotos" type="file" accept="image/*" multiple hidden>
-      <button type="button" class="ghost" id="sellPhotoBtn">📷 Adaugă poze</button>
-      <div id="sellPrev" class="prev"></div>
-      <p id="sellProg" class="muted" hidden></p>
-      <label class="check"><input type="checkbox" name="negotiable"> Preț negociabil</label>
-      <fieldset class="contact-box" id="sellContact">
-        <legend>Contact în anunț</legend>
-        <div id="sellContactHas" hidden>
-          <p class="sp-num">Telefon: <b id="sellPhoneShown"></b></p>
-          <label class="check"><input type="checkbox" id="sellShowPhone"> Afișează telefonul în anunț</label>
-          <label class="check"><input type="checkbox" id="sellWa"> Am WhatsApp pe acest număr</label>
-          <small class="muted">Îl poți schimba din Setări cont. Cumpărătorii te pot contacta oricum prin mesaje.</small>
-        </div>
-        <div id="sellContactNew" hidden>
-          <input id="sellPhoneNew" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="07xx xxx xxx">
-          <label class="check"><input type="checkbox" id="sellWaNew" checked> Am WhatsApp pe acest număr</label>
-          <small class="muted">Numărul se salvează în contul tău și apare în anunț cu butoane de apel și WhatsApp. Lasă gol dacă vrei doar mesaje.</small>
-        </div>
-      </fieldset>
-      <p id="sellErr" class="err" hidden></p>
-      <button class="primary" type="submit" id="sellSubmit">Publică anunțul</button>
-    </form>
-  </dialog>
+  <dialog id="sellDialog" class="sheet sell-page">
+<div class="sell-top"><button class="dialog-close" id="sellClose" aria-label="Închide">✕</button><h2 id="sellHead">Publică un anunț</h2></div>
+<form id="sellForm" novalidate>
+<label for="sellTitle">Titlul anunțului *</label>
+<input id="sellTitle" name="title" maxlength="120" placeholder="ex: Ford Focus 1.6 TDI, 2008" autocomplete="off" required>
+<div class="hint-row"><small class="muted">Minim 5 caractere: marca, modelul, starea.</small><small id="sellCount" class="muted">0/120</small></div>
+<p id="sellAuto" class="auto-note" hidden></p>
+<div id="sellChips" class="chips"></div>
+<div class="cat-card"><div><small>Categoria</small><b id="sellCatText">Alege categoria</b></div><button type="button" id="sellCatEdit">Modifică</button></div>
+<select id="sellCat" name="category_id" required hidden><option value="">Alege categoria…</option></select>
+<div class="sec">Poze <small>(până la 8)</small></div>
+<div id="sellExisting" class="prev" hidden></div>
+<input id="sellPhotos" type="file" accept="image/*" multiple hidden>
+<button type="button" class="photo-box" id="sellPhotoBtn">📷 Adaugă poze</button>
+<div id="sellPrev" class="prev"></div>
+<p id="sellProg" class="muted" hidden></p>
+<label for="sellDesc">Descriere</label>
+<textarea id="sellDesc" name="description" rows="4" maxlength="4000" placeholder="Scrie ce ai vrea să afli dacă te-ai uita la acest anunț"></textarea>
+<div class="row2">
+<div><label for="sellPrice">Preț</label><input id="sellPrice" name="price" type="number" inputmode="decimal" min="0" placeholder="0"></div>
+<div><label for="sellCur">Moneda</label><select id="sellCur" name="currency"><option value="RON">lei</option><option value="EUR">€</option></select></div>
+</div>
+<label class="check"><input type="checkbox" name="negotiable"> Preț negociabil</label>
+<p id="sellAutoAttrs" class="auto-note" hidden></p>
+<div id="sellAttrs"></div>
+<div class="sec">Stare</div>
+<div class="seg" id="sellSeg"></div>
+<select id="sellCond" name="condition" hidden><option value="folosit">Folosit</option><option value="nou">Nou</option></select>
+<div class="sec">Locația</div>
+<div class="row2">
+<div><label for="sellCounty">Județ</label><select id="sellCounty" name="county"></select></div>
+<div><label for="sellCity">Localitate</label><input id="sellCity" name="city" list="cityList" maxlength="60" autocomplete="off" placeholder="ex: Alba Iulia"><datalist id="cityList"></datalist></div>
+</div>
+<label for="sellAddr">Zonă / adresă <small class="muted">(opțional, public)</small></label>
+<input id="sellAddr" name="address" maxlength="120" autocomplete="off" placeholder="ex: Cartier Cetate, str. Unirii">
+<fieldset class="contact-box" id="sellContact">
+<legend>Contact în anunț</legend>
+<div id="sellContactHas" hidden>
+<p class="sp-num">Telefon: <b id="sellPhoneShown"></b></p>
+<label class="check"><input type="checkbox" id="sellShowPhone"> Afișează telefonul în anunț</label>
+<label class="check"><input type="checkbox" id="sellWa"> Am WhatsApp pe acest număr</label>
+<small class="muted">Îl poți schimba din Setări cont. Cumpărătorii te pot contacta oricum prin mesaje.</small>
+</div>
+<div id="sellContactNew" hidden>
+<input id="sellPhoneNew" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="07xx xxx xxx">
+<label class="check"><input type="checkbox" id="sellWaNew" checked> Am WhatsApp pe acest număr</label>
+<small class="muted">Numărul se salvează în contul tău și apare în anunț cu butoane de apel și WhatsApp. Lasă gol dacă vrei doar mesaje.</small>
+</div>
+</fieldset>
+<p id="sellErr" class="err" hidden></p>
+<div class="sell-bar"><button class="primary" type="submit" id="sellSubmit">Publică anunțul</button></div>
+</form>
+</dialog>
 
   <dialog id="authDialog" class="sheet">
     <button class="dialog-close" id="authClose" aria-label="Închide">✕</button>

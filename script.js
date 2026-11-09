@@ -82,9 +82,10 @@ $("sellCounty").addEventListener("change", syncCities);
 $("sellCity").addEventListener("input", () => { cityManual = true; });
 syncCities();
 function renderAttrs() {
-  const box = $("sellAttrs"); box.innerHTML = "";
+  const box = $("sellAttrs"); box.innerHTML = ""; syncCatCard();
   const id = Number($("sellCat").value); let defs = [];
   for (const c of cats) for (const k of c.children.length ? c.children : [c]) if (k.id === id) defs = [...c.attributes, ...(k !== c ? k.attributes : [])];
+  if (defs.length) { const hd = document.createElement("div"); hd.className = "sec"; hd.textContent = "Detalii · " + (catPath().split(" › ").pop() || ""); box.appendChild(hd); }
   for (const d of defs) {
     const l = document.createElement("label"); l.textContent = d.label + (d.required ? " *" : ""); l.htmlFor = "at-" + d.key; box.appendChild(l);
     let f;
@@ -175,6 +176,7 @@ $("sellForm")?.addEventListener("submit", async (e) => {
     }
     show($("sellProg"), ""); photos.length = 0; renderPrev();
     e.target.reset(); $("sellAttrs").innerHTML = ""; $("sellDialog").close();
+    try { localStorage.removeItem("omnivoDraft"); } catch { /* fără ciornă */ }
     showMessage(wasEdit ? "Anunț actualizat" : "Anunț trimis", failed ? `${note} ${failed} poze nu s-au încărcat.` : note);
     if (!wasEdit) { mode = "public"; filter = {}; }
     loadListings();
@@ -818,3 +820,39 @@ async function applySellContact() {
   }
   if (body) me = (await api("/api/auth/me", "PATCH", body)).user;
 }
+
+/* ---- pagina de postare: card de categorie, „Stare” ca butoane, contor titlu, ciornă salvată ---- */
+function catPath() { const o = $("sellCat").selectedOptions[0]; return o && o.value ? `${o.parentElement.label || ""} › ${o.textContent}` : ""; }
+function syncCatCard() { $("sellCatText").textContent = catPath() || "Alege categoria"; }
+$("sellCatEdit")?.addEventListener("click", () => { $("sellCat").hidden = !$("sellCat").hidden; });
+$("sellCat")?.addEventListener("change", () => { syncCatCard(); $("sellCat").hidden = true; });
+function syncSeg() { document.querySelectorAll("#sellSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === $("sellCond").value)); }
+$("sellSeg")?.replaceChildren(...[["folosit", "Folosit"], ["nou", "Nou"]].map(([v, t]) => {
+  const b = document.createElement("button"); b.type = "button"; b.dataset.v = v; b.textContent = t;
+  b.addEventListener("click", () => { $("sellCond").value = v; syncSeg(); }); return b;
+}));
+const countTitle = () => { $("sellCount").textContent = `${$("sellTitle").value.length}/120`; };
+$("sellTitle")?.addEventListener("input", countTitle);
+
+const DRAFT = "omnivoDraft", DRAFT_FIELDS = ["title", "price", "currency", "condition", "county", "city", "address", "description"];
+let draftTimer;
+$("sellForm")?.addEventListener("input", () => {
+  if (editing) return; clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    try {
+      const f = new FormData($("sellForm")), d = {}; DRAFT_FIELDS.forEach((k) => { d[k] = f.get(k) || ""; }); d.cat = $("sellCat").value;
+      if (d.title || d.description) localStorage.setItem(DRAFT, JSON.stringify(d));
+    } catch { /* browser fără stocare */ }
+  }, 600);
+});
+function restoreDraft() {
+  if (editing || $("sellTitle").value) return;
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT) || "null"); if (!d) return;
+    DRAFT_FIELDS.forEach((k) => { const el = $("sellForm").elements[k]; if (el && d[k]) el.value = d[k]; });
+    if (d.cat) { $("sellCat").value = d.cat; catManual = true; renderAttrs(); }
+    show($("sellAuto"), "Am restaurat ciorna ta. Anunțul nu s-a pierdut.");
+  } catch { /* ciornă ilizibilă */ }
+}
+const syncSell = () => { countTitle(); syncCatCard(); syncSeg(); };
+new MutationObserver(() => { if ($("sellDialog").open) { restoreDraft(); syncSell(); setTimeout(syncSell, 300); } }).observe($("sellDialog"), { attributes: true, attributeFilter: ["open"] });

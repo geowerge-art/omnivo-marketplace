@@ -838,3 +838,22 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
 /* --- întrebare „mașină sau piesă” --- */
 .ask-btn{flex:1 1 140px;min-height:52px;padding:0 14px;border:2px solid var(--blue);background:#fff;color:var(--blue);border-radius:14px;font-weight:700;font-size:15px}
 .ask-btn:active{background:var(--light)}
+
+/* --- pagina de postare (stil aplicație) --- */
+.sell-page{padding:0}
+.sell-top{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border)}
+.sell-top h2{font-size:20px;margin:0}
+.sell-top .dialog-close{position:static;margin:0}
+.sell-page form{padding:6px 18px 0}
+.hint-row{display:flex;justify-content:space-between;gap:10px}
+.sec{margin:22px 0 6px;font-size:18px;font-weight:800;color:var(--navy)}.sec small{font-weight:500;color:var(--muted);font-size:13px}
+.cat-card{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 6px;padding:12px 14px;background:var(--light);border:1px solid var(--border);border-radius:14px}
+.cat-card small{display:block;color:var(--muted)}.cat-card b{color:var(--navy)}
+.cat-card button{border:0;background:none;color:var(--blue);font-weight:800;text-decoration:underline;min-height:44px;padding:0 6px}
+.photo-box{width:100%;min-height:120px;margin:6px 0;border:2px dashed var(--gold);border-radius:16px;background:#fbf7ee;color:var(--navy);font-size:17px;font-weight:700}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg button{min-height:48px;border:1px solid var(--border);border-radius:12px;background:var(--light);font-weight:700;color:var(--text)}
+.seg button.on{background:#14110c;color:#e9d3a8;border-color:#14110c}
+.sell-bar{position:sticky;bottom:0;margin:18px -18px 0;padding:10px 18px calc(10px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--border)}
+.sell-bar .primary{margin:0}
+@media(max-width:760px){#sellDialog.sell-page{width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;border-radius:0}}
