@@ -6,7 +6,7 @@
   --gold-soft: #d4b483;
   --navy: #17181b;
   --text: #2b2a27;
-  --muted: #6f6b62;
+  --muted: #56524a;
   --light: #f7f5f0;
   --white: #ffffff;
   --border: #e6e0d4;
@@ -746,3 +746,51 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
 .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; font-size: 32px; line-height: 1; cursor: pointer; }
 .lb-nav.prev { left: 12px; } .lb-nav.next { right: 12px; }
 .lb-count { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; }
+
+/* ---- text mai ușor de citit ---- */
+.product-info h3 { font-size: 16px; font-weight: 600; line-height: 1.3; }
+.product-info p { font-size: 14px; }
+.products.rail .product-info h3 { font-size: 14px; font-weight: 600; }
+.products.rail .product-info strong { font-size: 16px; }
+.muted { font-size: 15px; }
+.ad-sub, .ad-seller small, .detail-grid dt { font-size: 14px; }
+.lchip { font-size: 14px; }
+.desc { font-size: 16px; color: var(--navy); }
+
+/* ---- inimioară favorite ---- */
+.product-image { position: relative; }
+.fav-btn { position: absolute; top: 8px; right: 8px; z-index: 1; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .92); color: var(--navy); font-size: 20px; line-height: 1; box-shadow: 0 2px 8px rgba(0, 0, 0, .18); cursor: pointer; }
+.fav-btn.on { color: #d93025; }
+.ad-callbar > button.fav-btn.big { position: static; flex: 0 0 52px; width: 52px; height: 48px; border-radius: 12px; border: 1px solid var(--gold); background: #fff; font-size: 24px; box-shadow: none; }
+.ad-callbar > button.fav-btn.big.on { color: #d93025; }
+
+/* ---- contul meu ---- */
+.sheet.acc { min-height: 60vh; }
+.acc-head { display: flex; align-items: center; gap: 12px; margin: 0 38px 12px 0; }
+.acc-head h2 { margin: 0; font-size: 20px; }
+.acc-head small { color: var(--muted); }
+.acc-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); margin-bottom: 12px; scrollbar-width: none; }
+.acc-tabs::-webkit-scrollbar { display: none; }
+.acc-tabs button { flex: none; padding: 10px 14px; border: 0; border-bottom: 3px solid transparent; background: none; font: inherit; font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.acc-tabs button.on { color: var(--navy); border-bottom-color: var(--gold); }
+.acc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.acc-chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font: inherit; font-size: 14px; color: var(--navy); cursor: pointer; }
+.acc-chip.on { background: #14110c; border-color: #14110c; color: #e9d3a8; }
+.acc-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.acc-thumb { flex: none; width: 84px; height: 84px; border-radius: 12px; overflow: hidden; background: var(--light); display: grid; place-items: center; color: var(--gold); cursor: pointer; }
+.acc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.acc-mid { min-width: 0; flex: 1; }
+.acc-mid > b { display: block; color: var(--navy); font-size: 16px; line-height: 1.3; cursor: pointer; overflow-wrap: anywhere; }
+.acc-price { font-weight: 800; color: var(--navy); margin: 2px 0; cursor: pointer; }
+.acc-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.acc-st { padding: 2px 9px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--light); color: var(--navy); }
+.acc-st.ok { background: #e6f5ec; color: #1b6b3f; } .acc-st.wait { background: #fff3d6; color: #7a5a14; } .acc-st.bad { background: #fdeceb; color: #b3261e; } .acc-st.sold { background: #ececec; color: #444; }
+.acc-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.acc-acts button { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--gold); background: #fff; color: var(--navy); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.acc-acts button.danger { color: #b3261e; border-color: #f0b8b4; }
+.acc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.acc-grid .product-image { height: 120px; }
+.acc-grid .product-info { padding: 10px; }
+.acc-grid .product-info p { display: none; }
+.acc-foot { display: flex; gap: 8px; margin-top: 18px; }
+.acc-foot .ghost { margin-top: 0; }

@@ -197,14 +197,17 @@
     </form>
   </dialog>
 
-  <dialog id="accountDialog" class="sheet">
+  <dialog id="accountDialog" class="sheet det acc">
     <button class="dialog-close" id="accClose" aria-label="Închide">✕</button>
-    <h2 id="accName">Contul meu</h2>
-    <button class="primary" id="accMine" type="button">Anunțurile mele</button>
-    <button class="primary" id="accMsgs" type="button">Mesaje <span id="accMsgsN"></span></button>
-    <button class="primary" id="accMod" type="button" hidden>Moderare anunțuri</button>
-    <button class="ghost" id="accSettings" type="button">Setări cont și telefon</button>
-    <button class="ghost" id="accOut" type="button">Ieșire din cont</button>
+    <div class="acc-head"><span class="ad-av" id="accAv"></span><div><h2 id="accName">Contul meu</h2><small id="accSub"></small></div></div>
+    <div class="acc-tabs" role="tablist">
+      <button type="button" data-tab="mine" class="on">Anunțurile mele</button>
+      <button type="button" data-tab="favs">Favorite</button>
+      <button type="button" data-tab="msgs" id="accMsgs">Mesaje <span id="accMsgsN"></span></button>
+      <button type="button" data-tab="mod" id="accMod" hidden>Moderare</button>
+    </div>
+    <div id="accBody" class="acc-body"></div>
+    <div class="acc-foot"><button class="ghost" id="accSettings" type="button">Setări cont și telefon</button><button class="ghost" id="accOut" type="button">Ieșire din cont</button></div>
   </dialog>
 
   <dialog id="detailDialog" class="sheet det">
