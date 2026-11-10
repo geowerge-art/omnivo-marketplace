@@ -60,10 +60,12 @@ router.post('/:id(\\d+)/images', requireAuth, requireDb, raw, ah(async (req, res
   const buf = req.body, k = Buffer.isBuffer(buf) && kind(buf);
   if (!k) return res.status(400).json({ error: 'POZA_INVALIDA' });
   const id = Number(req.params.id);
-  const own = await db.query("SELECT 1 FROM listings WHERE id = $1 AND user_id = $2 AND status <> 'deleted'", [id, req.user.id]);
+  const staff = ['admin', 'moderator'].includes(req.user.role);
+  const own = await db.query("SELECT user_id FROM listings WHERE id = $1 AND status <> 'deleted'" + (staff ? '' : ' AND user_id = $2'), staff ? [id] : [id, req.user.id]);
   if (!own.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  const ownerId = own.rows[0].user_id;
   const st = await db.query(
-    'SELECT (SELECT COUNT(*)::int FROM listing_images WHERE listing_id = $1) AS n, (SELECT COALESCE(SUM(i.size),0)::bigint FROM listing_images i JOIN listings l ON l.id = i.listing_id WHERE l.user_id = $2) AS used', [id, req.user.id]);
+    'SELECT (SELECT COUNT(*)::int FROM listing_images WHERE listing_id = $1) AS n, (SELECT COALESCE(SUM(i.size),0)::bigint FROM listing_images i JOIN listings l ON l.id = i.listing_id WHERE l.user_id = $2) AS used', [id, ownerId]);
   if (st.rows[0].n >= MAX_PER_LISTING) return res.status(409).json({ error: 'PREA_MULTE_POZE' });
   if (Number(st.rows[0].used) + buf.length > QUOTA) return res.status(413).json({ error: 'SPATIU_POZE_DEPASIT' });
 
@@ -85,9 +87,11 @@ router.post('/:id(\\d+)/images', requireAuth, requireDb, raw, ah(async (req, res
 }));
 
 router.delete('/:id(\\d+)/images/:imgId(\\d+)', requireAuth, requireDb, ah(async (req, res) => {
-  const r = await db.query('DELETE FROM listing_images i USING listings l WHERE i.id = $1 AND i.listing_id = l.id AND l.id = $2 AND l.user_id = $3 RETURNING i.url, i.thumb_url',
-    [req.params.imgId, req.params.id, req.user.id]);
+  const staff = ['admin', 'moderator'].includes(req.user.role);
+  const r = await db.query('DELETE FROM listing_images i USING listings l WHERE i.id = $1 AND i.listing_id = l.id AND l.id = $2 AND (l.user_id = $3 OR $4) RETURNING i.url, i.thumb_url, l.user_id',
+    [req.params.imgId, req.params.id, req.user.id, staff]);
   if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  if (r.rows[0].user_id !== req.user.id) db.query('INSERT INTO admin_activity(admin_id, action, target_type, target_id, details) VALUES($1,$2,$3,$4,$5)', [req.user.id, 'listing_edit', 'listing', Number(req.params.id), 'poză ștearsă de echipă']).catch(() => {});
   removeStored(r.rows[0].url, r.rows[0].thumb_url);
   res.json({ ok: true });
 }));

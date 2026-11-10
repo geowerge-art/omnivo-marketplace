@@ -25,17 +25,19 @@ const log = (req, action, type, id, details) => db.query(
 /* ---- panou ---- */
 router.get('/overview', ah(async (req, res) => {
   const one = async (s) => (await db.query(s)).rows[0];
-  const [users, listings, reports, msgs, recent, activity] = await Promise.all([
+  const [users, listings, reports, msgs, recent, activity, byStatus] = await Promise.all([
     one(`SELECT COUNT(*)::int total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int d1,
                 COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int d7, COUNT(*) FILTER (WHERE status = 'blocked')::int blocked FROM users`),
     one(`SELECT COUNT(*) FILTER (WHERE status = 'pending')::int pending, COUNT(*) FILTER (WHERE status = 'approved' AND expires_at > NOW())::int active,
                 COUNT(*) FILTER (WHERE status = 'sold')::int sold, COUNT(*) FILTER (WHERE status <> 'deleted' AND created_at > NOW() - INTERVAL '24 hours')::int d1 FROM listings`),
     one("SELECT COUNT(*)::int open FROM reports WHERE status = 'open'"),
     isAdmin(req) ? one("SELECT COUNT(*)::int d1 FROM messages WHERE created_at > NOW() - INTERVAL '24 hours'") : Promise.resolve({ d1: null }),
-    db.query("SELECT l.id, l.title, l.status, l.created_at, u.nickname FROM listings l LEFT JOIN users u ON u.id = l.user_id WHERE l.status <> 'deleted' ORDER BY l.created_at DESC LIMIT 5"),
-    db.query('SELECT a.action, a.target_type, a.target_id, a.details, a.created_at, u.nickname FROM admin_activity a LEFT JOIN users u ON u.id = a.admin_id ORDER BY a.id DESC LIMIT 5')
+    db.query("SELECT l.id, l.title, l.status, l.price, l.currency, l.created_at, u.nickname, (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb FROM listings l LEFT JOIN users u ON u.id = l.user_id WHERE l.status <> 'deleted' ORDER BY l.created_at DESC LIMIT 5"),
+    db.query('SELECT a.action, a.target_type, a.target_id, a.details, a.created_at, u.nickname FROM admin_activity a LEFT JOIN users u ON u.id = a.admin_id ORDER BY a.id DESC LIMIT 5'),
+    db.query("SELECT status, COUNT(*)::int n FROM listings WHERE status <> 'deleted' GROUP BY status")
   ]);
-  res.json({ users, listings, reports, messages: msgs, recent: recent.rows, activity: activity.rows });
+  const by_status = Object.fromEntries(byStatus.rows.map((x) => [x.status, x.n]));
+  res.json({ users, listings, reports, messages: msgs, recent: recent.rows, activity: activity.rows, by_status });
 }));
 
 /* ---- anunțuri ---- */
@@ -50,11 +52,42 @@ router.get('/ads', ah(async (req, res) => {
     where.push(`(l.title ILIKE $${vals.length - 1} OR u.nickname ILIKE $${vals.length - 1} OR u.email ILIKE $${vals.length - 1} OR l.id::text = $${vals.length})`);
   }
   const r = await db.query(
-    `SELECT l.id, l.title, l.price, l.currency, l.status, l.county, l.created_at, l.mod_note, c.name AS category, u.id AS uid, u.nickname, u.email,
+    `SELECT l.id, l.title, l.price, l.currency, l.status, l.county, l.city, l.condition, l.views, l.created_at, l.mod_note, l.promoted_until, c.name AS category, u.id AS uid, u.nickname, u.email,
+            (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb,
             (SELECT COUNT(*)::int FROM reports r WHERE r.listing_id = l.id AND r.status = 'open') AS reports
        FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN users u ON u.id = l.user_id
       WHERE ${where.join(' AND ')} ORDER BY l.created_at DESC LIMIT ${num(req.query.limit, 20, 50)} OFFSET ${offset(req.query.offset)}`, vals);
   res.json({ rows: r.rows });
+}));
+
+/* Aprobă toate anunțurile din coada de moderare. */
+router.post('/ads/approve-all', ah(async (req, res) => {
+  const r = await db.query("UPDATE listings SET status = 'approved', mod_note = NULL, expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days'), updated_at = NOW() WHERE status = 'pending' RETURNING id");
+  if (r.rowCount) await log(req, 'listing_approved', 'listing', 0, `aprobate toate: ${r.rowCount} anunțuri`);
+  res.json({ ok: true, approved: r.rowCount });
+}));
+
+/* Tot ce trebuie ca să judeci un anunț: poze, câmpuri, vânzător, raportări, istoric. */
+router.get('/ads/:id(\\d+)', ah(async (req, res) => {
+  const r = await db.query(
+    `SELECT l.id, l.title, l.description, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.address, l.status, l.mod_note, l.views,
+            l.created_at, l.updated_at, l.expires_at, l.attributes, l.promoted_until, l.category_id, l.seller_type,
+            c.name AS category, p.name AS parent_category,
+            u.id AS uid, u.nickname, u.name AS uname, u.email, u.phone, u.status AS ustatus, u.role AS urole, u.created_at AS ucreated, u.email_verified,
+            (SELECT COUNT(*)::int FROM listings x WHERE x.user_id = u.id AND x.status <> 'deleted') AS uads
+       FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id LEFT JOIN users u ON u.id = l.user_id WHERE l.id = $1`, [req.params.id]);
+  if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  const l = r.rows[0];
+  const [imgs, defs, reps, hist] = await Promise.all([
+    db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]),
+    db.query('SELECT key, label FROM category_attributes WHERE category_id = $1 OR category_id = (SELECT parent_id FROM categories WHERE id = $1)', [l.category_id]),
+    db.query("SELECT r.id, r.reason, r.details, r.status, r.created_at, ru.nickname AS reporter FROM reports r LEFT JOIN users ru ON ru.id = r.reporter_id WHERE r.listing_id = $1 ORDER BY r.created_at DESC LIMIT 10", [l.id]),
+    db.query("SELECT a.action, a.details, a.created_at, u.nickname FROM admin_activity a LEFT JOIN users u ON u.id = a.admin_id WHERE a.target_type = 'listing' AND a.target_id = $1 ORDER BY a.id DESC LIMIT 10", [l.id])
+  ]);
+  const label = Object.fromEntries(defs.rows.map((d) => [d.key, d.label]));
+  const attrs = Object.entries(l.attributes || {}).map(([k, v]) => ({ label: label[k] || k, value: String(v) }));
+  const { attributes, ...rest } = l;
+  res.json({ listing: { ...rest, attrs, images: imgs.rows, reports: reps.rows, history: hist.rows } });
 }));
 
 router.patch('/ads/:id(\\d+)', ah(async (req, res) => {

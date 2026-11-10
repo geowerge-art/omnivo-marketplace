@@ -119,7 +119,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
     images: imgs.rows.map((i) => i.url),
     seller_id: l.user_id, mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
     // datele brute de care are nevoie formularul de editare; le primește doar proprietarul
-    edit: owner ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
+    edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
     category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type,
@@ -151,16 +151,18 @@ router.post('/', requireAuth, requireVerified, ah(async (req, res) => {
 const same = (a) => JSON.stringify(Object.keys(a || {}).sort().map((k) => [k, a[k]]));
 router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => {
   if (!editAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
-  const cur = (await db.query('SELECT * FROM listings WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])).rows[0];
+  const staff = ['admin', 'moderator'].includes(req.user.role);   // echipa poate edita orice anunț (se scrie în jurnal)
+  const cur = (await db.query('SELECT * FROM listings WHERE id = $1' + (staff ? '' : ' AND user_id = $2'), staff ? [req.params.id] : [req.params.id, req.user.id])).rows[0];
   if (!cur || cur.status === 'deleted') return res.status(404).json({ error: 'NEGASIT' });
-  if (cur.status === 'blocked') return res.status(403).json({ error: 'INTERZIS' });
+  const asStaff = staff && cur.user_id !== req.user.id;
+  if (cur.status === 'blocked' && !staff) return res.status(403).json({ error: 'INTERZIS' });
   const p = await parse({ seller_type: cur.seller_type, city: cur.city, address: cur.address, ...(req.body || {}) });
   if (p.error) return res.status(400).json({ error: p.error, field: p.field });
   const v = p.v;
   const changed = cur.title !== v.title || (cur.description || '') !== v.description || cur.category_id !== v.category_id || same(cur.attributes) !== same(v.attributes);
   let status = cur.status;
-  if (changed && ['approved', 'sold', 'rejected'].includes(cur.status) && (config.NEW_LISTING_STATUS === 'pending' || cur.status === 'rejected')) {
-    const pend = await db.query("SELECT COUNT(*)::int AS n FROM listings WHERE user_id = $1 AND status = 'pending'", [req.user.id]);
+  if (!asStaff && changed && ['approved', 'sold', 'rejected'].includes(cur.status) && (config.NEW_LISTING_STATUS === 'pending' || cur.status === 'rejected')) {
+    const pend = await db.query("SELECT COUNT(*)::int AS n FROM listings WHERE user_id = $1 AND status = 'pending'", [cur.user_id]);
     if (pend.rows[0].n >= 20) return res.status(429).json({ error: 'PREA_MULTE_ANUNTURI' });
     status = 'pending';
   }
@@ -169,7 +171,16 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
             county=$9, city=$10, attributes=$11, status=$12, search_text=$13, address=$16, updated_at=NOW()
       WHERE id=$14 AND user_id=$15 RETURNING id, status`,
     [v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
-     JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, req.user.id, v.address]);
+     JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, cur.user_id, v.address]);
+  if (asStaff) {
+    const ch = [];
+    if (cur.title !== v.title) ch.push('titlu'); if ((cur.description || '') !== v.description) ch.push('descriere');
+    if (String(cur.price == null ? '' : Number(cur.price)) !== String(v.price == null ? '' : v.price)) ch.push('preț');
+    if (cur.category_id !== v.category_id) ch.push('categorie'); if (same(cur.attributes) !== same(v.attributes)) ch.push('atribute');
+    if (cur.county !== v.county || cur.city !== v.city) ch.push('locație'); if (cur.condition !== v.condition) ch.push('stare');
+    db.query('INSERT INTO admin_activity(admin_id, action, target_type, target_id, details) VALUES($1,$2,$3,$4,$5)',
+      [req.user.id, 'listing_edit', 'listing', cur.id, ('editat de echipă: ' + (ch.join(', ') || 'fără schimbări')).slice(0, 900)]).catch(() => {});
+  }
   res.json({ listing: r.rows[0], resubmitted: status === 'pending' && cur.status !== 'pending' });
 }));
 

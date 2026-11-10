@@ -323,10 +323,22 @@
     <p id="dialogText"></p>
   </dialog>
 
-  <dialog id="adminDialog" class="sheet sell-page">
-    <div class="sell-top"><button class="dialog-close" id="admClose" aria-label="Închide">✕</button><h2>🛡 Administrare</h2></div>
-    <nav class="acc-tabs" id="admTabs" aria-label="Secțiuni administrare"></nav>
+  <dialog id="adminDialog" class="sheet adm-page" aria-label="Administrare">
+    <header class="adm-head">
+      <span class="adm-shield" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6L12 3z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.4"/></svg></span>
+      <div class="adm-head-t"><b>Administrare</b><small id="admRole"></small></div>
+      <button class="adm-x" id="admClose" type="button" aria-label="Închide">✕</button>
+    </header>
+    <nav class="adm-tabs" id="admTabs" aria-label="Secțiuni administrare"></nav>
     <div id="admBody" class="adm-body"></div>
+  </dialog>
+  <dialog id="admAd" class="sheet adm-ad" aria-label="Verifică anunțul">
+    <header class="adm-head">
+      <button class="adm-x" id="admAdClose" type="button" aria-label="Închide">✕</button>
+      <div class="adm-head-t"><b id="admAdTitle">Anunț</b><small id="admAdSub"></small></div>
+    </header>
+    <div id="admAdBody" class="adm-ad-body"></div>
+    <div id="admAdActions" class="adm-bar"></div>
   </dialog>
   <dialog id="admForm" class="sheet">
     <h2 id="admFormTitle"></h2><p id="admFormHint" class="muted"></p>
@@ -334,14 +346,6 @@
     <label for="admReason" id="admReasonLbl">Motiv</label><textarea id="admReason" rows="3" maxlength="300"></textarea>
     <p class="err" id="admFormErr" hidden></p>
     <button class="primary" id="admFormOk" type="button">Confirmă</button><button class="ghost" id="admFormNo" type="button">Anulează</button>
-  </dialog>
-  <dialog id="admEdit" class="sheet">
-    <h2>Editează anunțul</h2>
-    <label for="edTitle">Titlu</label><input id="edTitle" maxlength="120">
-    <label for="edPrice">Preț <small class="muted">(gol = la cerere)</small></label><input id="edPrice" type="number" min="0" inputmode="decimal">
-    <label for="edDesc">Descriere</label><textarea id="edDesc" rows="5" maxlength="4000"></textarea>
-    <p class="err" id="edErr" hidden></p>
-    <button class="primary" id="edOk" type="button">Salvează</button><button class="ghost" id="edNo" type="button">Anulează</button>
   </dialog>
   <dialog id="reportDialog" class="sheet">
     <h2>Raportează anunțul</h2>
