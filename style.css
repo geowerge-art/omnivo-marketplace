@@ -1399,3 +1399,53 @@ button.adm-stat { cursor: pointer; }
 .pl-table { min-width: 0; font-size: 13px; }
 .pl-table th, .pl-table td { padding: 8px 3px; }
 .pl-table th:first-child, .pl-table td:first-child { padding-left: 6px; }
+
+/* ---- subsol cu pagini informative ---- */
+.foot-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 10px 0 8px; }
+.foot-links a { color: var(--navy); font-size: 14px; text-decoration: none; }
+.foot-links a:hover { color: var(--blue); text-decoration: underline; }
+
+/* ---- fereastra anunțului: distribuire / siguranță / raportare ---- */
+.det-links { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; }
+.det-links .ad-report { margin: 0; text-decoration: none; }
+.chat-safe { margin: 0; padding: 7px 14px; font-size: 12.5px; line-height: 1.35; color: #5a4210; background: #fff7e0; border-bottom: 1px solid #f0e2b8; }
+.chat-safe a { color: inherit; font-weight: 700; }
+
+/* ---- notificări ---- */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(86px + env(safe-area-inset-bottom, 0px)); z-index: 300; max-width: min(92vw, 420px); padding: 11px 16px; border: 0; border-radius: 14px; background: #14110c; color: #f1ebd9; font: inherit; font-size: 14px; font-weight: 600; text-align: left; box-shadow: 0 10px 30px rgba(0, 0, 0, .3); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast[hidden] { display: none; }
+@media (min-width: 761px) { .toast { bottom: 24px; } }
+.nt-row { display: flex; gap: 12px; width: 100%; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--border); background: none; text-align: left; font: inherit; color: var(--navy); cursor: pointer; }
+.nt-row:last-child { border-bottom: 0; }
+.nt-row.new { background: #fbf6ea; }
+.nt-ic { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--light); font-size: 18px; }
+.nt-ic.price { background: #e6f5ec; color: #1b6b3f; font-weight: 800; }
+.nt-ic.mod_approved { background: #e6f5ec; color: #1b6b3f; font-weight: 800; }
+.nt-ic.mod_rejected, .nt-ic.mod_blocked { background: #fdeceb; color: #b3261e; font-weight: 800; }
+.nt-mid { display: grid; gap: 2px; min-width: 0; }
+.nt-mid b { overflow-wrap: anywhere; }
+.nt-mid small { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.nt-mid em { color: var(--muted); font-size: 12px; font-style: normal; }
+
+/* ---- pagini informative (/termeni, /siguranta, /contact ...) ---- */
+.doc-page { background: var(--light); }
+.doc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 5%; background: #fff; border-bottom: 1px solid var(--border); }
+.doc-back { color: var(--blue); font-weight: 700; text-decoration: none; font-size: 15px; }
+.doc { width: min(780px, calc(100% - 28px)); margin: 18px auto 28px; padding: 22px clamp(16px, 4vw, 34px) 28px; background: #fff; border: 1px solid var(--border); border-radius: 15px; line-height: 1.6; color: var(--navy); }
+.doc h1 { font-size: 28px; margin: 0 0 6px; }
+.doc h2 { font-size: 18px; margin: 22px 0 6px; }
+.doc p, .doc li { font-size: 16px; }
+.doc ul { padding-left: 22px; }
+.doc li { margin: 5px 0; }
+.doc a { color: var(--blue); }
+.doc code { background: var(--light); padding: 1px 6px; border-radius: 6px; }
+.doc-upd { color: var(--muted); font-size: 14px !important; }
+.doc-form { display: grid; gap: 6px; margin-top: 14px; }
+.doc-form label { font-weight: 700; margin-top: 8px; }
+.doc-form input:not([type=checkbox]), .doc-form select, .doc-form textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; font: inherit; background: #fff; color: var(--navy); }
+.doc-form .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
+.doc-form .ok { color: #1b6b3f; font-weight: 700; }
+.doc-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.doc-foot { display: grid; gap: 8px; justify-items: center; padding: 8px 5% 28px; color: var(--muted); }
+.doc-foot nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; }
+.doc-foot a { color: var(--navy); text-decoration: none; font-size: 14px; }

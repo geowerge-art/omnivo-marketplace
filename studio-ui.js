@@ -27,9 +27,10 @@
       ${xl.map((i, k) => `<text class="t" x="${x(i)}" y="${H - 6}" text-anchor="${k === 0 ? "start" : k === 2 ? "end" : "middle"}">${dshort(rows[i].day)}</text>`).join("")}
       <path class="area" d="${line(cur)} L${x(n - 1)} ${y(0)} L${x(0)} ${y(0)} Z"/>
       <path class="prev" d="${line(prev)}"/><path class="cur" d="${line(cur)}"/>
-      <line class="cursor" x1="0" x2="0" y1="${T}" y2="${T + ph}" style="display:none"/><circle class="dot" r="4.5" cx="0" cy="0" style="display:none"/></svg><div class="st-tip" style="display:none"></div>`;
+      <line class="cursor" x1="0" x2="0" y1="${T}" y2="${T + ph}"/><circle class="dot" r="4.5" cx="0" cy="0"/></svg><div class="st-tip"></div>`;
     const svg = wrap.querySelector("svg"), cursor = svg.querySelector(".cursor"), dot = svg.querySelector(".dot"), tip = wrap.querySelector(".st-tip");
     const vis = (on) => { cursor.style.display = dot.style.display = on ? "" : "none"; tip.style.display = on ? "grid" : "none"; };
+    vis(false);       // ascuns la început (fără atribute style în HTML: politica CSP le blochează)
     const move = (e) => {
       const r = svg.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * W, i = Math.max(0, Math.min(n - 1, Math.round(((px - L) / pw) * (n - 1))));
       cursor.setAttribute("x1", x(i)); cursor.setAttribute("x2", x(i)); dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(cur[i])); vis(true);

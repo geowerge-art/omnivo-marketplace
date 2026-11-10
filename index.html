@@ -4,7 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Omnivo - marketplace general din România">
+  <meta name="description" content="Omnivo - marketplace general din România: anunțuri, mesaje în timp real și vânzători de încredere.">
+  <meta name="theme-color" content="#14110c">
+  <meta property="og:site_name" content="Omnivo">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Omnivo - Marketplace">
+  <meta property="og:description" content="Cumpără și vinde în România: anunțuri, mesaje în timp real și vânzători de încredere.">
   <title>Omnivo - Marketplace</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -100,6 +105,7 @@
   <footer>
     <a class="logo" href="/">omnivo<span>.ro</span></a>
     <p>Marketplace general pentru România.</p>
+    <nav class="foot-links" aria-label="Informații"><a href="/termeni">Termeni</a><a href="/confidentialitate">Confidențialitate</a><a href="/cookies">Cookie-uri</a><a href="/siguranta">Siguranță</a><a href="/ajutor">Ajutor</a><a href="/contact">Contact</a></nav>
     <small>© 2026 Omnivo. Toate drepturile rezervate.</small>
   </footer>
 
@@ -210,7 +216,7 @@
       <label for="rgPhone">Telefon (opțional)</label><input id="rgPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="ex: 0722 123 456">
       <label class="check"><input type="checkbox" id="rgShowPhone"> Arată telefonul pe anunțurile mele</label>
       <label class="check"><input type="checkbox" id="rgWa"> Am WhatsApp pe acest număr</label>
-      <label class="check"><input type="checkbox" id="rgTerms"> Sunt de acord cu termenii și condițiile</label>
+      <label class="check"><input type="checkbox" id="rgTerms"> Sunt de acord cu <a href="/termeni" target="_blank" rel="noopener">termenii și condițiile</a> și <a href="/confidentialitate" target="_blank" rel="noopener">politica de confidențialitate</a></label>
       <p class="err" id="rgErr" hidden></p><button class="primary" type="submit">Creează cont</button>
     </form>
   </dialog>
@@ -254,7 +260,7 @@
       <h3 class="ad-h">Detalii</h3>
       <dl id="detAttrs" class="detail-grid"></dl>
       <div class="ad-seller" id="detSeller"></div>
-      <button type="button" id="detReport" class="ad-report" hidden>⚑ Raportează anunțul</button>
+      <div class="det-links"><button type="button" id="detShare" class="ad-report">↗ Distribuie</button><a class="ad-report" href="/siguranta" target="_blank" rel="noopener">🛡 Sfaturi de siguranță</a><button type="button" id="detReport" class="ad-report" hidden>⚑ Raportează anunțul</button></div>
     </div>
     <div id="detActions" class="ad-callbar"></div>
   </dialog>
@@ -298,6 +304,7 @@
       </div>
     </header>
     <button type="button" class="cp-ad" id="chatAd"><span class="cp-ad-t" id="chatTitle">Anunț</span><i>›</i></button>
+    <p class="chat-safe">🛡 Nu trimite bani în avans și nu da coduri primite prin SMS. <a href="/siguranta" target="_blank" rel="noopener">Sfaturi de siguranță</a></p>
     <div id="chatLog" class="chat-log" aria-live="polite"></div>
     <p id="chatErr" class="err cp-err" hidden></p>
     <form id="chatForm" class="cp-bar" novalidate>

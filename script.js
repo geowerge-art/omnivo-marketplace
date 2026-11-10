@@ -254,7 +254,7 @@ function renderUnread() { if ($("accTileMsgs")) $("accTileMsgs").textContent = u
 async function refreshUnread() { if (!me) return; try { unread = (await api("/api/messages/unread")).unread; renderUnread(); } catch { /* insigna rămâne cum era */ } }
 function setMe(u) {
   me = u; unread = 0; renderUnread(); clearInterval(unreadTimer); stopLive();
-  loadFavIds();
+  loadFavIds(); loadNotifCount();
   if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); startLive(); }
 }
 async function authSubmit(e, url, body, errEl) {
@@ -302,6 +302,7 @@ function accGo(view) { history.pushState({ acc: view }, "", "#cont"); accShow(vi
 $("accBack")?.addEventListener("click", () => history.back());
 window.addEventListener("popstate", (e) => {
   const st = e.state;
+  if ($("detailDialog").open && !(st && st.det)) { detSkipBack = true; detPushed = false; $("detailDialog").close(); }
   if (st && st.acc !== undefined && me) { accShowPage(); accShow(st.acc); } else accClosePage();
 });
 
@@ -395,7 +396,7 @@ function accMenu() {
   secs.append(
     accGroup("Anunțurile tale", [...status, accItem("Studio · statistici", () => accGo("studio"))]),
     accGroup("Cumpăr", [accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
-    accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN")]),
+    accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN"), accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN")]),
     accGroup("Cont", [accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
@@ -418,12 +419,12 @@ function accShow(view) {
   $("accName").textContent = me.nickname; $("accSub").textContent = me.name || me.email || ""; loadPlan().then((p) => { if (p && !$("accName").querySelector(".plan-badge")) { const b = document.createElement("span"); b.className = "plan-badge " + p.key; b.textContent = p.name; $("accName").append(" ", b); } }); $("accAv").textContent = (me.nickname || "?").charAt(0).toUpperCase();
   $("accountPage").scrollTop = 0;
   if (!accCur) return accMenu();
-  const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", modstudio: "Studio moderare" };
+  const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", modstudio: "Studio moderare", notif: "Notificări" };
   const h = document.createElement("h2"); h.className = "acc-title"; h.textContent = titles[accCur] || "";
   const body = document.createElement("div"); body.id = "accBody"; body.className = "acc-body";
   $("accMain").replaceChildren(h, body);
   accTab = accCur === "favs" ? "favs" : "mine";
-  if (accCur === "saved") renderSaved(body); else if (accCur === "stats" || accCur === "studio") window.renderStudio(body); else if (accCur === "plan") window.renderPlan(body); else if (accCur === "modstudio") window.renderModStudio(body); else renderAcc();
+  if (accCur === "saved") renderSaved(body); else if (accCur === "stats" || accCur === "studio") window.renderStudio(body); else if (accCur === "plan") window.renderPlan(body); else if (accCur === "modstudio") window.renderModStudio(body); else if (accCur === "notif") renderNotifs(body); else renderAcc();
 }
 async function renderAcc() {
   const box = $("accBody"); if (!box) return; box.replaceChildren(note("Se încarcă…"));
@@ -659,6 +660,57 @@ $("lightbox")?.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") l
   lg?.addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) lbMove(dx < 0 ? 1 : -1); }); }
 
 /* ---- fereastra anunțului ---- */
+/* ---- link propriu pentru fiecare anunț, distribuire ---- */
+const slug = (t) => fold(t).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+let detPushed = false, detSkipBack = false, detCur = null; const baseTitle = document.title;
+function detUrlSync(l) {
+  const url = "/anunt/" + l.id + (slug(l.title) ? "-" + slug(l.title) : "");
+  detCur = { id: l.id, title: l.title, url, price: price(l) };
+  document.title = l.title + " | Omnivo";
+  if (location.pathname === url) return;                                  // deschis direct din link
+  if (/^\/anunt\//.test(location.pathname)) history.replaceState({ det: l.id }, "", url);   // de la un anunț la altul
+  else { history.pushState({ det: l.id }, "", url); detPushed = true; }
+}
+$("detailDialog")?.addEventListener("close", () => {
+  document.title = baseTitle;
+  if (detSkipBack) { detSkipBack = false; return; }
+  if (/^\/anunt\//.test(location.pathname)) { if (detPushed) { detPushed = false; history.back(); } else history.replaceState(null, "", "/"); }
+});
+$("detShare")?.addEventListener("click", async () => {
+  if (!detCur) return; const url = location.origin + detCur.url;
+  if (navigator.share) { try { await navigator.share({ title: detCur.title, text: detCur.price, url }); } catch { /* anulat */ } return; }
+  try { await navigator.clipboard.writeText(url); showMessage("Link copiat", "Poți trimite linkul oricui: " + url); } catch { showMessage("Link anunț", url); }
+});
+
+/* ---- notificări ---- */
+let notifCount = 0, toastTimer = null;
+function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } }
+async function loadNotifCount() { notifCount = 0; if (me) { try { notifCount = (await api("/api/notifications/count")).unread; } catch { /* fără notificări */ } } paintNotifCount(); }
+function toast(text, fn) {
+  let t = $("toast"); if (!t) { t = document.createElement("button"); t.id = "toast"; t.type = "button"; t.className = "toast"; document.body.appendChild(t); }
+  t.textContent = "🔔 " + text; t.hidden = false; t.onclick = () => { t.hidden = true; if (fn) fn(); };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+}
+const NK = { price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔" };
+async function renderNotifs(box) {
+  box.replaceChildren(note("Se încarcă…"));
+  try {
+    const d = await api("/api/notifications");
+    if (!d.notifications.length) { box.replaceChildren(note("Nicio notificare încă. Te anunțăm când un anunț salvat își reduce prețul sau apare un anunț nou pentru o căutare salvată.")); return; }
+    const head = document.createElement("div"); head.className = "nt-head";
+    box.replaceChildren(head, ...d.notifications.map((n) => {
+      const r = document.createElement("button"); r.type = "button"; r.className = "nt-row" + (n.read ? "" : " new");
+      const ic = document.createElement("span"); ic.className = "nt-ic " + n.kind; ic.textContent = NK[n.kind] || "•";
+      const mid = document.createElement("span"); mid.className = "nt-mid";
+      const t = document.createElement("b"); t.textContent = n.title; const b = document.createElement("small"); b.textContent = n.body;
+      const w = document.createElement("em"); w.textContent = when(n.created_at); mid.append(t, b, w);
+      r.append(ic, mid); r.addEventListener("click", () => { if (n.listing_id) openDetail(n.listing_id); });
+      return r;
+    }));
+    if (d.unread) { api("/api/notifications/read", "POST").then(() => { notifCount = 0; paintNotifCount(); }).catch(() => {}); }
+  } catch (err) { box.replaceChildren(note(errText(err))); }
+}
+
 async function openDetail(id) {
   try {
     const { listing: l } = await api("/api/listings/" + id);
@@ -734,7 +786,7 @@ async function openDetail(id) {
       if (l.seller_id) btn("✉️ Trimite mesaj", () => { $("detailDialog").close(); me ? openChat(l.id, l.seller_id, l.title) : openAuth(); }, l.has_phone && l.status !== "sold" ? "alt" : "call");
       if (!l.has_phone && l.status !== "sold") { const n = document.createElement("small"); n.className = "ad-nophone"; n.textContent = "Vânzătorul nu a afișat telefonul. Scrie-i un mesaj."; act.prepend(n); }
     }
-    open("detailDialog"); $("detailDialog").scrollTop = 0;
+    open("detailDialog"); $("detailDialog").scrollTop = 0; detUrlSync(l);
   } catch (err) { showMessage("Eroare", errText(err)); }
 }
 
@@ -940,6 +992,7 @@ function startLive() {
     else if ($("inboxDialog").open) renderInbox();
   });
   on("msg_status", (d) => { setTicks(d.ids, d.status); if ($("inboxDialog").open) renderInbox(); });
+  on("notify", (d) => { notifCount++; paintNotifCount(); toast(d.title, () => { if (d.listing_id) openDetail(d.listing_id); else openAccount(); }); if (accIsOpen() && accCur === "notif") renderNotifs($("accBody")); });
   on("presence", (d) => { if (chat && d.uid === chat.withId) setPresence({ online: d.online, last_seen: new Date().toISOString() }); });
   on("typing", (d) => {
     if (!chat || d.from !== chat.withId || (d.listing && d.listing !== chat.listingId)) return;
@@ -1149,6 +1202,8 @@ $("chatDialog")?.addEventListener("close", () => { clearInterval(chatTimer); cha
 })();
 
 (async () => { try { setMe((await api("/api/me")).user); } catch { /* fără server */ } await loadCats(); loadListings();
+  const dm = location.pathname.match(/^\/anunt\/(\d+)/);
+  if (dm) openDetail(Number(dm[1]));                       // link direct către un anunț
   if (location.hash === "#cont") {                       // pagină reîncărcată din contul meu
     if (me && history.state && history.state.acc !== undefined) { accShowPage(); accShow(history.state.acc); }
     else history.replaceState(null, "", location.pathname + location.search);

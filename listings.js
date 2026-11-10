@@ -6,6 +6,7 @@ const { requireAuth, requireRole, requireVerified } = require('./authmw');
 const { createThrottle, clientIp } = require('./security');
 const plans = require('./plans');
 const studio = require('./studio');
+const notify = require('./notify');
 
 const router = express.Router();
 const adminRouter = express.Router();
@@ -151,6 +152,7 @@ router.post('/', requireAuth, requireVerified, ah(async (req, res) => {
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, status`,
     [req.user.id, v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
      JSON.stringify(v.attributes), config.NEW_LISTING_STATUS, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), v.address]);
+  if (r.rows[0].status === 'approved') notify.matchSaved(r.rows[0].id);   // anunț nou → căutări salvate care se potrivesc
   res.status(201).json({ listing: r.rows[0] });
 }));
 
@@ -190,6 +192,7 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
     db.query('INSERT INTO admin_activity(admin_id, action, target_type, target_id, details) VALUES($1,$2,$3,$4,$5)',
       [req.user.id, 'listing_edit', 'listing', cur.id, ('editat de echipă: ' + (ch.join(', ') || 'fără schimbări')).slice(0, 900)]).catch(() => {});
   }
+  if (r.rowCount && r.rows[0].status === 'approved' && cur.price != null && v.price != null && cur.currency === v.currency && Number(v.price) < Number(cur.price)) notify.priceDrop(cur.id, v.title, cur.price, v.price, v.currency);   // preț redus → cei care au anunțul la favorite
   res.json({ listing: r.rows[0], resubmitted: status === 'pending' && cur.status !== 'pending' });
 }));
 

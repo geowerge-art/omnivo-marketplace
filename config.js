@@ -18,6 +18,11 @@ module.exports = {
   NEW_LISTING_STATUS: env.NEW_LISTING_STATUS === 'pending' ? 'pending' : 'approved',
   // promovarea anunțurilor: 'free' = gratuită (cu limite), 'off' = oprită (până adaugi plăți)
   PROMO_MODE: env.PROMO_MODE === 'off' ? 'off' : 'free',
+  // date afișate în paginile legale și de contact (completează-le în variabilele de mediu)
+  SUPPORT_EMAIL: (env.SUPPORT_EMAIL || '').trim(),
+  LEGAL_NAME: (env.LEGAL_NAME || '').trim(),
+  LEGAL_CUI: (env.LEGAL_CUI || '').trim(),
+  LEGAL_ADDRESS: (env.LEGAL_ADDRESS || '').trim(),
   SESSION_DAYS: 30,
   SESSION_SHORT_HOURS: 12
 };

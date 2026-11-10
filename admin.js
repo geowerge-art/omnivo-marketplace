@@ -15,6 +15,7 @@ router.use(requireDb, requireRole('admin', 'moderator'));
 const isAdmin = (req) => req.user.role === 'admin';
 const adminOnly = (req, res, next) => (isAdmin(req) ? next() : res.status(403).json({ error: 'DOAR_ADMIN' }));
 const plans = require('./plans');
+const notify = require('./notify');
 const clip = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const num = (v, d, max) => Math.min(max, Math.max(1, Math.floor(Number(v)) || d));
 const offset = (v) => Math.min(100000, Math.max(0, Math.floor(Number(v)) || 0));
@@ -81,6 +82,7 @@ router.get('/ads', ah(async (req, res) => {
 router.post('/ads/approve-all', ah(async (req, res) => {
   const r = await db.query("UPDATE listings SET status = 'approved', mod_note = NULL, expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days'), updated_at = NOW() WHERE status = 'pending' RETURNING id");
   if (r.rowCount) await log(req, 'listing_approved', 'listing', 0, `aprobate toate: ${r.rowCount} anunțuri`);
+  if (r.rowCount) { const okIds = r.rows.map((x) => x.id); notify.moderation(okIds, 'approved', ''); okIds.slice(0, 200).forEach((i) => notify.matchSaved(i)); }
   res.json({ ok: true, approved: r.rowCount });
 }));
 
@@ -95,6 +97,7 @@ router.post('/ads/bulk', ah(async (req, res) => {
     `UPDATE listings SET status = $1, mod_note = $2, updated_at = NOW()${s === 'approved' ? ", expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days')" : ''}
       WHERE id = ANY($3::int[]) AND status IN ('pending', 'approved', 'rejected', 'blocked') AND status <> $1 RETURNING id`, [s, s === 'approved' ? null : note, ids]);
   if (r.rowCount) { await log(req, 'listing_' + s, 'listing', 0, `în masă: ${r.rowCount} anunțuri (#${r.rows.map((x) => x.id).join(', #')})${note ? ' — ' + note : ''}`); if (s !== 'approved') notifySeller(r.rows.map((x) => x.id), s, note); }
+  if (r.rowCount) { const okIds = r.rows.map((x) => x.id); notify.moderation(okIds, s, note); if (s === 'approved') okIds.forEach((i) => notify.matchSaved(i)); }
   res.json({ ok: true, changed: r.rowCount });
 }));
 
@@ -161,7 +164,11 @@ router.patch('/ads/:id(\\d+)', ah(async (req, res) => {
   await db.query(`UPDATE listings SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${vals.length}`, vals);
   if (statusChanged === 'approved') await db.query("UPDATE listings SET expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days') WHERE id = $1", [req.params.id]);
   await log(req, statusChanged ? 'listing_' + statusChanged : 'listing_edit', 'listing', Number(req.params.id), ch.join('; '));
-  if (statusChanged) notifySeller([Number(req.params.id)], statusChanged, clip(body.note, 300));
+  if (statusChanged) {
+    notifySeller([Number(req.params.id)], statusChanged, clip(body.note, 300));
+    notify.moderation([Number(req.params.id)], statusChanged, clip(body.note, 300));
+    if (statusChanged === 'approved') notify.matchSaved(Number(req.params.id));
+  }
   res.json({ ok: true, changed: true });
 }));
 
