@@ -16,7 +16,7 @@ async function loadUser(req, res, next) {
   if (!token || !db.hasDb()) return next();
   try {
     const r = await db.query(
-      `SELECT u.id,u.name,u.nickname,u.email,u.phone,u.show_phone,u.whatsapp,u.role,u.status,u.blocked_until,u.email_verified,
+      `SELECT u.id,u.name,u.nickname,u.email,u.phone,u.show_phone,u.whatsapp,u.role,u.status,u.blocked_until,u.email_verified, u.plan, u.plan_until,
               s.id AS session_id, s.last_seen_at
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.expires_at > NOW()`, [hashToken(token)]);

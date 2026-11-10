@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const COUNTIES = ["Alba","Arad","Argeș","Bacău","Bihor","Bistrița-Năsăud","Botoșani","Brașov","Brăila","București","Buzău","Caraș-Severin","Călărași","Cluj","Constanța","Covasna","Dâmbovița","Dolj","Galați","Giurgiu","Gorj","Harghita","Hunedoara","Ialomița","Iași","Ilfov","Maramureș","Mehedinți","Mureș","Neamț","Olt","Prahova","Satu Mare","Sălaj","Sibiu","Suceava","Teleorman","Timiș","Tulcea","Vaslui","Vâlcea","Vrancea"];
 const ERR = {
+  LIMITA_ANUNTURI: "Ai atins numărul maxim de anunțuri active al planului tău. Vezi Cont › Planul meu.", PLAN_INVALID: "Plan necunoscut.", DOAR_TITANIUM: "Exportul CSV e disponibil doar pe planul Titanium.",
   REINNOIRE_PREA_DEVREME: "Anunțul se poate reînnoi cu cel mult 7 zile înainte să expire.", REINNOIRE_INDISPONIBILA: "Doar anunțurile active se pot reînnoi.", REACTUALIZARE_PREA_DEVREME: "Poți reactualiza un anunț o singură dată la 24 de ore.", PROMOVARE_INDISPONIBILA: "Promovarea nu este disponibilă acum.", PREA_MULTE_PROMOVARI: "Poți avea cel mult 3 anunțuri promovate în același timp.", PROMOVARE_INVALIDA: "Alege 3, 7 sau 30 de zile.",
   INVALID_LOGIN: "Email, nickname sau parolă greșite.", LOGIN_RATE_LIMIT: "Prea multe încercări. Mai încearcă peste câteva minute.", CONT_BLOCAT: "Contul este blocat.",
   EMAIL_EXISTS: "Există deja un cont cu acest email.", NICKNAME_EXISTS: "Nickname-ul este luat.", NICKNAME_INVALID: "Nickname invalid (3-24 caractere: litere, cifre, . _ -).",
@@ -392,13 +393,13 @@ function accMenu() {
   });
   const secs = document.createElement("div"); secs.className = "acc-sections";
   secs.append(
-    accGroup("Anunțurile tale", [...status, accItem("Statistici anunțuri", () => accGo("stats"))]),
+    accGroup("Anunțurile tale", [...status, accItem("Studio · statistici", () => accGo("studio"))]),
     accGroup("Cumpăr", [accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
     accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN")]),
-    accGroup("Cont", [accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
+    accGroup("Cont", [accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
-  if (isMod) secs.appendChild(accGroup("Moderare", [accItem("Moderare anunțuri", goModeration)]));
+  if (isMod || isAdmin) secs.appendChild(accGroup("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])]));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
   const last = [tiles, secs, out];
   if (isAdmin || isMod) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", () => openAdmin()); last.push(ad); }
@@ -408,26 +409,34 @@ function accMenu() {
     for (const k of Object.keys(c)) { const em = $("accC_" + k); if (!em) continue; const it = em.closest(".acc-item"); it.hidden = !c[k] && !["approved", "pending", "sold"].includes(k); em.textContent = c[k] || ""; em.hidden = !c[k]; }
     const t = $("accTileMine"); if (t) t.textContent = c.approved;
   }).catch(() => {});
+  loadPlan().then((p) => { const c = $("accPlanTag"); if (c && p) { c.textContent = p.name; c.hidden = false; } });
   api("/api/saved-searches").then((r) => { const t = $("accTileSaved"); if (t) t.textContent = r.searches.length; }).catch(() => {});
 }
 function accShow(view) {
   if (!me) return accClosePage();
   accCur = view || null;
-  $("accName").textContent = me.nickname; $("accSub").textContent = me.name || me.email || "Cont standard"; $("accAv").textContent = (me.nickname || "?").charAt(0).toUpperCase();
+  $("accName").textContent = me.nickname; $("accSub").textContent = me.name || me.email || ""; loadPlan().then((p) => { if (p && !$("accName").querySelector(".plan-badge")) { const b = document.createElement("span"); b.className = "plan-badge " + p.key; b.textContent = p.name; $("accName").append(" ", b); } }); $("accAv").textContent = (me.nickname || "?").charAt(0).toUpperCase();
   $("accountPage").scrollTop = 0;
   if (!accCur) return accMenu();
-  const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Statistici anunțuri" };
+  const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", modstudio: "Studio moderare" };
   const h = document.createElement("h2"); h.className = "acc-title"; h.textContent = titles[accCur] || "";
   const body = document.createElement("div"); body.id = "accBody"; body.className = "acc-body";
   $("accMain").replaceChildren(h, body);
   accTab = accCur === "favs" ? "favs" : "mine";
-  if (accCur === "saved") renderSaved(body); else if (accCur === "stats") renderStats(body); else renderAcc();
+  if (accCur === "saved") renderSaved(body); else if (accCur === "stats" || accCur === "studio") window.renderStudio(body); else if (accCur === "plan") window.renderPlan(body); else if (accCur === "modstudio") window.renderModStudio(body); else renderAcc();
 }
 async function renderAcc() {
   const box = $("accBody"); if (!box) return; box.replaceChildren(note("Se încarcă…"));
   if (accTab === "favs") return renderFavs(box);
   try { accMine = (await api("/api/listings/mine")).listings; } catch (err) { box.replaceChildren(note(errText(err))); return; }
   drawMine(box);
+}
+let planCache = null;
+async function loadPlan(force) {
+  if (!me) return null;
+  if (planCache && !force && Date.now() - planCache.t < 60000 && planCache.uid === me.id) return planCache.p;
+  try { const d = await api("/api/plans/me"); const p = d.plans.find((x) => x.key === d.plan); planCache = { t: Date.now(), uid: me.id, p: { ...p, until: d.plan_until }, d }; return planCache.p; }
+  catch { return null; }
 }
 async function accLogout() { await api("/api/auth/logout", "POST").catch(() => {}); setMe(null); accClosePage(); history.pushState(null, "", location.pathname + location.search); mode = "public"; loadListings(); }
 $("sellDialog")?.addEventListener("close", () => { if (accIsOpen() && (accCur === "mine" || accCur === "stats")) accShow(accCur); else if (accIsOpen() && !accCur) accMenu(); });
@@ -673,7 +682,7 @@ async function openDetail(id) {
     const sc = $("detSeller"); sc.replaceChildren();
     const av = document.createElement("span"); av.className = "ad-av"; av.textContent = (l.seller || "V").charAt(0).toUpperCase();
     const who = document.createElement("div"), nm = document.createElement("b"), mt = document.createElement("small");
-    nm.textContent = l.seller || "Vânzător"; mt.textContent = [l.seller_type === "firma" ? "Firmă" : "Persoană fizică", l.county].filter(Boolean).join(" · ");
+    nm.textContent = l.seller || "Vânzător"; if (["silver", "gold", "titanium"].includes(l.seller_plan)) { const pb = document.createElement("span"); pb.className = "plan-badge " + l.seller_plan; pb.textContent = l.seller_plan.charAt(0).toUpperCase() + l.seller_plan.slice(1); nm.append(" ", pb); } mt.textContent = [l.seller_type === "firma" ? "Firmă" : "Persoană fizică", l.county].filter(Boolean).join(" · ");
     who.append(nm, mt);
     { const sp = l.seller_presence;   // „online acum” / „văzut azi la 21:40”; lipsește dacă vânzătorul și-a ascuns prezența
       if (sp && !sp.hidden) { const pr = document.createElement("small"); pr.className = "ad-pres" + (sp.online ? " online" : ""); pr.textContent = sp.online ? "online acum" : seenText(sp.last_seen); who.appendChild(pr); } }

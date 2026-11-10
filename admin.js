@@ -14,6 +14,7 @@ router.use(requireDb, requireRole('admin', 'moderator'));
 
 const isAdmin = (req) => req.user.role === 'admin';
 const adminOnly = (req, res, next) => (isAdmin(req) ? next() : res.status(403).json({ error: 'DOAR_ADMIN' }));
+const plans = require('./plans');
 const clip = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const num = (v, d, max) => Math.min(max, Math.max(1, Math.floor(Number(v)) || d));
 const offset = (v) => Math.min(100000, Math.max(0, Math.floor(Number(v)) || 0));
@@ -180,6 +181,7 @@ router.get('/users', ah(async (req, res) => {
   if (q) { vals.push(like(q), q.replace(/\D/g, '') || '-'); where.push(`(u.name ILIKE $${vals.length - 1} OR u.nickname ILIKE $${vals.length - 1} OR u.email ILIKE $${vals.length - 1} OR u.id::text = $${vals.length})`); }
   const r = await db.query(
     `SELECT u.id, u.name, u.nickname, u.email, u.phone, u.role, u.status, u.email_verified, u.created_at, u.block_reason, u.blocked_until,
+            CASE WHEN u.plan_until IS NULL OR u.plan_until > NOW() THEN u.plan ELSE 'basic' END AS plan, u.plan_until,
             (SELECT COUNT(*)::int FROM listings l WHERE l.user_id = u.id AND l.status <> 'deleted') AS ads,
             (SELECT COUNT(*)::int FROM reports r JOIN listings l ON l.id = r.listing_id WHERE l.user_id = u.id AND r.status = 'open') AS reported
        FROM users u WHERE ${where.join(' AND ')} ORDER BY u.created_at DESC LIMIT ${num(req.query.limit, 20, 50)} OFFSET ${offset(req.query.offset)}`, vals);
@@ -209,6 +211,22 @@ router.patch('/users/:id(\\d+)', ah(async (req, res) => {
   await db.query('UPDATE users SET status = $1, block_reason = $2, blocked_until = $3 WHERE id = $4', [status, status === 'blocked' ? reason : null, until, uid]);
   if (status === 'blocked') await db.query('DELETE FROM sessions WHERE user_id = $1', [uid]);
   await log(req, status === 'blocked' ? 'user_block' : 'user_unblock', 'user', uid, status === 'blocked' ? `${days ? days + ' zile' : 'definitiv'}: ${reason}` : '');
+  res.json({ ok: true });
+}));
+
+/* Planul contului (Basic / Standard / Silver / Gold / Titanium), cu sau fără expirare. */
+router.patch('/users/:id(\\d+)/plan', adminOnly, ah(async (req, res) => {
+  const uid = Number(req.params.id), plan = String((req.body || {}).plan || ''), d = (req.body || {}).days;
+  if (!plans.ORDER.includes(plan)) return res.status(400).json({ error: 'PLAN_INVALID' });
+  let until = null;
+  if (plan !== 'basic' && d !== null && d !== undefined && d !== '') {
+    const days = Math.floor(Number(d));
+    if (!Number.isFinite(days) || days < 1 || days > 3650) return res.status(400).json({ error: 'DATE_INVALIDE', field: 'zile' });
+    until = new Date(Date.now() + days * 86400000);
+  }
+  const r = await db.query('UPDATE users SET plan = $1, plan_until = $2 WHERE id = $3 RETURNING id', [plan, until, uid]);
+  if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  await log(req, 'user_plan', 'user', uid, plan + (until ? ` până la ${until.toISOString().slice(0, 10)}` : ' (fără expirare)'));
   res.json({ ok: true });
 }));
 

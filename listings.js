@@ -4,6 +4,8 @@ const config = require('./config');
 const { ah, requireDb } = require('./common');
 const { requireAuth, requireRole, requireVerified } = require('./authmw');
 const { createThrottle, clientIp } = require('./security');
+const plans = require('./plans');
+const studio = require('./studio');
 
 const router = express.Router();
 const adminRouter = express.Router();
@@ -82,6 +84,7 @@ router.get('/:id(\\d+)/phone', ah(async (req, res) => {
   const r = await db.query(
     "SELECT u.phone, u.whatsapp FROM listings l JOIN users u ON u.id = l.user_id WHERE l.id = $1 AND l.status IN ('approved','sold') AND u.show_phone AND u.phone IS NOT NULL", [req.params.id]);
   if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  studio.bump(Number(req.params.id), 'phones', studio.whoOf(req));
   res.json({ phone: r.rows[0].phone, whatsapp: !!r.rows[0].whatsapp });
 }));
 
@@ -106,14 +109,14 @@ router.get('/stats', requireAuth, ah(async (req, res) => {
 
 router.get('/:id(\\d+)', ah(async (req, res) => {
   const r = await db.query(
-    `SELECT l.*, c.name AS category, p.name AS parent_category, u.nickname AS seller, u.created_at AS seller_since, u.show_phone, u.phone AS seller_phone
+    `SELECT l.*, c.name AS category, p.name AS parent_category, u.nickname AS seller, u.created_at AS seller_since, u.show_phone, u.phone AS seller_phone, u.plan, u.plan_until
        FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id
        LEFT JOIN users u ON u.id = l.user_id WHERE l.id = $1`, [req.params.id]);
   if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
   const l = r.rows[0], me = req.user;
   const staff = me && ['admin', 'moderator'].includes(me.role), owner = me && me.id === l.user_id;
   if (!['approved', 'sold'].includes(l.status) && !staff && !owner) return res.status(404).json({ error: 'NEGASIT' });
-  if (!owner && !staff) db.query('UPDATE listings SET views = views + 1 WHERE id = $1', [l.id]).catch(() => {});
+  if (!owner && !staff) { db.query('UPDATE listings SET views = views + 1 WHERE id = $1', [l.id]).catch(() => {}); studio.bump(l.id, 'views', studio.whoOf(req)); }
   const defs = await db.query('SELECT key, label FROM category_attributes WHERE category_id = $1 OR category_id = (SELECT parent_id FROM categories WHERE id = $1)', [l.category_id]);
   const label = Object.fromEntries(defs.rows.map((d) => [d.key, d.label]));
   const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);
@@ -124,7 +127,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
     edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
-    category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type,
+    category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type, seller_plan: plans.effective(l),
     address: l.address || null,
     // doar proprietarul: datele din bara de acțiuni de pe pagina anunțului
     owner_info: owner ? { favs: (await db.query('SELECT COUNT(*)::int n FROM favorites WHERE listing_id = $1', [l.id])).rows[0].n, msgs: (await db.query('SELECT COUNT(*)::int n FROM messages WHERE listing_id = $1 AND recipient_id = $2', [l.id, me.id])).rows[0].n, views: l.views, expires_at: l.expires_at, bumped_at: l.bumped_at, updated_at: l.updated_at, promoted_until: l.promoted_until } : undefined,
@@ -139,6 +142,10 @@ router.post('/', requireAuth, requireVerified, ah(async (req, res) => {
   const p = await parse(req.body || {});
   if (p.error) return res.status(400).json({ error: p.error, field: p.field });
   const v = p.v;
+  if (req.user.role === 'user') {   // limita de anunțuri active a planului (adminii și moderatorii sunt scutiți)
+    const act = await db.query("SELECT COUNT(*)::int n FROM listings WHERE user_id = $1 AND status IN ('pending','approved') AND expires_at > NOW()", [req.user.id]);
+    if (act.rows[0].n >= plans.limitsOf(req.user).listings) return res.status(403).json({ error: 'LIMITA_ANUNTURI' });
+  }
   const r = await db.query(
     `INSERT INTO listings(user_id, category_id, title, description, price, currency, negotiable, condition, seller_type, county, city, attributes, status, search_text, address)
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, status`,
@@ -219,7 +226,7 @@ router.post('/:id(\\d+)/renew', requireAuth, ah(async (req, res) => {
 }));
 
 /* ---- promovare: anunțul apare primul, cu insigna „Promovat” ---- */
-const PROMO_DAYS = [3, 7, 30], PROMO_MAX_ACTIVE = 3;
+const PROMO_DAYS = [3, 7, 30];
 router.post('/:id(\\d+)/promote', requireAuth, ah(async (req, res) => {
   if (config.PROMO_MODE === 'off') return res.status(503).json({ error: 'PROMOVARE_INDISPONIBILA' });
   const days = Number((req.body || {}).days);
@@ -227,7 +234,7 @@ router.post('/:id(\\d+)/promote', requireAuth, ah(async (req, res) => {
   const own = await db.query("SELECT id, promoted_until FROM listings WHERE id = $1 AND user_id = $2 AND status = 'approved'", [req.params.id, req.user.id]);
   if (!own.rowCount) return res.status(404).json({ error: 'NEGASIT' });
   const active = await db.query("SELECT COUNT(*)::int n FROM listings WHERE user_id = $1 AND id <> $2 AND promoted_until > NOW()", [req.user.id, req.params.id]);
-  if (active.rows[0].n >= PROMO_MAX_ACTIVE) return res.status(409).json({ error: 'PREA_MULTE_PROMOVARI' });
+  if (active.rows[0].n >= plans.limitsOf(req.user).promos) return res.status(409).json({ error: 'PREA_MULTE_PROMOVARI' });
   const r = await db.query(
     "UPDATE listings SET promoted_until = GREATEST(COALESCE(promoted_until, NOW()), NOW()) + ($1 || ' days')::interval, bumped_at = NOW() WHERE id = $2 RETURNING promoted_until", [String(days), req.params.id]);
   res.json({ ok: true, promoted_until: r.rows[0].promoted_until });

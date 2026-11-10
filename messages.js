@@ -4,6 +4,7 @@ const { ah, requireDb } = require('./common');
 const { requireAuth, requireVerified } = require('./authmw');
 const { createThrottle } = require('./security');
 const live = require('./live');
+const studio = require('./studio');
 const crypto = require('crypto');
 const imgs = require('./images');
 
@@ -118,8 +119,10 @@ router.post('/', requireVerified, ah(async (req, res) => {
     "SELECT id, created_at FROM messages WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 AND body = $4 AND created_at > NOW() - INTERVAL '8 seconds' ORDER BY id DESC LIMIT 1",
     [listingId, me, to, body])).rows[0];
   if (dup && !imageId) return res.json({ message: dup, duplicate: true });
+  const firstContact = l.user_id !== me && !(await db.query('SELECT 1 FROM messages WHERE listing_id = $1 AND sender_id = $2 AND recipient_id = $3 LIMIT 1', [listingId, me, to])).rowCount;
   const online = live.isOnline(to);
   const r = await db.query('INSERT INTO messages(listing_id, sender_id, recipient_id, body, delivered_at, image_id) VALUES($1,$2,$3,$4, CASE WHEN $5::boolean THEN NOW() END, $6) RETURNING id, created_at', [listingId, me, to, body, online, imageId]);
+  if (firstContact) studio.bump(listingId, 'chats');
   live.send(to, 'message', { id: r.rows[0].id, from: me, listing_id: listingId, body, has_attach: !!imageId, created_at: r.rows[0].created_at });
   res.status(201).json({ message: { ...r.rows[0], delivered: online } });
 }));

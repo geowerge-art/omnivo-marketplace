@@ -242,6 +242,17 @@
       };
       (r.querySelector(".adm-acts") || r.querySelector(".adm-mid").appendChild(el("div", "adm-acts"))).append(s);
     }
+    if (me.role === "admin") {
+      const PN = { basic: "Basic", standard: "Standard", silver: "Silver", gold: "Gold", titanium: "Titanium" };
+      const ps = el("select", "adm-sel"); ps.title = "Planul contului";
+      Object.entries(PN).forEach(([k, t]) => { const o = el("option", "", "Plan " + t); o.value = k; o.selected = k === (u.plan || "basic"); ps.append(o); });
+      ps.onchange = async () => {
+        let days = null;
+        if (ps.value !== "basic") { const a = prompt(`Plan ${PN[ps.value]} pentru @${u.nickname}. Câte zile? (lasă gol = fără expirare)`, ""); if (a === null) { ps.value = u.plan || "basic"; return; } days = a.trim() || null; }
+        try { await api(`/api/admin/users/${u.id}/plan`, "PATCH", { plan: ps.value, days }); render(); } catch (e) { ps.value = u.plan || "basic"; fail(e); }
+      };
+      (r.querySelector(".adm-acts") || r.querySelector(".adm-mid").appendChild(el("div", "adm-acts"))).append(ps);
+    }
     return r;
   }
   async function vUsers(b) {

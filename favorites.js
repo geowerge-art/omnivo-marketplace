@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('./db');
 const { ah, requireDb } = require('./common');
 const { requireAuth } = require('./authmw');
+const studio = require('./studio');
 
 const router = express.Router();
 router.use(requireDb, requireAuth);
@@ -22,6 +23,7 @@ router.post('/:id(\\d+)', ah(async (req, res) => {
      ON CONFLICT DO NOTHING`, [req.user.id, req.params.id]);
   const exists = r.rowCount || (await db.query('SELECT 1 FROM favorites WHERE user_id = $1 AND listing_id = $2', [req.user.id, req.params.id])).rowCount;
   if (!exists) return res.status(404).json({ error: 'NEGASIT' });
+  if (r.rowCount) studio.bump(Number(req.params.id), 'favs');
   res.json({ ok: true });
 }));
 
