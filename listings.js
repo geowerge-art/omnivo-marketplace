@@ -50,7 +50,8 @@ async function parse(b) {
 
 /* ---- public: listare cu filtre ---- */
 router.get('/', ah(async (req, res) => {
-  const where = ["l.status = 'approved'", 'l.expires_at > NOW()'], vals = [];
+  const sold = req.query.sold === '1' && Number(req.query.user) > 0;   // profil public: și anunțurile vândute ale vânzătorului
+  const where = sold ? ["l.status = 'sold'"] : ["l.status = 'approved'", 'l.expires_at > NOW()'], vals = [];
   const add = (sql, val) => { vals.push(val); where.push(sql.split('$#').join('$' + vals.length)); };
   const q = fold(req.query.q).replace(/[^a-z0-9 ]+/g, ' ').trim();
   for (const w of q.split(/\s+/).filter(Boolean).slice(0, 6)) add("l.search_text LIKE '%' || $# || '%'", w);
@@ -58,6 +59,7 @@ router.get('/', ah(async (req, res) => {
     const ids = String(req.query.ids).split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 48);
     if (ids.length) add('l.id = ANY($#::int[])', ids);
   }
+  if (Number(req.query.user) > 0) add('l.user_id = $#', Math.floor(Number(req.query.user)));
   if (req.query.category) add('(c.slug = $# OR p.slug = $#)', String(req.query.category).slice(0, 60));
   if (req.query.county) add('LOWER(l.county) = LOWER($#)', String(req.query.county).slice(0, 40));
   if (Number.isFinite(Number(req.query.min)) && req.query.min !== undefined && req.query.min !== '') add('l.price >= $#', Number(req.query.min));
@@ -104,7 +106,7 @@ router.get('/stats', requireAuth, ah(async (req, res) => {
 
 router.get('/:id(\\d+)', ah(async (req, res) => {
   const r = await db.query(
-    `SELECT l.*, c.name AS category, p.name AS parent_category, u.nickname AS seller, u.show_phone, u.phone AS seller_phone
+    `SELECT l.*, c.name AS category, p.name AS parent_category, u.nickname AS seller, u.created_at AS seller_since, u.show_phone, u.phone AS seller_phone
        FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id
        LEFT JOIN users u ON u.id = l.user_id WHERE l.id = $1`, [req.params.id]);
   if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
@@ -117,7 +119,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);
   res.json({ listing: {
     images: imgs.rows.map((i) => i.url),
-    seller_id: l.user_id, mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
+    seller_id: l.user_id, seller_since: l.seller_since, seller_rating: (await db.query('SELECT COALESCE(ROUND(AVG(rating)::numeric, 1), 0)::float AS avg, COUNT(*)::int AS n FROM reviews WHERE seller_id = $1', [l.user_id]).catch(() => ({ rows: [{ avg: 0, n: 0 }] }))).rows[0], mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
     // datele brute de care are nevoie formularul de editare; le primește doar proprietarul
     edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,

@@ -6,6 +6,7 @@ const config = require('./config');
 const { ah, requireDb } = require('./common');
 const { requireAuth, requireRole } = require('./authmw');
 const { createThrottle } = require('./security');
+const { sendMail, MAIL_READY } = require('./mail');
 
 const router = express.Router();
 const publicRouter = express.Router();
@@ -21,6 +22,21 @@ const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const log = (req, action, type, id, details) => db.query(
   'INSERT INTO admin_activity(admin_id, action, target_type, target_id, details) VALUES($1,$2,$3,$4,$5)',
   [req.user.id, action, type, id, String(details || '').slice(0, 900)]);
+
+/* Vânzătorul află pe email când anunțul lui e aprobat / respins / blocat (doar dacă emailul e configurat). */
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function notifySeller(ids, status, note) {
+  if (!MAIL_READY || !['approved', 'rejected', 'blocked'].includes(status)) return;
+  try {
+    const r = await db.query('SELECT l.title, u.email, u.nickname FROM listings l JOIN users u ON u.id = l.user_id WHERE l.id = ANY($1::int[])', [ids]);
+    const subj = { approved: 'Anunțul tău a fost aprobat', rejected: 'Anunțul tău a fost respins', blocked: 'Anunțul tău a fost blocat' }[status];
+    for (const x of r.rows) {
+      const txt = status === 'approved' ? `Anunțul „${x.title}” este acum publicat pe Omnivo.`
+        : `Anunțul „${x.title}” a fost ${status === 'rejected' ? 'respins' : 'blocat'}. Motiv: ${note}.` + (status === 'rejected' ? ' Îl poți corecta din contul tău și va fi verificat din nou.' : '');
+      sendMail(x.email, subj, `<p>Salut, ${esc(x.nickname)},</p><p>${esc(txt)}</p><p>Echipa Omnivo</p>`, `Salut, ${x.nickname},\n\n${txt}\n\nEchipa Omnivo`).catch(() => {});
+    }
+  } catch (e) { console.error('notify:', e.message); }
+}
 
 /* ---- panou ---- */
 router.get('/overview', ah(async (req, res) => {
@@ -65,6 +81,32 @@ router.post('/ads/approve-all', ah(async (req, res) => {
   const r = await db.query("UPDATE listings SET status = 'approved', mod_note = NULL, expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days'), updated_at = NOW() WHERE status = 'pending' RETURNING id");
   if (r.rowCount) await log(req, 'listing_approved', 'listing', 0, `aprobate toate: ${r.rowCount} anunțuri`);
   res.json({ ok: true, approved: r.rowCount });
+}));
+
+/* Aprobă / respinge / blochează mai multe anunțuri odată (maxim 50). */
+router.post('/ads/bulk', ah(async (req, res) => {
+  const b = req.body || {}, s = String(b.status || ''), note = clip(b.note, 300);
+  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 50);
+  if (!ids.length) return res.status(400).json({ error: 'NIMIC_SELECTAT' });
+  if (!['approved', 'rejected', 'blocked'].includes(s)) return res.status(400).json({ error: 'STATUS_INVALID' });
+  if (s !== 'approved' && !note) return res.status(400).json({ error: 'MOTIV_OBLIGATORIU' });
+  const r = await db.query(
+    `UPDATE listings SET status = $1, mod_note = $2, updated_at = NOW()${s === 'approved' ? ", expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days')" : ''}
+      WHERE id = ANY($3::int[]) AND status IN ('pending', 'approved', 'rejected', 'blocked') AND status <> $1 RETURNING id`, [s, s === 'approved' ? null : note, ids]);
+  if (r.rowCount) { await log(req, 'listing_' + s, 'listing', 0, `în masă: ${r.rowCount} anunțuri (#${r.rows.map((x) => x.id).join(', #')})${note ? ' — ' + note : ''}`); if (s !== 'approved') notifySeller(r.rows.map((x) => x.id), s, note); }
+  res.json({ ok: true, changed: r.rowCount });
+}));
+
+/* Promovare din panou: 3 / 7 / 30 / 90 de zile sau 0 = oprește. */
+router.post('/ads/:id(\\d+)/promote', ah(async (req, res) => {
+  const days = Number((req.body || {}).days);
+  if (![0, 3, 7, 30, 90].includes(days)) return res.status(400).json({ error: 'PROMOVARE_INVALIDA' });
+  const r = days === 0
+    ? await db.query('UPDATE listings SET promoted_until = NULL WHERE id = $1 RETURNING id', [req.params.id])
+    : await db.query("UPDATE listings SET promoted_until = GREATEST(COALESCE(promoted_until, NOW()), NOW()) + ($1 || ' days')::interval, bumped_at = NOW() WHERE id = $2 AND status = 'approved' RETURNING id", [String(days), req.params.id]);
+  if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  await log(req, 'listing_promote', 'listing', Number(req.params.id), days ? `promovat ${days} zile` : 'promovare oprită');
+  res.json({ ok: true });
 }));
 
 /* Tot ce trebuie ca să judeci un anunț: poze, câmpuri, vânzător, raportări, istoric. */
@@ -118,6 +160,7 @@ router.patch('/ads/:id(\\d+)', ah(async (req, res) => {
   await db.query(`UPDATE listings SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${vals.length}`, vals);
   if (statusChanged === 'approved') await db.query("UPDATE listings SET expires_at = GREATEST(expires_at, NOW() + INTERVAL '30 days') WHERE id = $1", [req.params.id]);
   await log(req, statusChanged ? 'listing_' + statusChanged : 'listing_edit', 'listing', Number(req.params.id), ch.join('; '));
+  if (statusChanged) notifySeller([Number(req.params.id)], statusChanged, clip(body.note, 300));
   res.json({ ok: true, changed: true });
 }));
 

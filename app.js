@@ -16,6 +16,7 @@ const admin = require('./admin');
 const images = require('./images');
 const messages = require('./messages');
 const live = require('./live');
+const profiles = require('./profiles');
 
 function createApp() {
   const app = express();
@@ -63,13 +64,14 @@ function createApp() {
   app.use('/api/reports', admin.publicRouter);
   app.use('/api/messages', messages.router);
   app.use('/api/stream', live.router);
+  app.use('/api/users', profiles.router);
   app.use('/api/favorites', favorites.router);
   app.use('/api/saved-searches', saved.router);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'NEGASIT' })); // niciodată index.html pentru /api/*
 
   // Servim doar fișierele publice, pe listă; restul (server.js etc.) nu poate fi descărcat
-  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js', 'admin-ui.js'];
+  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js', 'admin-ui.js', 'profile-ui.js'];
   for (const f of PUBLIC_FILES) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
   app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 

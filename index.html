@@ -347,6 +347,23 @@
     <p class="err" id="admFormErr" hidden></p>
     <button class="primary" id="admFormOk" type="button">Confirmă</button><button class="ghost" id="admFormNo" type="button">Anulează</button>
   </dialog>
+  <dialog id="profileDialog" class="sheet prof-page" aria-label="Profil vânzător">
+    <div class="sell-top prof-top"><button class="dialog-close" id="profClose" type="button" aria-label="Închide">✕</button><h2 id="profTitle">Profil</h2><button type="button" class="prof-share" id="profShare">⤴ Distribuie</button></div>
+    <div id="profBody" class="prof-body"></div>
+  </dialog>
+  <dialog id="reviewDialog" class="sheet">
+    <h2>Lasă o recenzie</h2><p class="muted" id="rvWho"></p>
+    <div class="rv-stars" id="rvStars" role="group" aria-label="Numărul de stele"></div>
+    <label for="rvText">Comentariu <small class="muted">(opțional)</small></label><textarea id="rvText" rows="4" maxlength="500" placeholder="Cum a fost? Ai primit ce ai cerut?"></textarea>
+    <p class="err" id="rvErr" hidden></p>
+    <button class="primary" id="rvOk" type="button">Trimite recenzia</button><button class="ghost" id="rvNo" type="button">Anulează</button>
+  </dialog>
+  <dialog id="aboutDialog" class="sheet">
+    <h2>Despre tine</h2><p class="muted">Câteva cuvinte pentru cumpărători. Se vede pe profilul tău public.</p>
+    <textarea id="aboutText" rows="4" maxlength="300" placeholder="Ex.: Vând lucruri puține, în stare bună. Predau în București."></textarea>
+    <p class="err" id="aboutErr" hidden></p>
+    <button class="primary" id="aboutOk" type="button">Salvează</button><button class="ghost" id="aboutNo" type="button">Anulează</button>
+  </dialog>
   <dialog id="reportDialog" class="sheet">
     <h2>Raportează anunțul</h2>
     <label for="rpReason">Motivul</label>
@@ -360,5 +377,6 @@
   <script src="/autofill.js"></script>
   <script src="/script.js"></script>
   <script src="/admin-ui.js"></script>
+  <script src="/profile-ui.js"></script>
 </body>
 </html>

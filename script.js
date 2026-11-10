@@ -395,7 +395,7 @@ function accMenu() {
     accGroup("Anunțurile tale", [...status, accItem("Statistici anunțuri", () => accGo("stats"))]),
     accGroup("Cumpăr", [accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
     accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN")]),
-    accGroup("Cont", [accItem("Date generale și telefon", openSettings)])
+    accGroup("Cont", [accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
   if (isMod) secs.appendChild(accGroup("Moderare", [accItem("Moderare anunțuri", goModeration)]));
@@ -678,6 +678,11 @@ async function openDetail(id) {
     { const sp = l.seller_presence;   // „online acum” / „văzut azi la 21:40”; lipsește dacă vânzătorul și-a ascuns prezența
       if (sp && !sp.hidden) { const pr = document.createElement("small"); pr.className = "ad-pres" + (sp.online ? " online" : ""); pr.textContent = sp.online ? "online acum" : seenText(sp.last_seen); who.appendChild(pr); } }
     sc.append(av, who);
+    { const rt = document.createElement("small"); rt.className = "ad-rate"; rt.textContent = l.seller_rating && l.seller_rating.n ? `★ ${l.seller_rating.avg.toLocaleString("ro-RO")} · ${l.seller_rating.n} ${l.seller_rating.n === 1 ? "recenzie" : "recenzii"}` : "Fără recenzii încă"; who.appendChild(rt);
+      if (l.seller_since) { const sn = document.createElement("small"); sn.textContent = "Pe Omnivo din " + new Date(l.seller_since).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }); who.appendChild(sn); }
+      const go = document.createElement("span"); go.className = "ad-go"; go.textContent = "›"; go.setAttribute("aria-hidden", "true"); sc.appendChild(go);
+      sc.classList.add("ad-seller-link"); sc.tabIndex = 0; sc.setAttribute("role", "button"); sc.setAttribute("aria-label", "Vezi profilul vânzătorului");
+      sc.onclick = () => window.openProfile && window.openProfile(l.seller_id); sc.onkeydown = (e) => { if (e.key === "Enter") sc.onclick(); }; }
     /* bara de contact: mereu vizibilă jos, cu telefon, WhatsApp și mesaj */
     const act = $("detActions"); act.replaceChildren(); act.hidden = false;
     const ob = $("detOwner"); ob.replaceChildren(); ob.hidden = true;

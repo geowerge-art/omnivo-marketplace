@@ -5,7 +5,7 @@
     MOTIV_OBLIGATORIU: "Scrie un motiv.", BLOCARE_MAX_30_ZILE: "Moderatorii pot bloca cel mult 30 de zile.", DOAR_ADMIN: "Doar administratorii pot face asta.",
     CANNOT_BLOCK_SELF: "Nu te poți bloca singur.", ROL_PROPRIU: "Nu îți poți schimba singur rolul.", ADMIN_PRINCIPAL: "Contul principal de administrator nu poate fi schimbat.",
     ULTIMUL_ADMIN: "Trebuie să rămână cel puțin un administrator.", CANNOT_DELETE_ADMIN: "Un administrator nu poate fi șters.", INTERZIS: "Nu ai voie să faci asta.",
-    REPORT_PROPRIU: "Nu îți poți raporta propriul anunț.", RAPORT_MOTIV: "Alege motivul raportării."
+    NIMIC_SELECTAT: "Nu ai selectat niciun anunț.", REPORT_PROPRIU: "Nu îți poți raporta propriul anunț.", RAPORT_MOTIV: "Alege motivul raportării."
   });
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const fmt = (d) => new Date(d).toLocaleString("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -17,11 +17,11 @@
   const ROLE = { user: "Utilizator", moderator: "Moderator", admin: "Administrator" };
   const REASON = { inselatorie: "Înșelătorie", interzis: "Interzis", duplicat: "Duplicat", gresit: "Preț/categorie greșită", vandut: "Deja vândut", altul: "Altceva" };
   const ACT = { listing_approved: "Anunț aprobat", listing_rejected: "Anunț respins", listing_blocked: "Anunț blocat", listing_pending: "Anunț trimis în moderare", listing_edit: "Anunț editat", listing_delete: "Anunț șters",
-    user_block: "Cont blocat", user_unblock: "Cont deblocat", user_role: "Rol schimbat", user_delete: "Cont șters", report_resolved: "Raportare rezolvată", report_dismissed: "Raportare respinsă" };
-  const ICON = { listing_approved: "✅", listing_rejected: "⛔", listing_blocked: "🚫", listing_pending: "⏳", listing_edit: "✎", listing_delete: "🗑", user_block: "🔒", user_unblock: "🔓", user_role: "🛡", user_delete: "🗑", report_resolved: "⚑", report_dismissed: "⚑" };
+    user_block: "Cont blocat", user_unblock: "Cont deblocat", user_role: "Rol schimbat", user_delete: "Cont șters", report_resolved: "Raportare rezolvată", report_dismissed: "Raportare respinsă", listing_promote: "Promovare anunț", review_delete: "Recenzie ștearsă" };
+  const ICON = { listing_approved: "✅", listing_rejected: "⛔", listing_blocked: "🚫", listing_pending: "⏳", listing_edit: "✎", listing_delete: "🗑", user_block: "🔒", user_unblock: "🔓", user_role: "🛡", user_delete: "🗑", report_resolved: "⚑", report_dismissed: "⚑", listing_promote: "⭐", review_delete: "★" };
   const PILL = { pending: "warn", approved: "ok", rejected: "bad", blocked: "bad", sold: "mute", deleted: "mute" };
   const DIST = [["approved", "#2e9e5b"], ["pending", "#d9a528"], ["sold", "#8a8a8a"], ["rejected", "#d9705f"], ["blocked", "#b3261e"]];
-  const st = { tab: "over", ads: "pending", users: "", reports: "open", q: { ads: "", users: "" }, badge: { pending: 0, reports: 0 }, counts: {}, review: 0 };
+  const st = { tab: "over", ads: "pending", users: "", reports: "open", q: { ads: "", users: "" }, badge: { pending: 0, reports: 0 }, counts: {}, review: 0, sel: new Set(), selMode: false, updateBulk: () => {} };
   const fail = (e) => showMessage("Eroare", errText(e));
   const pill = (s) => el("span", "adm-pill " + (PILL[s] || "mute"), AB[s] || s);
 
@@ -135,7 +135,7 @@
     const c1 = el("small", "adm-meta"); if (l.email) { const a = el("a", "", l.email); a.href = "mailto:" + l.email; c1.append(a); } if (l.phone) { c1.append(" · "); const a = el("a", "", l.phone); a.href = "tel:" + l.phone; c1.append(a); } sinfo.append(c1);
     sinfo.append(el("small", "adm-meta", `${ROLE[l.urole] || ""} · ${l.uads} anunțuri · înscris ${fmtD(l.ucreated)}${l.ustatus === "blocked" ? " · CONT BLOCAT" : ""}${l.email_verified ? "" : " · email neconfirmat"}`));
     sb.append(srow);
-    const sa = el("div", "adm-acts"); sa.append(btn("Toate anunțurile lui", async () => { st.q.ads = l.nickname; st.ads = "all"; $("admAd").close(); go("ads"); })); sb.append(sa); right.append(sb);
+    const sa = el("div", "adm-acts"); sa.append(btn("Profil public", async () => { await window.openProfile(l.uid); }), btn("Toate anunțurile lui", async () => { st.q.ads = l.nickname; st.ads = "all"; $("admAd").close(); go("ads"); })); sb.append(sa); right.append(sb);
 
     if (l.reports.length) { const b = el("div", "adm-box"); b.append(el("h4", "", `Raportări (${l.reports.length})`)); l.reports.forEach((r) => { const p = el("p", "", `⚑ ${REASON[r.reason] || r.reason}${r.details ? " — " + r.details : ""}`); const s = el("small", "adm-meta", `de la @${r.reporter || "—"} · ${fmt(r.created_at)} · ${RB[r.status] || r.status}`); b.append(p, s); }); right.append(b); }
     if (l.history.length) { const b = el("div", "adm-box"); b.append(el("h4", "", "Istoric moderare")); l.history.forEach((h) => b.append(actRow({ ...h, target_type: "anunț", target_id: l.id }))); right.append(b); }
@@ -147,6 +147,12 @@
     if (l.status !== "blocked") bar.append(btn("Blochează", () => setStatus(l, "blocked", "Blochează anunțul", true), "bad"));
     bar.append(btn("✎ Editează", () => editFull(l.id)));
     bar.append(btn("👁 Pagina publică", async () => { await openDetail(l.id); }));
+    if (l.status === "approved" || (l.promoted_until && new Date(l.promoted_until) > new Date())) {
+      const sel = el("select", "adm-sel"), on = l.promoted_until && new Date(l.promoted_until) > new Date();
+      [["", "⭐ Promovare…"], ["3", "Promovează 3 zile"], ["7", "Promovează 7 zile"], ["30", "Promovează 30 de zile"], ["90", "Promovează 90 de zile"], ...(on ? [["0", "Oprește promovarea"]] : [])].forEach(([v, t]) => { const o = el("option", "", t); o.value = v; sel.append(o); });
+      sel.onchange = async () => { if (sel.value === "") return; try { await api(`/api/admin/ads/${l.id}/promote`, "POST", { days: Number(sel.value) }); await refresh(); } catch (e) { sel.value = ""; fail(e); } };
+      bar.append(sel);
+    }
     if (me.role === "admin") bar.append(btn("🗑 Șterge", async () => { if (!confirm(`Ștergi definitiv „${l.title}”? Nu se mai poate recupera.`)) return; await api(`/api/admin/ads/${l.id}`, "DELETE"); $("admAd").close(); render(); }, "bad"));
   }
   $("admAdClose")?.addEventListener("click", () => $("admAd").close());
@@ -182,9 +188,13 @@
     const quick = [];
     if (a.status === "pending") quick.push(["✓ Aprobă", () => setStatus(a, "approved", "Aprobă", false), "ok"], ["Respinge", () => setStatus(a, "rejected", "Respinge anunțul", true)]);
     else quick.push(["Deschide", () => openReview(a.id)]);
-    return item({ lead: thumb(a.thumb), title: a.title, tag: pill(a.status), price: price(a),
+    let cb = null;
+    if (st.selMode) { cb = el("input", "adm-pick"); cb.type = "checkbox"; cb.checked = st.sel.has(a.id); cb.onchange = () => { cb.checked ? st.sel.add(a.id) : st.sel.delete(a.id); st.updateBulk(); }; }
+    const it = item({ lead: thumb(a.thumb), title: a.title, tag: pill(a.status), price: price(a),
       meta: [`${a.category}${a.county ? " · " + a.county : ""}`, `@${a.nickname || "—"} · ${fmt(a.created_at)}${a.views ? " · 👁 " + a.views : ""}`, a.mod_note ? `Motiv: ${a.mod_note}` : ""],
-      flags: [a.reports ? `⚑ ${a.reports} raportări deschise` : ""], acts: quick, onOpen: () => openReview(a.id) });
+      flags: [a.reports ? `⚑ ${a.reports} raportări deschise` : ""], acts: st.selMode ? [] : quick, onOpen: () => (cb ? cb.click() : openReview(a.id)) });
+    if (cb) it.prepend(cb);
+    return it;
   }
   async function vAds(b) {
     const list = el("div", "adm-list two"), fill = () => paged(list, `/api/admin/ads?status=${st.ads}&q=${encodeURIComponent(st.q.ads)}`, adItem);
@@ -193,7 +203,17 @@
     const counts = { all: ["pending", "approved", "rejected", "blocked", "sold"].reduce((s, k) => s + (st.counts[k] || 0), 0) };
     ["pending", "approved", "rejected", "blocked", "sold"].forEach((k) => { counts[k] = st.counts[k] || 0; });
     const top = el("div", "adm-top");
-    top.append(searchBox("Caută: titlu, @nickname, email sau #id", st.q.ads, (v) => { st.q.ads = v; fill(); }), chips(AB, st.ads, (k) => { st.ads = k; vAds(b); }, counts));
+    top.append(searchBox("Caută: titlu, @nickname, email sau #id", st.q.ads, (v) => { st.q.ads = v; st.sel.clear(); fill(); st.updateBulk(); }), chips(AB, st.ads, (k) => { st.ads = k; st.sel.clear(); vAds(b); }, counts));
+    const bulk = el("div", "adm-bulk");
+    st.updateBulk = () => {
+      bulk.replaceChildren(); bulk.hidden = !st.selMode; const n = st.sel.size; bulk.append(el("b", "", n ? `${n} selectate` : "Bifează anunțurile"));
+      if (n) [["✓ Aprobă", "approved", false, "ok"], ["Respinge", "rejected", true, ""], ["Blochează", "blocked", true, "bad"]].forEach(([t, s, need, cls]) => bulk.append(btn(t, async () => {
+        let note; if (need) { const f = await ask({ title: `${t} ${n} anunțuri`, hint: "Motivul îl văd vânzătorii." }); if (!f) return; note = f.reason; }
+        const r = await api("/api/admin/ads/bulk", "POST", { ids: [...st.sel], status: s, note }); st.sel.clear(); showMessage("Gata", `${r.changed} anunțuri actualizate.`); await render();
+      }, cls)));
+    };
+    top.append(btn(st.selMode ? "✕ Ieși din selectare" : "☑ Selectează mai multe", async () => { st.selMode = !st.selMode; st.sel.clear(); vAds(b); }));
+    top.append(bulk); st.updateBulk();
     if (st.ads === "pending" && counts.pending > 0) top.append(btn(`✓ Aprobă toate (${counts.pending})`, async () => { if (!confirm(`Aprobi toate cele ${counts.pending} anunțuri din coadă?`)) return; await api("/api/admin/ads/approve-all", "POST"); await render(); }, "ok"));
     b.replaceChildren(top, list); fill();
   }
