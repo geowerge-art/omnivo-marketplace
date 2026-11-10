@@ -84,7 +84,13 @@ router.get('/:id(\\d+)/phone', ah(async (req, res) => {
 }));
 
 router.get('/mine', requireAuth, ah(async (req, res) => {
-  const r = await db.query(`${SELECT} WHERE l.user_id = $1 AND l.status <> 'deleted' ORDER BY l.created_at DESC LIMIT 200`, [req.user.id]);
+  // + data expirării, vizualizări, salvări la favorite și mesaje primite, pentru cardurile din „Anunțurile mele”
+  const r = await db.query(
+    `SELECT x.*, l2.expires_at, l2.views, l2.updated_at,
+            (SELECT COUNT(*)::int FROM favorites f WHERE f.listing_id = x.id) AS favs,
+            (SELECT COUNT(*)::int FROM messages m WHERE m.listing_id = x.id AND m.recipient_id = $1) AS msgs
+       FROM (${SELECT} WHERE l.user_id = $1 AND l.status <> 'deleted' ORDER BY l.created_at DESC LIMIT 200) x
+       JOIN listings l2 ON l2.id = x.id ORDER BY x.created_at DESC`, [req.user.id]);
   res.json({ listings: r.rows });
 }));
 
@@ -118,6 +124,8 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
     category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type,
     address: l.address || null,
+    // doar proprietarul: datele din bara de acțiuni de pe pagina anunțului
+    owner_info: owner ? { favs: (await db.query('SELECT COUNT(*)::int n FROM favorites WHERE listing_id = $1', [l.id])).rows[0].n, msgs: (await db.query('SELECT COUNT(*)::int n FROM messages WHERE listing_id = $1 AND recipient_id = $2', [l.id, me.id])).rows[0].n, views: l.views, expires_at: l.expires_at, bumped_at: l.bumped_at, updated_at: l.updated_at, promoted_until: l.promoted_until } : undefined,
     has_phone: !!(l.show_phone && l.seller_phone), // numărul se cere separat (GET /:id/phone), nu stă în pagină
     attributes: Object.entries(l.attributes || {}).map(([k, v]) => ({ label: label[k] || k, value: v }))
   } });
@@ -185,6 +193,16 @@ router.post('/:id(\\d+)/bump', requireAuth, ah(async (req, res) => {
   const ex = await db.query("SELECT status FROM listings WHERE id = $1 AND user_id = $2", [req.params.id, req.user.id]);
   if (!ex.rowCount) return res.status(404).json({ error: 'NEGASIT' });
   res.status(429).json({ error: 'REACTUALIZARE_PREA_DEVREME' });
+}));
+
+/* ---- reînnoire: încă 30 de zile; se poate cu cel mult 7 zile înainte de expirare sau după ce a expirat ---- */
+router.post('/:id(\\d+)/renew', requireAuth, ah(async (req, res) => {
+  const r = await db.query(
+    "UPDATE listings SET expires_at = NOW() + INTERVAL '30 days', bumped_at = NOW(), updated_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'approved' AND expires_at < NOW() + INTERVAL '7 days' RETURNING expires_at", [req.params.id, req.user.id]);
+  if (r.rowCount) return res.json({ ok: true, expires_at: r.rows[0].expires_at });
+  const ex = await db.query("SELECT status FROM listings WHERE id = $1 AND user_id = $2", [req.params.id, req.user.id]);
+  if (!ex.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  res.status(409).json({ error: ex.rows[0].status === 'approved' ? 'REINNOIRE_PREA_DEVREME' : 'REINNOIRE_INDISPONIBILA' });
 }));
 
 /* ---- promovare: anunțul apare primul, cu insigna „Promovat” ---- */

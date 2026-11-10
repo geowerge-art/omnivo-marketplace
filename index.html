@@ -242,6 +242,7 @@
 
   <dialog id="detailDialog" class="sheet det">
     <div class="sell-top det-top"><button class="dialog-close" id="detClose" aria-label="Închide">✕</button><nav id="detCrumbs" class="ad-crumbs" aria-label="Categorie"></nav></div>
+    <div id="detOwner" class="own-bar" hidden></div>
     <div id="detGal" class="ad-gal"></div>
     <div class="ad-chips" id="detChips"></div>
     <div class="det-body">
@@ -255,6 +256,12 @@
       <div class="ad-seller" id="detSeller"></div>
     </div>
     <div id="detActions" class="ad-callbar"></div>
+  </dialog>
+
+  <dialog id="actDialog" class="actsheet" aria-label="Gestionează anunțul">
+    <div class="as-grab" aria-hidden="true"></div>
+    <div class="as-head"><b id="asTitle">Gestionează acest anunț</b><button type="button" class="as-x" id="asClose" aria-label="Închide">✕</button></div>
+    <div id="asList"></div>
   </dialog>
 
   <dialog id="lightbox" class="lightbox" aria-label="Poza anunțului">
