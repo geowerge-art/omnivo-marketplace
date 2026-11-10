@@ -1173,3 +1173,26 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
 .own-cta{display:block;width:100%;margin-top:12px;min-height:48px;border:0;border-radius:12px;background:linear-gradient(180deg,#d9b974,#b8935a);color:#fff;font:inherit;font-size:16px;font-weight:800;cursor:pointer}.own-cta:disabled{opacity:.6}
 .ad-callbar[hidden]{display:none}
 @media(max-width:380px){.acc-tile span{font-size:12px}.mc-th{width:84px;height:84px}}
+
+/* --- panou administrare --- */
+@media(max-width:760px){#adminDialog.sell-page{width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;border-radius:0}}
+.adm-body{padding:12px 16px 28px}
+.adm-top{display:grid;gap:10px;margin-bottom:8px}
+.adm-search{width:100%;height:46px;border:1px solid var(--border);border-radius:12px;padding:0 14px;font:inherit;font-size:16px;background:#fff}
+.adm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+.adm-stat{display:flex;flex-direction:column;gap:2px;text-align:left;padding:14px;border:1px solid var(--border);border-radius:14px;background:#fff;font:inherit;cursor:default}
+button.adm-stat{cursor:pointer}.adm-stat .n{font-size:28px;font-weight:800;color:var(--navy);line-height:1.1}.adm-stat .l{color:var(--muted);font-size:14px}
+.adm-stat.hot{border-color:var(--gold);background:#fbf7ee}
+.adm-h{margin:20px 0 6px;font-size:17px;color:var(--navy)}
+.adm-row{padding:12px 0;border-bottom:1px solid var(--border)}
+.adm-title{display:block;color:var(--navy);overflow-wrap:anywhere;cursor:pointer}
+.adm-meta{display:block;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.adm-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.adm-btn{min-height:40px;padding:0 14px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit;font-weight:700;font-size:14px;color:var(--navy)}
+.adm-btn.ok{background:#14110c;border-color:#14110c;color:#e9d3a8}.adm-btn.bad{color:#b3261e;border-color:#e8c4c0}
+.adm-btn:disabled{opacity:.5}
+.adm-sel{min-height:40px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit;font-size:14px;padding:0 8px}
+.adm-badge{display:inline-block;min-width:20px;margin-left:6px;padding:1px 6px;border-radius:10px;background:var(--gold);color:#fff;font-size:12px;text-align:center}
+.adm-warn{color:#b3261e;font-weight:700}
+.ad-report{display:block;margin:6px auto 22px;border:0;background:none;color:var(--muted);text-decoration:underline;font:inherit;min-height:44px}
+.mod-note{display:block;margin-top:4px;color:#b3261e}

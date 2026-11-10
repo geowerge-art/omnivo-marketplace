@@ -254,6 +254,7 @@
       <h3 class="ad-h">Detalii</h3>
       <dl id="detAttrs" class="detail-grid"></dl>
       <div class="ad-seller" id="detSeller"></div>
+      <button type="button" id="detReport" class="ad-report" hidden>⚑ Raportează anunțul</button>
     </div>
     <div id="detActions" class="ad-callbar"></div>
   </dialog>
@@ -322,9 +323,38 @@
     <p id="dialogText"></p>
   </dialog>
 
+  <dialog id="adminDialog" class="sheet sell-page">
+    <div class="sell-top"><button class="dialog-close" id="admClose" aria-label="Închide">✕</button><h2>🛡 Administrare</h2></div>
+    <nav class="acc-tabs" id="admTabs" aria-label="Secțiuni administrare"></nav>
+    <div id="admBody" class="adm-body"></div>
+  </dialog>
+  <dialog id="admForm" class="sheet">
+    <h2 id="admFormTitle"></h2><p id="admFormHint" class="muted"></p>
+    <div id="admFormDays" hidden><label for="admDays">Durata blocării, în zile <small class="muted">(gol = definitiv)</small></label><input id="admDays" type="number" min="1" max="365" inputmode="numeric"></div>
+    <label for="admReason" id="admReasonLbl">Motiv</label><textarea id="admReason" rows="3" maxlength="300"></textarea>
+    <p class="err" id="admFormErr" hidden></p>
+    <button class="primary" id="admFormOk" type="button">Confirmă</button><button class="ghost" id="admFormNo" type="button">Anulează</button>
+  </dialog>
+  <dialog id="admEdit" class="sheet">
+    <h2>Editează anunțul</h2>
+    <label for="edTitle">Titlu</label><input id="edTitle" maxlength="120">
+    <label for="edPrice">Preț <small class="muted">(gol = la cerere)</small></label><input id="edPrice" type="number" min="0" inputmode="decimal">
+    <label for="edDesc">Descriere</label><textarea id="edDesc" rows="5" maxlength="4000"></textarea>
+    <p class="err" id="edErr" hidden></p>
+    <button class="primary" id="edOk" type="button">Salvează</button><button class="ghost" id="edNo" type="button">Anulează</button>
+  </dialog>
+  <dialog id="reportDialog" class="sheet">
+    <h2>Raportează anunțul</h2>
+    <label for="rpReason">Motivul</label>
+    <select id="rpReason"><option value="inselatorie">Înșelătorie / fraudă</option><option value="interzis">Produs sau serviciu interzis</option><option value="duplicat">Anunț duplicat</option><option value="gresit">Preț sau categorie greșită</option><option value="vandut">Deja vândut</option><option value="altul">Altceva</option></select>
+    <label for="rpDetails">Detalii <small class="muted">(opțional)</small></label><textarea id="rpDetails" rows="3" maxlength="500"></textarea>
+    <p class="err" id="rpErr" hidden></p>
+    <button class="primary" id="rpOk" type="button">Trimite raportarea</button><button class="ghost" id="rpNo" type="button">Anulează</button>
+  </dialog>
   <script src="/icons.js"></script>
   <script src="/cities.js"></script>
   <script src="/autofill.js"></script>
   <script src="/script.js"></script>
+  <script src="/admin-ui.js"></script>
 </body>
 </html>

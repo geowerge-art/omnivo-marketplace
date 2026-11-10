@@ -401,7 +401,7 @@ function accMenu() {
   if (isMod) secs.appendChild(accGroup("Moderare", [accItem("Moderare anunțuri", goModeration)]));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
   const last = [tiles, secs, out];
-  if (isAdmin) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", goModeration); last.push(ad); }
+  if (isAdmin || isMod) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", () => openAdmin()); last.push(ad); }
   $("accMain").replaceChildren(...last);
   api("/api/listings/mine").then((r) => {
     accMine = r.listings; const c = accCounts();
@@ -588,6 +588,7 @@ function card(l) {
   const s = document.createElement("strong"); s.textContent = price(l);
   info.append(h, p, s); a.append(im, info);
   if (mode !== "public" && l.status !== "approved") { const t = document.createElement("span"); t.className = "tag"; t.textContent = l.status; info.appendChild(t); }
+  if (mode === "mine" && l.mod_note) { const n = document.createElement("small"); n.className = "mod-note"; n.textContent = "Motiv: " + l.mod_note; info.appendChild(n); }
   a.addEventListener("click", () => { trackInterest({ cat: l.category_slug, w: 3, id: l.id, title: l.title }); openDetail(l.id); });
   if (mode === "public") return a;
   const box = document.createElement("div"); box.className = "card-actions";

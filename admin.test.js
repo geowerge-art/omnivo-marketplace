@@ -1,0 +1,46 @@
+const Module = require('module'); const orig = Module._load; const handlers = {}; let queries = [];
+let DB = {};
+Module._load = function (req, ...a) {
+  if (req === 'express') { const mk = () => { const o = {}; ['use'].forEach((m) => (o[m] = () => o));
+      ['get', 'post', 'patch', 'delete'].forEach((m) => (o[m] = (p, ...h) => { handlers[m.toUpperCase() + ' ' + p] = h[h.length - 1]; return o; })); return o; };
+    const ex = () => ({}); ex.Router = mk; return ex; }
+  if (req === './db') return { hasDb: () => true, query: async (sql, p) => { queries.push(sql); return DB.q(sql, p); } };
+  if (req === './common') return { ah: (f) => f, requireDb: () => {} };
+  if (req === './authmw') return { requireAuth: () => {}, requireRole: () => () => {} };
+  if (req === './security') return { createThrottle: () => () => true };
+  if (req === './config') return { ADMIN_EMAIL: 'main@omnivo.ro' };
+  return orig.call(this, req, ...a);
+};
+require(require('path').join(__dirname, 'admin.js'));
+const run = async (route, user, params, body, db) => { DB = { q: db || (async () => ({ rows: [], rowCount: 0 })) }; queries = [];
+  let out = { code: 200 }; const res = { status(c) { out.code = c; return this; }, json(j) { out.body = j; return this; } };
+  await handlers[route]({ user, params, body, query: {} }, res); return out; };
+const MOD = { id: 2, role: 'moderator' }, ADM = { id: 1, role: 'admin' };
+const U = (role, extra = {}) => async (s) => (/FROM users WHERE id/.test(s) ? { rows: [{ id: 9, role, email: 'x@y.ro', status: 'active', ...extra }], rowCount: 1 } : { rows: [], rowCount: 0 });
+let ok = 0, bad = 0; const t = (name, got, want) => { const pass = got.code === want[0] && (!want[1] || (got.body && got.body.error === want[1])); pass ? ok++ : bad++; console.log((pass ? 'ok  ' : 'EȘEC') + ' ' + name + ' → ' + got.code + ' ' + JSON.stringify(got.body)); };
+(async () => {
+  const B = 'PATCH /users/:id(\\d+)';
+  t('moderator blochează un admin', await run(B, MOD, { id: 9 }, { status: 'blocked', reason: 'x', days: 5 }, U('admin')), [403, 'INTERZIS']);
+  t('moderator fără durată', await run(B, MOD, { id: 9 }, { status: 'blocked', reason: 'spam' }, U('user')), [403, 'BLOCARE_MAX_30_ZILE']);
+  t('moderator 60 de zile', await run(B, MOD, { id: 9 }, { status: 'blocked', reason: 'spam', days: 60 }, U('user')), [403, 'BLOCARE_MAX_30_ZILE']);
+  t('fără motiv', await run(B, ADM, { id: 9 }, { status: 'blocked', days: 3 }, U('user')), [400, 'MOTIV_OBLIGATORIU']);
+  t('își blochează propriul cont', await run(B, ADM, { id: 1 }, { status: 'blocked', reason: 'x' }, U('user')), [400, 'CANNOT_BLOCK_SELF']);
+  t('zile invalide', await run(B, ADM, { id: 9 }, { status: 'blocked', reason: 'x', days: 999 }, U('user')), [400, 'DATE_INVALIDE']);
+  const r = await run(B, MOD, { id: 9 }, { status: 'blocked', reason: 'spam', days: 7 }, U('user'));
+  t('moderator blochează 7 zile', r, [200]); console.log('     sesiunile închise:', queries.some((q) => /DELETE FROM sessions/.test(q)), '| jurnal scris:', queries.some((q) => /admin_activity/.test(q)));
+  const R = 'PATCH /users/:id(\\d+)/role';
+  t('își schimbă singur rolul', await run(R, ADM, { id: 1 }, { role: 'user' }, U('admin')), [400, 'ROL_PROPRIU']);
+  t('retrogradează adminul principal', await run(R, ADM, { id: 9 }, { role: 'user' }, U('admin', { email: 'MAIN@omnivo.ro' })), [400, 'ADMIN_PRINCIPAL']);
+  t('retrogradează ultimul admin', await run(R, ADM, { id: 9 }, { role: 'user' }, async (s) => (/FROM users WHERE id/.test(s) ? { rows: [{ id: 9, role: 'admin', email: 'a@b.ro', status: 'active' }], rowCount: 1 } : /COUNT/.test(s) ? { rows: [{ n: 1 }] } : { rows: [] })), [400, 'ULTIMUL_ADMIN']);
+  t('rol pentru cont blocat', await run(R, ADM, { id: 9 }, { role: 'moderator' }, U('user', { status: 'blocked' })), [400, 'CONT_BLOCAT']);
+  t('rol invalid', await run(R, ADM, { id: 9 }, { role: 'rege' }), [400, 'ROL_INVALID']);
+  const L = 'PATCH /ads/:id(\\d+)', ad = async (s) => (/FROM listings WHERE id/.test(s) ? { rows: [{ id: 5, title: 'Titlu vechi', description: 'd', price: 100, status: 'pending' }], rowCount: 1 } : { rows: [], rowCount: 0 });
+  t('respinge fără motiv', await run(L, MOD, { id: 5 }, { status: 'rejected' }, ad), [400, 'MOTIV_OBLIGATORIU']);
+  t('blochează fără motiv', await run(L, MOD, { id: 5 }, { status: 'blocked' }, ad), [400, 'MOTIV_OBLIGATORIU']);
+  t('titlu prea scurt', await run(L, MOD, { id: 5 }, { title: 'abc' }, ad), [400, 'TITLU_INVALID']);
+  t('preț negativ', await run(L, MOD, { id: 5 }, { price: -4 }, ad), [400, 'PRET_INVALID']);
+  const ap = await run(L, MOD, { id: 5 }, { status: 'approved' }, ad); t('aprobă', ap, [200]); console.log('     expirarea prelungită:', queries.some((q) => /expires_at/.test(q)));
+  t('statusul rămâne la fel → fără modificări', await run(L, MOD, { id: 5 }, { status: 'pending' }, ad), [200]);
+  t('raport: motiv invalid', await run('POST /', { id: 3 }, {}, { listing_id: 5, reason: 'x' }), [400, 'RAPORT_MOTIV']);
+  console.log(`\n${ok} trecute, ${bad} eșuate`); if (bad) process.exit(1);
+})();

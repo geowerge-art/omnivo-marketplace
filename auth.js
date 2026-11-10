@@ -135,7 +135,11 @@ router.post('/login', ah(async (req, res) => {
     return res.status(401).json({ error: 'INVALID_LOGIN' });
   }
   const user = r.rows[0];
-  if (user.status !== 'active') return res.status(403).json({ error: 'CONT_BLOCAT' });
+  if (user.status === 'blocked' && user.blocked_until && new Date(user.blocked_until) < new Date()) {
+    await db.query("UPDATE users SET status = 'active', block_reason = NULL, blocked_until = NULL WHERE id = $1", [user.id]);
+    user.status = 'active';
+  }
+  if (user.status !== 'active') return res.status(403).json({ error: 'CONT_BLOCAT', field: user.block_reason || undefined });
   await db.query('DELETE FROM login_attempts WHERE key = $1', [idKey]);
   const s = await createSession(user.id, req, remember !== false);
   res.cookie(COOKIE, s.token, cookieOptions(s.maxAge));

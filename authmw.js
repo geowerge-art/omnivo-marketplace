@@ -16,10 +16,14 @@ async function loadUser(req, res, next) {
   if (!token || !db.hasDb()) return next();
   try {
     const r = await db.query(
-      `SELECT u.id,u.name,u.nickname,u.email,u.phone,u.show_phone,u.whatsapp,u.role,u.status,u.email_verified,
+      `SELECT u.id,u.name,u.nickname,u.email,u.phone,u.show_phone,u.whatsapp,u.role,u.status,u.blocked_until,u.email_verified,
               s.id AS session_id, s.last_seen_at
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.expires_at > NOW()`, [hashToken(token)]);
+    if (r.rowCount && r.rows[0].status === 'blocked' && r.rows[0].blocked_until && new Date(r.rows[0].blocked_until) < new Date()) {
+      await db.query("UPDATE users SET status = 'active', block_reason = NULL, blocked_until = NULL WHERE id = $1", [r.rows[0].id]); // blocare temporară încheiată
+      r.rows[0].status = 'active';
+    }
     if (r.rowCount && r.rows[0].status === 'active') {
       req.user = r.rows[0];
       if (Date.now() - new Date(r.rows[0].last_seen_at).getTime() > 10 * 60 * 1000) {

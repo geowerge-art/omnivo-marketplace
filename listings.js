@@ -13,7 +13,7 @@ const createAllow = createThrottle(30, 60 * 60 * 1000); // max 30 anunțuri/oră
 const editAllow = createThrottle(60, 60 * 60 * 1000); // max 60 editări/oră per utilizator
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.created_at, l.bumped_at,
+const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.mod_note, l.created_at, l.bumped_at,
                        (COALESCE(l.promoted_until, 'epoch'::timestamptz) > NOW()) AS promoted, l.promoted_until,
                        c.slug AS category_slug, c.name AS category, p.name AS parent_category,
                        (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb
