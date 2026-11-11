@@ -11,6 +11,8 @@ const { createThrottle } = require('./security');
 const { sendMail, MAIL_READY } = require('./mail');
 const notifyMod = require('./notify');
 const live = require('./live');
+const imgs = require('./images');
+const crypto = require('crypto');
 
 const router = express.Router();
 router.use(requireDb, requireAuth);
@@ -19,6 +21,8 @@ const createAllow = createThrottle(8, 24 * 60 * 60 * 1000);     // max 8 cereri 
 const quoteAllow = createThrottle(60, 60 * 60 * 1000);          // max 60 oferte / modificări pe oră
 const chatAllow = createThrottle(60, 60 * 60 * 1000);
 const dealerAllow = createThrottle(10, 60 * 60 * 1000);
+const photoAllow = createThrottle(40, 60 * 60 * 1000);          // max 40 poze / oră
+const MAX_PHOTOS = 4, PHOTO_QUOTA = 60 * 1024 * 1024;
 
 const GRACE_DAYS = 7;       // după termen, cumpărătorul mai poate alege încă 7 zile dacă a primit oferte
 const MAX_NOTIFY = 300;     // câți dezmembrători primesc notificare în aplicație per cerere
@@ -194,6 +198,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
             d.company, d.county AS dealer_county, d.city AS dealer_city, d.status AS dealer_status,
             (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = q.dealer_id) AS rating,
             (SELECT COUNT(*)::int FROM reviews WHERE seller_id = q.dealer_id) AS rating_count,
+            (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
             CASE WHEN q.status = 'won' THEN q.dealer_id END AS dealer_id,
             CASE WHEN q.status = 'won' AND u.show_phone THEN u.phone END AS phone,
             (q.status = 'won' AND u.whatsapp) AS whatsapp
@@ -241,6 +246,7 @@ router.get('/inbox', ah(async (req, res) => {
   const r = await db.query(
     `SELECT r.id, r.part, r.brand, r.model, r.year, r.engine, r.vin, r.details, r.county, r.city, r.delivery, r.status, r.expires_at, r.created_at,
             (r.expires_at > NOW() AND r.status = 'open') AS accepting,
+            (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
             q.id AS quote_id, q.price, q.currency, q.state, q.warranty_days, q.shipping, q.pickup, q.note, q.status AS quote_status,
             CASE WHEN q.status = 'won' THEN u.nickname END AS buyer, CASE WHEN q.status = 'won' THEN r.user_id END AS buyer_id
        FROM part_requests r JOIN users u ON u.id = r.user_id LEFT JOIN quotes q ON q.request_id = r.id AND q.dealer_id = $1
@@ -266,6 +272,7 @@ router.post('/:id(\\d+)/quotes', ah(async (req, res) => {
        WHERE quotes.status IN ('sent','withdrawn') RETURNING id, (xmax = 0) AS created`,
     [r.id, req.user.id, v.price, v.currency, v.state, v.warranty_days, v.shipping, v.pickup, v.note]);
   if (!q.rowCount) return res.status(409).json({ error: 'CERERE_INCHISA' });
+  if (Array.isArray((req.body || {}).image_ids)) await attachImages(q.rows[0].id, req.user.id, [...new Set(req.body.image_ids.map(toId).filter(Boolean))].slice(0, MAX_PHOTOS));
   if (q.rows[0].created) {
     notify(r.user_id, 'rfq_quote', null, `Ofertă nouă: ${reqTitle(r)}`, `${d.company} · ${money(v.price, v.currency)}`);
     live.send(r.user_id, 'rfq', { request_id: r.id });
@@ -276,6 +283,52 @@ router.post('/:id(\\d+)/quotes', ah(async (req, res) => {
 router.delete('/:id(\\d+)/quotes', ah(async (req, res) => {
   const r = await db.query("UPDATE quotes SET status = 'withdrawn', updated_at = NOW() WHERE request_id = $1 AND dealer_id = $2 AND status = 'sent' RETURNING id", [Number(req.params.id), req.user.id]);
   res.json({ ok: r.rowCount > 0 });
+}));
+
+/* ---------- poze la oferte ---------- */
+async function attachImages(qid, uid, ids) {
+  const gone = await db.query('DELETE FROM quote_images WHERE quote_id = $1 AND owner_id = $2 AND NOT (id = ANY($3::int[])) RETURNING url, thumb_url', [qid, uid, ids]);
+  for (const g of gone.rows) imgs.removeStored(g.url, g.thumb_url).catch(() => {});
+  for (let i = 0; i < ids.length; i++) await db.query('UPDATE quote_images SET quote_id = $1, position = $4 WHERE id = $2 AND owner_id = $3 AND (quote_id IS NULL OR quote_id = $1)', [qid, ids[i], uid, i]);
+}
+
+router.post('/image', imgs.raw, ah(async (req, res) => {
+  const me = req.user.id, d = await myDealer(me);
+  if (!d || d.status !== 'approved') return res.status(403).json({ error: 'DEZMEMBRATOR_NEAPROBAT' });
+  const buf = req.body, k = Buffer.isBuffer(buf) && imgs.kind(buf);
+  if (!k) return res.status(400).json({ error: 'POZA_INVALIDA' });
+  if (!photoAllow('u' + me)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  // curățenie: pozele încărcate dar neatașate nicio ofertă, de peste o zi
+  const old = await db.query("DELETE FROM quote_images WHERE owner_id = $1 AND quote_id IS NULL AND created_at < NOW() - INTERVAL '1 day' RETURNING url, thumb_url", [me]);
+  for (const o of old.rows) imgs.removeStored(o.url, o.thumb_url).catch(() => {});
+  const used = (await db.query('SELECT COALESCE(SUM(size),0)::bigint AS n FROM quote_images WHERE owner_id = $1', [me])).rows[0].n;
+  if (Number(used) + buf.length > PHOTO_QUOTA) return res.status(413).json({ error: 'SPATIU_POZE_DEPASIT' });
+  const pending = (await db.query('SELECT COUNT(*)::int AS n FROM quote_images WHERE owner_id = $1 AND quote_id IS NULL', [me])).rows[0].n;
+  if (pending >= MAX_PHOTOS * 3) return res.status(409).json({ error: 'PREA_MULTE_POZE' });
+  let p;
+  try { p = await imgs.process(buf, k); } catch { return res.status(400).json({ error: 'POZA_INVALIDA' }); }
+  const size = p.full.length + p.thumb.length;
+  let row;
+  if (imgs.STORAGE) {
+    const base = `rfq/u${me}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+    let url, thumbUrl;
+    try { url = await imgs.put(`${base}.${p.ext}`, p.full, p.type); thumbUrl = await imgs.put(`${base}-t.${p.ext}`, p.thumb, p.type); }
+    catch (e) { console.error('storage:', e.message); return res.status(502).json({ error: 'STORAGE_EROARE' }); }
+    row = (await db.query('INSERT INTO quote_images(owner_id, url, thumb_url, size) VALUES($1,$2,$3,$4) RETURNING id, url, thumb_url AS thumb', [me, url, thumbUrl, size])).rows[0];
+  } else {   // fără Supabase: în Postgres, văzute doar de dezmembrător și de cumpărătorul cererii
+    const ins = await db.query('INSERT INTO quote_images(owner_id, ctype, size, data, thumb) VALUES($1,$2,$3,$4,$5) RETURNING id', [me, p.type, size, p.full, p.thumb]);
+    row = (await db.query("UPDATE quote_images SET url = '/api/requests/img/' || id, thumb_url = '/api/requests/img/' || id || '?t=1' WHERE id = $1 RETURNING id, url, thumb_url AS thumb", [ins.rows[0].id])).rows[0];
+  }
+  res.status(201).json({ image: row });
+}));
+
+router.get('/img/:id(\\d+)', ah(async (req, res) => {
+  const r = await db.query(
+    `SELECT i.data, i.thumb, i.ctype FROM quote_images i LEFT JOIN quotes q ON q.id = i.quote_id LEFT JOIN part_requests r ON r.id = q.request_id
+      WHERE i.id = $1 AND i.data IS NOT NULL AND (i.owner_id = $2 OR r.user_id = $2)`, [Number(req.params.id), req.user.id]);
+  if (!r.rowCount) return res.status(404).end();
+  res.set('Content-Type', r.rows[0].ctype || 'image/webp').set('Cache-Control', 'private, max-age=86400').set('X-Content-Type-Options', 'nosniff');
+  res.send(req.query.t ? r.rows[0].thumb : r.rows[0].data);
 }));
 
 /* ---------- chatul ofertei câștigătoare (doar cei doi) ---------- */
