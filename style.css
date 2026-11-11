@@ -1541,3 +1541,10 @@ button.adm-stat { cursor: pointer; }
 .rfq-mini { border: 0; background: none; padding: 8px 4px; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .rfq-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
 .rfq-filters input[type=search], .rfq-filters select:last-child { grid-column: 1 / -1; }
+
+/* ---- Oferte piese: fără bara gri sub file; cererile mele nu mai rup textul „nicio ofertă încă” ---- */
+.rfq-tabs { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.rfq-tabs::-webkit-scrollbar { display: none; }
+.rfq-row .rfq-mid { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.rfq-row .rfq-right { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
+.rfq-row .rfq-right small { white-space: nowrap; }
