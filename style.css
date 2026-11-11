@@ -1524,3 +1524,20 @@ button.adm-stat { cursor: pointer; }
 .rfq-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 0; }
 .rfq-filters input[type=search] { grid-column: 1 / -1; height: 50px; padding: 0 14px; }
 .rfq-filters input, .rfq-filters select { height: 50px; min-width: 0; padding: 0 12px; }
+.rfq-ask { margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-left: 4px solid var(--gold); border-radius: 14px; background: #fff; }
+.rfq-ask.dim { opacity: .55; }
+.rfq-ask-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.rfq-ask-part { font-size: 18px; color: var(--navy); }
+.rfq-ask-left { flex: none; font-size: 12px; font-weight: 700; color: #6b5210; }
+.rfq-bar { height: 4px; border-radius: 4px; background: #eee9dc; margin: 8px 0 10px; overflow: hidden; }
+.rfq-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); }
+.rfq-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.rfq-tag { font-size: 13px; padding: 3px 10px; border-radius: 8px; background: var(--light); color: var(--text); }
+.rfq-tag.car { background: #14110c; color: #e9d3a8; font-weight: 700; }
+.rfq-tag.kind { background: #fff8e4; color: #6b5210; }
+.rfq-ask-ft { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.rfq-ask-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.rfq-ask-acts .primary, .rfq-ask-acts .ghost { width: auto; min-height: 44px; margin-top: 0; padding: 0 18px; }
+.rfq-mini { border: 0; background: none; padding: 8px 4px; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+.rfq-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.rfq-filters input[type=search], .rfq-filters select:last-child { grid-column: 1 / -1; }

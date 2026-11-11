@@ -18,7 +18,8 @@
   const money = (n, c) => `${nf(n)} ${cur(c)}`;
   const when = (d) => new Date(d).toLocaleString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const left = (d) => { const ms = new Date(d) - Date.now(); if (ms <= 0) return "termen depășit"; const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000); return h >= 1 ? `mai ai ${h} h` : `mai ai ${m} min`; };
-  const STATE = { excelenta: "Stare excelentă", buna: "Stare bună", uzata: "Uzată, funcțională", "de-reparat": "De reparat" };
+  const STATE = { noua: "Piesă nouă", excelenta: "Stare excelentă", buna: "Stare bună", uzata: "Uzată, funcțională", "de-reparat": "De reparat" };
+  const KIND = { oricare: "Noi sau second-hand", "second-hand": "Doar second-hand", noi: "Doar piese noi" };
   const RS = { open: ["Deschisă", "ok"], awarded: ["Câștigător ales", "sold"], expired: ["Expirată", "wait"], cancelled: ["Anulată", "bad"] };
   const BRANDS = ["Audi", "BMW", "Dacia", "Ford", "Opel", "Renault", "Skoda", "Volkswagen", "Mercedes", "Toyota", "Peugeot", "Citroen", "Fiat", "Hyundai", "Kia", "Seat", "Honda", "Mazda", "Nissan", "Volvo"];
   const title = (r) => [r.part, r.brand, r.model, r.year].filter(Boolean).join(" ");
@@ -42,7 +43,7 @@
   }
 
   function tabs() {
-    const items = [["board", "Cereri deschise"]];
+    const items = [["board", "Piese căutate"]];
     if (me) items.push(["mine", "Cererile mele"], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]);
     if (me && ["admin", "moderator"].includes(me.role)) items.push(["admin", "Aprobări"]);
     const on = (k) => st.view === k || (k === "mine" && (st.view === "detail" || (st.view === "chat" && st.from !== "offers"))) || (k === "offers" && st.view === "chat" && st.from === "offers");
@@ -108,16 +109,17 @@
     const det = el("textarea"); det.rows = 3; det.maxLength = 1000; det.placeholder = "Culoare, variantă de echipare, defecte acceptate…";
     const hours = el("select"); [[24, "24 de ore"], [48, "48 de ore"], [72, "72 de ore"]].forEach(([v, t]) => hours.append(new Option(t, v))); hours.value = 48;
     const del = el("input"); del.type = "checkbox"; del.checked = true; const delL = el("label", "rfq-chk"); delL.append(del, " Accept și livrare prin curier");
+    const kind = el("select"); Object.entries(KIND).forEach(([v, t]) => kind.append(new Option(t, v)));
     const msg = el("p", "err"); msg.hidden = true;
     const go1 = el("button", "primary", "Trimite cererea"); go1.type = "button";
     go1.onclick = async () => {
       go1.disabled = true; msg.hidden = true;
-      try { const r = await api("/api/requests", "POST", { part: part.value, brand: brand.value, model: model.value, year: year.value, engine: engine.value, vin: vin.value, county: county.value, city: city.value, details: det.value, delivery: del.checked, hours: Number(hours.value) }); go("detail", r.request.id); }
+      try { const r = await api("/api/requests", "POST", { part: part.value, brand: brand.value, model: model.value, year: year.value, engine: engine.value, vin: vin.value, county: county.value, city: city.value, details: det.value, kind: kind.value, delivery: del.checked, hours: Number(hours.value) }); go("detail", r.request.id); }
       catch (e) { msg.textContent = errText(e); msg.hidden = false; go1.disabled = false; }
     };
     body.replaceChildren(el("p", "muted rfq-intro", "Cererea e publică: oricine o poate vedea și poate oferi, iar dezmembrătorii potriviți sunt anunțați. Ofertanții nu văd ofertele celorlalți, iar contactul tău rămâne ascuns până alegi tu."),
       field("Ce piesă cauți?", part), field("Marca", brand), dl, field("Modelul", model), field("Anul fabricației", year), field("Motorizare", engine), field("Serie de șasiu (VIN)", vin),
-      field("Județ", county), field("Localitate", city), field("Detalii", det), delL, field("Cât timp primești oferte?", hours), msg, go1);
+      field("Ce fel de piese accepți?", kind), field("Județ", county), field("Localitate", city), field("Detalii", det), delL, field("Cât timp primești oferte?", hours), msg, go1);
   }
 
   /* ---------- cumpărător: o cerere cu ofertele ei ---------- */
@@ -126,7 +128,7 @@
     let d; try { d = await api("/api/requests/" + id); } catch (e) { return fail(e); }
     const r = d.request, out = [], back = el("button", "link-btn", "‹ Toate cererile"); back.type = "button"; back.onclick = () => go("mine"); out.push(back);
     const hd = el("section", "rfq-head"); hd.append(el("h3", "", title(r)));
-    hd.append(el("p", "muted", [r.engine, r.vin && "VIN " + r.vin, r.county + (r.city ? ", " + r.city : ""), r.delivery ? "acceptă livrare" : "doar ridicare"].filter(Boolean).join(" · ")));
+    hd.append(el("p", "muted", [r.engine, r.vin && "VIN " + r.vin, r.county + (r.city ? ", " + r.city : ""), r.delivery ? "acceptă livrare" : "doar ridicare", KIND[r.kind]].filter(Boolean).join(" · ")));
     if (r.details) hd.append(el("p", "", r.details));
     const [t, c] = RS[r.status] || [r.status, ""];
     const sp = el("p"); sp.append(el("em", "rfq-chip " + c, t));
@@ -135,6 +137,11 @@
     out.push(hd);
     if (!d.quotes.length) out.push(el("p", "muted rfq-empty", r.status === "open" ? "Nicio ofertă încă. Dezmembrătorii au fost anunțați; te anunțăm când sosește prima ofertă." : "Cererea nu a primit oferte."));
     d.quotes.forEach((q, i) => out.push(quoteCard(r, q, i === 0 && q.status !== "won" && d.quotes.filter((x) => x.status === "sent").length > 1)));
+    if (["expired", "cancelled"].includes(r.status) && !r.awarded_quote_id) {
+      const re = el("button", "primary", "Redeschide cererea pentru încă 48 h"); re.type = "button";
+      re.onclick = async () => { re.disabled = true; try { await api(`/api/requests/${r.id}/reactivate`, "POST"); viewDetail(r.id); } catch (e) { showMessage("Eroare", errText(e)); re.disabled = false; } };
+      out.push(re);
+    }
     if (r.status === "open") {
       const cn = el("button", "ghost", "Anulează cererea"); cn.type = "button";
       cn.onclick = async () => { if (!confirm("Anulezi cererea? Ofertele primite se închid.")) return; try { await api(`/api/requests/${r.id}/cancel`, "POST"); go("mine"); } catch (e) { showMessage("Eroare", errText(e)); } };
@@ -202,18 +209,46 @@
   async function viewBoard() {
     const q = inp("search", "Caută: piesă, marcă, model"), brand = inp("text", "Marca"), county = countySel("", "Toate județele");
     brand.setAttribute("list", "rfqBrands"); const dl = el("datalist"); dl.id = "rfqBrands"; BRANDS.forEach((b) => dl.append(new Option(b)));
-    const list = el("div", "rfq-list"), bar = el("div", "rfq-filters"); bar.append(q, brand, county, dl);
-    const nb = el("button", "primary", me ? "Cere oferte pentru o piesă" : "Intră în cont ca să ceri sau să oferi"); nb.type = "button"; nb.onclick = () => (me ? go("new") : openAuth());
-    body.replaceChildren(el("p", "muted rfq-intro", "Cererile de piese postate de cumpărători. Oricine poate trimite o ofertă; ofertele nu se văd între ele."), nb, bar, list);
+    const seen = el("select"); [["new", "Încă n-am răspuns"], ["all", "Toate cererile"], ["offered", "Am trimis ofertă"], ["later", "Pentru mai târziu"], ["ignored", "Nu mă interesează"]].forEach(([v, t]) => seen.append(new Option(t, v)));
+    const list = el("div", "rfq-list"), bar = el("div", "rfq-filters"); bar.append(q, brand, county, dl); if (me) bar.append(seen);
+    const nb = el("button", "primary", me ? "Caut o piesă" : "Intră în cont ca să ceri sau să oferi"); nb.type = "button"; nb.onclick = () => (me ? go("new") : openAuth());
+    body.replaceChildren(el("p", "muted rfq-intro", "Piese căutate chiar acum de cumpărători din toată țara. Ai piesa? Trimite o ofertă; ceilalți ofertanți nu o văd."), nb, bar, list);
     let seq = 0, tm = null;
     const load = async () => {
       const my = ++seq; list.replaceChildren(el("p", "muted", "Se încarcă…"));
-      let d; try { d = await api("/api/requests/open?" + new URLSearchParams({ q: q.value, brand: brand.value, county: county.value })); } catch (e) { if (my === seq) list.replaceChildren(el("p", "err", errText(e))); return; }
+      let d; try { d = await api("/api/requests/open?" + new URLSearchParams({ q: q.value, brand: brand.value, county: county.value, state: me ? seen.value : "all" })); } catch (e) { if (my === seq) list.replaceChildren(el("p", "err", errText(e))); return; }
       if (my !== seq) return;
-      list.replaceChildren(...(d.requests.length ? d.requests.map((r) => inboxCard(r, load, true)) : [el("p", "muted", "Nicio cerere deschisă pentru aceste filtre.")]));
+      list.replaceChildren(...(d.requests.length ? d.requests.map((r) => askCard(r, load)) : [el("p", "muted rfq-empty", seen.value === "new" && me ? "Nicio cerere nouă pentru tine. Schimbă filtrul ca să le vezi pe toate." : "Nicio cerere pentru aceste filtre.")]));
     };
     const later = () => { clearTimeout(tm); tm = setTimeout(load, 350); };
-    q.oninput = later; brand.oninput = later; county.onchange = load; load();
+    q.oninput = later; brand.oninput = later; county.onchange = load; seen.onchange = load; load();
+  }
+
+  /* o cerere în panou: piesa mare, mașina pe etichete, timpul rămas ca o bară; acțiuni rapide pentru ofertant */
+  function askCard(r, onDone) {
+    const card = el("article", "rfq-ask" + (r.my_mark === "ignored" ? " dim" : ""));
+    const total = Math.max(1, new Date(r.expires_at) - new Date(r.created_at)), frac = Math.max(0, Math.min(1, (new Date(r.expires_at) - Date.now()) / total));
+    const hd = el("div", "rfq-ask-hd"); hd.append(el("b", "rfq-ask-part", r.part), el("span", "rfq-ask-left", left(r.expires_at).replace("mai ai ", "")));
+    const bar = el("div", "rfq-bar"); const fill = el("i"); fill.style.width = Math.round(frac * 100) + "%"; bar.append(fill);
+    const tags = el("div", "rfq-tags");
+    [[r.brand + (r.model ? " " + r.model : "") + (r.year ? " · " + r.year : ""), "car"], [r.engine, ""], [r.county, "loc"], [r.kind !== "oricare" ? KIND[r.kind] : "", "kind"], [r.delivery ? "livrare" : "ridicare", ""]]
+      .forEach(([t, c]) => { if (t) tags.append(el("span", "rfq-tag " + c, t)); });
+    card.append(hd, bar, tags); if (r.details) card.append(el("p", "rfq-note", r.details));
+    const foot = el("div", "rfq-ask-ft"); foot.append(el("small", "muted", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă primită" : "oferte primite"}` : "încă nicio ofertă"));
+    if (r.my_mark === "later") foot.append(el("em", "rfq-chip wait", "Pentru mai târziu")); if (r.my_mark === "ignored") foot.append(el("em", "rfq-chip", "Ignorată"));
+    if (r.quote_id) foot.append(el("em", "rfq-chip ok", "Ofertă trimisă"));
+    card.append(foot);
+    if (r.mine) { card.append(el("p", "muted", "Aceasta este cererea ta.")); return card; }
+    const acts = el("div", "rfq-ask-acts");
+    const offer = el("button", r.quote_id ? "ghost" : "primary", r.quote_id ? "Modifică oferta" : "Trimit ofertă"); offer.type = "button";
+    offer.onclick = () => { if (!me) return openAuth(); acts.replaceWith(quoteForm(r, onDone)); };
+    acts.append(offer);
+    if (me && !r.quote_id) {
+      const mk = async (mark) => { try { if (r.my_mark === mark) await api(`/api/requests/${r.id}/mark`, "DELETE"); else await api(`/api/requests/${r.id}/mark`, "POST", { mark }); onDone(); } catch (e) { showMessage("Eroare", errText(e)); } };
+      const l = el("button", "rfq-mini", r.my_mark === "later" ? "Scoate din „mai târziu”" : "Mai târziu"), i = el("button", "rfq-mini", r.my_mark === "ignored" ? "Arată-mi-o din nou" : "Nu mă interesează");
+      l.type = i.type = "button"; l.onclick = () => mk("later"); i.onclick = () => mk("ignored"); acts.append(l, i);
+    }
+    card.append(acts); return card;
   }
 
   /* ofertele mele (orice utilizator) + cererile potrivite pentru firmele aprobate */

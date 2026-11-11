@@ -28,7 +28,10 @@ const MAX_PHOTOS = 4, PHOTO_QUOTA = 60 * 1024 * 1024;
 const GRACE_DAYS = 7;       // după termen, cumpărătorul mai poate alege încă 7 zile dacă a primit oferte
 const MAX_NOTIFY = 300;     // câți dezmembrători primesc notificare în aplicație per cerere
 const MAX_EMAIL = 100;      // câți primesc și email
-const STATES = ['excelenta', 'buna', 'uzata', 'de-reparat'];
+const STATES = ['noua', 'excelenta', 'buna', 'uzata', 'de-reparat'];
+const KINDS = ['oricare', 'second-hand', 'noi'];
+const MARKS = ['later', 'ignored'];
+const SEEN = ['new', 'all', 'offered', 'later', 'ignored'];
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const ALIAS = { vw: 'volkswagen', 'mercedes-benz': 'mercedes', 'mercedes benz': 'mercedes', merc: 'mercedes', 'alfa-romeo': 'alfa romeo', 'land-rover': 'land rover' };
@@ -61,7 +64,7 @@ function parseRequest(b = {}) {
   // cererile sunt publice: fără telefon, email sau linkuri (contactul se dă doar după ce alegi oferta)
   if (CONTACT_RE.test(details) || CONTACT_RE.test(part) || CONTACT_RE.test(model)) return { error: 'FARA_CONTACT_IN_CERERE' };
   return { v: { part, brand, brand_key: brandKey(brand), model, year, engine: String(b.engine || '').trim().slice(0, 60), vin, details,
-    county, city: String(b.city || '').trim().slice(0, 60), delivery: b.delivery !== false, hours } };
+    county, city: String(b.city || '').trim().slice(0, 60), delivery: b.delivery !== false, hours, kind: KINDS.includes(b.kind) ? b.kind : 'oricare' } };
 }
 
 function parseQuote(b = {}) {
@@ -119,16 +122,20 @@ router.get('/open', ah(async (req, res) => {
   const clean = (v, n) => String(v || '').replace(/[%_\\]/g, ' ').trim().slice(0, n);
   const q = clean(req.query.q, 60), brand = brandKey(clean(req.query.brand, 40)), county = clean(req.query.county, 40);
   const r = await db.query(
-    `SELECT r.id, r.part, r.brand, r.model, r.year, r.engine, CASE WHEN $1::int IS NULL THEN '' ELSE r.vin END AS vin, r.details, r.county, r.delivery, r.expires_at, r.created_at,
+    `SELECT r.id, r.part, r.brand, r.model, r.year, r.engine, CASE WHEN $1::int IS NULL THEN '' ELSE r.vin END AS vin, r.details, r.county, r.delivery, r.kind, r.expires_at, r.created_at,
+            mk.mark AS my_mark,
             (SELECT COUNT(*)::int FROM quotes x WHERE x.request_id = r.id AND x.status = 'sent') AS quotes,
             COALESCE(r.user_id = $1::int, FALSE) AS mine,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = mq.id) AS images,
             mq.id AS quote_id, mq.price, mq.currency, mq.state, mq.warranty_days, mq.shipping, mq.pickup, mq.note, mq.county AS quote_county, mq.status AS quote_status
-       FROM part_requests r LEFT JOIN quotes mq ON mq.request_id = r.id AND mq.dealer_id = $1::int
+       FROM part_requests r LEFT JOIN quotes mq ON mq.request_id = r.id AND mq.dealer_id = $1::int AND mq.status <> 'withdrawn'
+           LEFT JOIN request_marks mk ON mk.request_id = r.id AND mk.user_id = $1::int
       WHERE r.status = 'open' AND r.expires_at > NOW()
+        AND ($5 = 'all' OR $1::int IS NULL OR ($5 = 'new' AND mq.id IS NULL AND mk.mark IS DISTINCT FROM 'ignored' AND r.user_id <> $1::int)
+             OR ($5 = 'offered' AND mq.id IS NOT NULL) OR ($5 = 'later' AND mk.mark = 'later') OR ($5 = 'ignored' AND mk.mark = 'ignored'))
         AND ($2 = '' OR r.brand_key = $2) AND ($3 = '' OR r.county = $3)
         AND ($4 = '' OR (r.part || ' ' || r.brand || ' ' || r.model) ILIKE '%' || $4 || '%')
-      ORDER BY r.id DESC LIMIT 60`, [uid, brand, county, q]);
+      ORDER BY r.id DESC LIMIT 60`, [uid, brand, county, q, SEEN.includes(req.query.state) ? req.query.state : 'new']);
   res.set('Cache-Control', 'no-store').json({ requests: r.rows });
 }));
 
@@ -178,9 +185,9 @@ router.post('/', requireVerified, ah(async (req, res) => {
   if (!createAllow('u' + req.user.id)) return res.status(429).json({ error: 'PREA_MULTE_CERERI' });
   const v = p.v;
   const ins = await db.query(
-    `INSERT INTO part_requests(user_id, part, brand, brand_key, model, year, engine, vin, details, county, city, delivery, expires_at)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW() + make_interval(hours => $13)) RETURNING id, expires_at`,
-    [req.user.id, v.part, v.brand, v.brand_key, v.model, v.year, v.engine, v.vin, v.details, v.county, v.city, v.delivery, v.hours]);
+    `INSERT INTO part_requests(user_id, part, brand, brand_key, model, year, engine, vin, details, county, city, delivery, kind, expires_at)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14, NOW() + make_interval(hours => $13)) RETURNING id, expires_at`,
+    [req.user.id, v.part, v.brand, v.brand_key, v.model, v.year, v.engine, v.vin, v.details, v.county, v.city, v.delivery, v.hours, v.kind]);
   const id = ins.rows[0].id;
   res.status(201).json({ request: { id, expires_at: ins.rows[0].expires_at } });
   distribute(id, req.user.id, v).catch((e) => console.error('rfq distribute:', e.message));   // după răspuns: notificările nu încetinesc cumpărătorul
@@ -241,6 +248,29 @@ router.post('/:id(\\d+)/cancel', ah(async (req, res) => {
   const r = await db.query("UPDATE part_requests SET status = 'cancelled' WHERE id = $1 AND user_id = $2 AND status = 'open' RETURNING id", [Number(req.params.id), req.user.id]);
   if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
   await db.query("UPDATE quotes SET status = 'lost', updated_at = NOW() WHERE request_id = $1 AND status = 'sent'", [r.rows[0].id]);
+  res.json({ ok: true });
+}));
+
+/* cererea expirată sau anulată se poate redeschide încă 48 h; ofertele anulate odată cu ea revin */
+router.post('/:id(\\d+)/reactivate', ah(async (req, res) => {
+  if (!createAllow('re' + req.user.id)) return res.status(429).json({ error: 'PREA_MULTE_CERERI' });
+  const r = await db.query("UPDATE part_requests SET status = 'open', expires_at = NOW() + INTERVAL '48 hours' WHERE id = $1 AND user_id = $2 AND status IN ('expired','cancelled') AND awarded_quote_id IS NULL RETURNING id", [Number(req.params.id), req.user.id]);
+  if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  await db.query("UPDATE quotes SET status = 'sent', updated_at = NOW() WHERE request_id = $1 AND status = 'lost'", [r.rows[0].id]);
+  res.json({ ok: true });
+}));
+
+/* marcaj personal al ofertantului: „mai târziu” sau „nu mă interesează” (nu îl vede nimeni altcineva) */
+router.post('/:id(\\d+)/mark', ah(async (req, res) => {
+  const mark = String((req.body || {}).mark || '');
+  if (!MARKS.includes(mark)) return res.status(400).json({ error: 'DATE_INVALIDE' });
+  const r = (await db.query("SELECT user_id FROM part_requests WHERE id = $1 AND status = 'open'", [Number(req.params.id)])).rows[0];
+  if (!r || r.user_id === req.user.id) return res.status(404).json({ error: 'NEGASIT' });
+  await db.query('INSERT INTO request_marks(user_id, request_id, mark) VALUES($1,$2,$3) ON CONFLICT (user_id, request_id) DO UPDATE SET mark = $3, created_at = NOW()', [req.user.id, Number(req.params.id), mark]);
+  res.json({ ok: true, mark });
+}));
+router.delete('/:id(\\d+)/mark', ah(async (req, res) => {
+  await db.query('DELETE FROM request_marks WHERE user_id = $1 AND request_id = $2', [req.user.id, Number(req.params.id)]);
   res.json({ ok: true });
 }));
 
@@ -389,4 +419,4 @@ router.post('/quote/:qid(\\d+)/chat', ah(async (req, res) => {
   res.status(201).json({ message: { id: m.id, created_at: m.created_at, body, mine: true } });
 }));
 
-module.exports = { router, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey };
+module.exports = { KINDS, STATES, router, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey };
