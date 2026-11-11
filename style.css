@@ -1608,3 +1608,26 @@ button.adm-stat { cursor: pointer; }
 .rfq-qa-a::before { content: "R: "; color: #1b6b3f; font-weight: 800; }
 .rfq-qa-wait { color: var(--muted); font-size: 13px; }
 .rfq-qa-it .rfq-qform { margin-top: 8px; }
+
+/* chat: cine e vânzător / cumpărător + poza produsului */
+.role-b{display:inline-block;vertical-align:middle;margin-left:4px;padding:2px 8px;border-radius:10px;font-style:normal;font-size:11px;font-weight:700;line-height:1.3;letter-spacing:.2px}
+.role-b.seller{background:#e9d3a8;color:#4a3410}.role-b.buyer{background:#dbe9ff;color:#1c3f77}
+.cp-who b .role-b{background:rgba(255,255,255,.18);color:#fff}
+.cp-ad-img{flex:none;width:44px;height:44px;border-radius:8px;object-fit:cover;background:#eee;border:1px solid var(--border)}
+.cp-ad-img[hidden]{display:none}
+.cp-ad-m{flex:1;min-width:0;display:block;line-height:1.3}
+.cp-ad-m small{display:block;font-size:12px;color:#8f6d38;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cp-prod{flex:none;width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;border:1px solid #f0e8d6}
+.cp-ad-m .cp-ad-t{display:block}
+
+/* „← Înapoi” pe toate ferestrele, la orice dimensiune de ecran */
+.dlg-back{flex:none;float:left;width:40px;height:40px;display:inline-grid;place-items:center;margin:0 6px 0 0;padding:0;border:0;border-radius:50%;background:rgba(0,0,0,.06);color:var(--navy,#14110c);cursor:pointer}
+.dlg-back:hover{background:rgba(0,0,0,.12)}
+.dlg-back:focus-visible{outline:2px solid #b8935a;outline-offset:2px}
+.sell-top .dlg-back,.adm-head .dlg-back{float:none}
+.adm-head .dlg-back{background:rgba(255,255,255,.12);color:#fff}.adm-head .dlg-back:hover{background:rgba(255,255,255,.22)}
+.sell-top .dlg-back+.dialog-close{display:none}
+
+/* Cere oferte: expediere (AWB) */
+.rfq-ship{display:grid;gap:8px;margin:10px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:#fbf5e8}
+.rfq-ship select,.rfq-ship input{width:100%;height:44px;border:1px solid var(--border);border-radius:10px;padding:0 10px;font:inherit;font-size:16px;background:#fff}

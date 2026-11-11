@@ -782,7 +782,7 @@ function toast(text, fn) {
   t.textContent = "🔔 " + text; t.hidden = false; t.onclick = () => { t.hidden = true; if (fn) fn(); };
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
 }
-const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", review: "★" };
+const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", rfq_edit: "✎", rfq_ship: "📦", rfq_expired: "⌛", rfq_remind: "⏰", review: "★" };
 async function renderNotifs(box) {
   box.replaceChildren(note("Se încarcă…"));
   try {
@@ -1104,6 +1104,9 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => { if (live) { live.close(); live = null; } });
 window.addEventListener("pageshow", () => { if (me && !live && !liveStopped) startLive(); });
 
+const roleLabel = (r) => (r === "seller" ? "Vânzător" : "Cumpărător");
+function roleBadge(r) { const b = document.createElement("em"); b.className = "role-b " + (r === "seller" ? "seller" : "buyer"); b.textContent = roleLabel(r); return b; }
+function prodThumb(src, cls) { const im = document.createElement("img"); im.className = cls; im.alt = ""; im.loading = "lazy"; im.src = src; return im; }
 const sel = { on: false, keys: new Set() };
 const tkey = (t) => t.listing_id + ":" + t.other;
 function setSel(on) {
@@ -1130,11 +1133,12 @@ async function renderInbox() {
     const b = document.createElement("button"); b.type = "button"; b.className = "cp-row" + (t.unread ? " unread" : "") + (sel.keys.has(tkey(t)) ? " sel" : "");
     const mid = document.createElement("span"); mid.className = "cp-mid";
     const top = document.createElement("span"); top.className = "cp-top";
-    const nm = document.createElement("b"); nm.textContent = t.other_name;
+    const nm = document.createElement("b"); nm.textContent = t.other_name; nm.append(" ", roleBadge(t.seller_id === t.other ? "seller" : "buyer"));
     const tm = document.createElement("time"); tm.textContent = inboxTime(t.created_at); top.append(nm, tm);
     const ti = document.createElement("span"); ti.className = "cp-ti"; ti.textContent = t.title;
     const sm = document.createElement("small"); if (t.mine) sm.append(tickEl(tickState(t)), " "); sm.append(t.attach && !t.body ? (t.attach === "file" ? "📎 Fișier" : "📷 Poză") : t.body);
     mid.append(top, ti, sm); b.append(avatar(t.other_name, t.other), mid);
+    if (t.thumb) b.appendChild(prodThumb(t.thumb, "cp-prod"));
     if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; b.appendChild(d); }
     const chk = document.createElement("span"); chk.className = "cp-chk"; chk.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'; b.prepend(chk);
     let pressT = 0, longDone = false;
@@ -1158,7 +1162,7 @@ async function openInbox() {
 
 async function openChat(listingId, withId, title) {
   chat = { listingId, withId, sig: "", blocked: false, first: true };
-  $("chatTitle").textContent = title || "Anunț"; $("chatWith").textContent = "Conversație"; $("chatAv").textContent = "?"; $("chatPop").hidden = true; setPresence(null); fitChat(); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
+  $("chatTitle").textContent = title || "Anunț"; $("chatWith").textContent = "Conversație"; $("chatRoles").textContent = ""; $("chatAdImg").hidden = true; $("chatAv").textContent = "?"; $("chatPop").hidden = true; setPresence(null); fitChat(); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
   open("chatDialog"); fitChat(); autoGrow();
   await refreshChat();
   clearInterval(chatTimer); chatTimer = setInterval(() => { if (!document.hidden) refreshChat(); }, live ? 20000 : 8000);   // cu conexiune live, interogarea e doar plasă de siguranță
@@ -1169,7 +1173,9 @@ async function refreshChat() {
     const d = await api(`/api/messages/thread?listing=${c.listingId}&with=${c.withId}`);
     if (chat !== c) return;                       // între timp s-a închis sau s-a deschis alta
     c.first = false; c.blocked = d.blocked_by_me;
-    $("chatTitle").textContent = d.listing.title; $("chatWith").textContent = d.other.nickname + (c.blocked ? " · blocat" : ""); const av = avatar(d.other.nickname, d.other.id); $("chatAv").textContent = av.textContent; $("chatAv").style.background = av.style.background;
+    $("chatTitle").textContent = d.listing.title; $("chatWith").textContent = d.other.nickname + (c.blocked ? " · blocat" : ""); $("chatWith").append(" ", roleBadge(d.other_role));
+    $("chatRoles").textContent = `${d.other.nickname}: ${roleLabel(d.other_role).toLowerCase()} · Tu: ${roleLabel(d.my_role).toLowerCase()}`;
+    { const im = $("chatAdImg"); if (d.listing.thumb) { if (im.getAttribute("src") !== d.listing.thumb) im.src = d.listing.thumb; im.hidden = false; } else im.hidden = true; } const av = avatar(d.other.nickname, d.other.id); $("chatAv").textContent = av.textContent; $("chatAv").style.background = av.style.background;
     if (!$("chatPresence").classList.contains("typing")) setPresence(d.presence);
     $("chatBlock").textContent = c.blocked ? "Deblochează utilizatorul" : "Blochează utilizatorul";
     $("chatInput").disabled = $("chatSend").disabled = $("chatAttach").disabled = c.blocked;
@@ -1431,3 +1437,15 @@ function restoreDraft() {
 }
 const syncSell = () => { countTitle(); syncCatCard(); syncSeg(); };
 new MutationObserver(() => { if ($("sellDialog").open) { restoreDraft(); syncSell(); setTimeout(syncSell, 300); } }).observe($("sellDialog"), { attributes: true, attributeFilter: ["open"] });
+
+/* buton „← Înapoi” pe toate ferestrele (telefon, laptop, desktop, TV): apasă butonul de închidere existent al ferestrei */
+(() => {
+  const ARROW = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+  ["sellDialog", "searchDialog", "promoDialog", "authDialog", "settingsDialog", "detailDialog", "adminDialog", "admAd", "admForm", "profileDialog", "reviewDialog", "aboutDialog", "reportDialog", "dataDialog"].forEach((id) => {
+    const dlg = $(id); if (!dlg || dlg.querySelector(".dlg-back")) return;
+    const x = dlg.querySelector(".dialog-close, .adm-x, .as-x"), host = x ? x.parentElement : dlg;
+    const b = document.createElement("button"); b.type = "button"; b.className = "dlg-back"; b.setAttribute("aria-label", "Înapoi"); b.title = "Înapoi"; b.innerHTML = ARROW;
+    b.addEventListener("click", () => { if (x) x.click(); else dlg.close(); });
+    host.insertBefore(b, host === dlg && dlg.firstChild ? dlg.firstChild : host.firstChild);
+  });
+})();

@@ -30,6 +30,8 @@ test('cererea e publică: telefon, email, link refuzate; codurile OEM trec', () 
     assert.strictEqual(parseRequest({ ...okReq, details }).error, 'FARA_CONTACT_IN_CERERE', details);
   }
   assert.ok(parseRequest({ ...okReq, details: 'Cod OEM 1K0 941 005 A, culoare neagră' }).v);
+  for (const details of ['Dacia cod 8200123456', 'Renault 7700 100 123', 'Bosch 0 986 494 123', 'Mercedes A 204 540 12 17']) assert.ok(parseRequest({ ...okReq, details }).v, details);   // coduri OEM lungi, nu telefoane
+  for (const details of ['sună 07 22 12 34 56', 'tel +40 722 123 456', 'tel 0040722123456']) assert.strictEqual(parseRequest({ ...okReq, details }).error, 'FARA_CONTACT_IN_CERERE', details);
 });
 
 test('ofertă: preț obligatoriu, transport gol = de stabilit, 0 = gratuit, piesă nouă acceptată', () => {
@@ -38,6 +40,11 @@ test('ofertă: preț obligatoriu, transport gol = de stabilit, 0 = gratuit, pies
   assert.strictEqual(parseQuote({ price: 250 }).v.shipping, null);
   assert.strictEqual(parseQuote({ price: 250, shipping: 0 }).v.shipping, 0);
   assert.strictEqual(parseQuote({ price: 250, warranty_days: 1000 }).error, 'GARANTIE_INVALIDA');
+  assert.strictEqual(parseQuote({ price: 250 }).v.eta_days, null);
+  assert.strictEqual(parseQuote({ price: 250, eta_days: 0 }).v.eta_days, 0);
+  assert.strictEqual(parseQuote({ price: 250, eta_days: '3' }).v.eta_days, 3);
+  assert.strictEqual(parseQuote({ price: 250, eta_days: 61 }).error, 'TERMEN_INVALID');
+  assert.strictEqual(parseQuote({ price: 250, eta_days: 1.5 }).error, 'TERMEN_INVALID');
   assert.strictEqual(parseQuote({ price: 250, state: 'nimic' }).v.state, 'buna');
   assert.strictEqual(parseQuote({ price: 250, state: 'noua' }).v.state, 'noua');
 });
@@ -69,4 +76,22 @@ test('potrivire: liste goale = toate; altfel marca și județul trebuie acoperit
 test('brandKey: diacritice, majuscule, alias-uri', () => {
   assert.strictEqual(brandKey(' ŠKODA '), 'skoda');
   assert.strictEqual(brandKey('Land-Rover'), 'land rover');
+});
+
+test('cerere: cod OEM, combustibil, cutie, caroserie; valori necunoscute se ignoră', () => {
+  const v = parseRequest({ ...okReq, oem: ' 1k0  941 005 a ', fuel: 'motorina', gearbox: 'automata', body_type: 'break' }).v;
+  assert.strictEqual(v.oem, '1K0 941 005 A');
+  assert.strictEqual(v.fuel, 'motorina'); assert.strictEqual(v.gearbox, 'automata'); assert.strictEqual(v.body_type, 'break');
+  const w = parseRequest({ ...okReq, fuel: 'apa', gearbox: 'x', body_type: 'nava' }).v;
+  assert.strictEqual(w.fuel, ''); assert.strictEqual(w.gearbox, ''); assert.strictEqual(w.body_type, '');
+  assert.strictEqual(parseRequest({ ...okReq, oem: 'ab@x.ro' }).error, 'OEM_INVALID');
+  assert.strictEqual(parseRequest({ ...okReq }).v.oem, '');
+});
+
+test('ofertă: factură și mod de plată', () => {
+  const a = parseQuote({ price: 100 }).v;
+  assert.strictEqual(a.invoice, false); assert.strictEqual(a.payment, 'oricare');
+  const b = parseQuote({ price: 100, invoice: true, payment: 'ramburs' }).v;
+  assert.strictEqual(b.invoice, true); assert.strictEqual(b.payment, 'ramburs');
+  assert.strictEqual(parseQuote({ price: 100, payment: 'bitcoin' }).v.payment, 'oricare');
 });
