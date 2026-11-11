@@ -23,7 +23,7 @@ const quoteAllow = createThrottle(60, 60 * 60 * 1000);          // max 60 oferte
 const chatAllow = createThrottle(60, 60 * 60 * 1000);
 const dealerAllow = createThrottle(10, 60 * 60 * 1000);
 const photoAllow = createThrottle(40, 60 * 60 * 1000);          // max 40 poze / oră
-const MAX_PHOTOS = 4, PHOTO_QUOTA = 60 * 1024 * 1024;
+const MAX_PHOTOS = 6, PHOTO_QUOTA = 60 * 1024 * 1024;
 
 const GRACE_DAYS = 7;       // după termen, cumpărătorul mai poate alege încă 7 zile dacă a primit oferte
 const MAX_NOTIFY = 300;     // câți dezmembrători primesc notificare în aplicație per cerere
@@ -126,6 +126,7 @@ router.get('/open', ah(async (req, res) => {
             mk.mark AS my_mark,
             (SELECT COUNT(*)::int FROM quotes x WHERE x.request_id = r.id AND x.status = 'sent') AS quotes,
             COALESCE(r.user_id = $1::int, FALSE) AS mine,
+            (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.request_id = r.id) AS photos,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = mq.id) AS images,
             mq.id AS quote_id, mq.price, mq.currency, mq.state, mq.warranty_days, mq.shipping, mq.pickup, mq.note, mq.county AS quote_county, mq.status AS quote_status
        FROM part_requests r LEFT JOIN quotes mq ON mq.request_id = r.id AND mq.dealer_id = $1::int AND mq.status <> 'withdrawn'
@@ -137,6 +138,16 @@ router.get('/open', ah(async (req, res) => {
         AND ($4 = '' OR (r.part || ' ' || r.brand || ' ' || r.model) ILIKE '%' || $4 || '%')
       ORDER BY r.id DESC LIMIT 60`, [uid, brand, county, q, SEEN.includes(req.query.state) ? req.query.state : 'new']);
   res.set('Cache-Control', 'no-store').json({ requests: r.rows });
+}));
+
+/* pozele unei cereri: publice cât timp cererea e deschisă sau acordată (panoul se vede și fără cont); proprietarul le vede oricând */
+router.get('/photo/:id(\\d+)', ah(async (req, res) => {
+  const r = await db.query(
+    `SELECT i.data, i.thumb, i.ctype FROM quote_images i JOIN part_requests q ON q.id = i.request_id
+      WHERE i.id = $1 AND i.data IS NOT NULL AND (q.status IN ('open', 'awarded') OR q.user_id = $2::int)`, [Number(req.params.id), req.user ? req.user.id : null]);
+  if (!r.rowCount) return res.status(404).end();
+  res.set('Content-Type', r.rows[0].ctype || 'image/webp').set('Cache-Control', 'public, max-age=3600').set('X-Content-Type-Options', 'nosniff');
+  res.send(req.query.t ? r.rows[0].thumb : r.rows[0].data);
 }));
 
 router.use(requireAuth);
@@ -189,6 +200,8 @@ router.post('/', requireVerified, ah(async (req, res) => {
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14, NOW() + make_interval(hours => $13)) RETURNING id, expires_at`,
     [req.user.id, v.part, v.brand, v.brand_key, v.model, v.year, v.engine, v.vin, v.details, v.county, v.city, v.delivery, v.hours, v.kind]);
   const id = ins.rows[0].id;
+  const photoIds = Array.isArray((req.body || {}).image_ids) ? [...new Set(req.body.image_ids.map(toId).filter(Boolean))].slice(0, MAX_PHOTOS) : [];
+  if (photoIds.length) await attachRequestImages(id, req.user.id, photoIds);
   res.status(201).json({ request: { id, expires_at: ins.rows[0].expires_at } });
   distribute(id, req.user.id, v).catch((e) => console.error('rfq distribute:', e.message));   // după răspuns: notificările nu încetinesc cumpărătorul
 }));
@@ -219,7 +232,8 @@ router.get('/mine', ah(async (req, res) => {
   const r = await db.query(
     `SELECT r.id, r.part, r.brand, r.model, r.year, r.county, r.status, r.expires_at, r.created_at, (r.expires_at > NOW()) AS accepting,
             (SELECT COUNT(*)::int FROM quotes q WHERE q.request_id = r.id AND q.status IN ('sent','won','lost')) AS quotes,
-            (SELECT MIN(q.price + COALESCE(q.shipping,0)) FROM quotes q WHERE q.request_id = r.id AND q.status IN ('sent','won') AND q.currency = 'RON') AS best_ron
+            (SELECT MIN(q.price + COALESCE(q.shipping,0)) FROM quotes q WHERE q.request_id = r.id AND q.status IN ('sent','won') AND q.currency = 'RON') AS best_ron,
+            (SELECT i.thumb_url FROM quote_images i WHERE i.request_id = r.id ORDER BY i.position, i.id LIMIT 1) AS thumb
        FROM part_requests r WHERE r.user_id = $1 ORDER BY r.id DESC LIMIT 100`, [req.user.id]);
   res.set('Cache-Control', 'no-store').json({ requests: r.rows });
 }));
@@ -241,7 +255,8 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
        FROM quotes q JOIN users u ON u.id = q.dealer_id JOIN users uq ON uq.id = q.dealer_id LEFT JOIN dealers d ON d.user_id = q.dealer_id
       WHERE q.request_id = $1 AND q.status IN ('sent','won','lost')
       ORDER BY (q.status = 'won') DESC, (CASE WHEN q.currency = 'EUR' THEN 5 ELSE 1 END) * (q.price + COALESCE(q.shipping, 0)), q.id`, [r.id]);
-  res.set('Cache-Control', 'no-store').json({ request: r, quotes: q.rows });
+  const photos = (await db.query("SELECT id, url, thumb_url AS thumb FROM quote_images WHERE request_id = $1 ORDER BY position, id", [r.id])).rows;
+  res.set('Cache-Control', 'no-store').json({ request: r, quotes: q.rows, photos });
 }));
 
 router.post('/:id(\\d+)/cancel', ah(async (req, res) => {
@@ -304,6 +319,7 @@ router.get('/inbox', ah(async (req, res) => {
   const r = await db.query(
     `SELECT r.id, r.part, r.brand, r.model, r.year, r.engine, r.vin, r.details, r.county, r.city, r.delivery, r.status, r.expires_at, r.created_at,
             (r.expires_at > NOW() AND r.status = 'open') AS accepting,
+            (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.request_id = r.id) AS photos,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
             q.id AS quote_id, q.price, q.currency, q.state, q.warranty_days, q.shipping, q.pickup, q.note, q.status AS quote_status,
             CASE WHEN q.status = 'won' THEN u.nickname END AS buyer, CASE WHEN q.status = 'won' THEN r.user_id END AS buyer_id
@@ -344,6 +360,17 @@ router.delete('/:id(\\d+)/quotes', ah(async (req, res) => {
   res.json({ ok: r.rowCount > 0 });
 }));
 
+/* ---------- poze la cereri: se încarcă pe /image, apoi se atașează cererii la trimitere ---------- */
+async function attachRequestImages(rid, uid, ids) {
+  for (let i = 0; i < ids.length; i++) {
+    await db.query(
+      `UPDATE quote_images SET request_id = $1, position = $4,
+              url = CASE WHEN data IS NOT NULL THEN '/api/requests/photo/' || id ELSE url END,
+              thumb_url = CASE WHEN data IS NOT NULL THEN '/api/requests/photo/' || id || '?t=1' ELSE thumb_url END
+        WHERE id = $2 AND owner_id = $3 AND quote_id IS NULL AND request_id IS NULL`, [rid, ids[i], uid, i]);
+  }
+}
+
 /* ---------- poze la oferte ---------- */
 async function attachImages(qid, uid, ids) {
   const gone = await db.query('DELETE FROM quote_images WHERE quote_id = $1 AND owner_id = $2 AND NOT (id = ANY($3::int[])) RETURNING url, thumb_url', [qid, uid, ids]);
@@ -357,11 +384,11 @@ router.post('/image', imgs.raw, ah(async (req, res) => {
   if (!k) return res.status(400).json({ error: 'POZA_INVALIDA' });
   if (!photoAllow('u' + me)) return res.status(429).json({ error: 'RATE_LIMIT' });
   // curățenie: pozele încărcate dar neatașate nicio ofertă, de peste o zi
-  const old = await db.query("DELETE FROM quote_images WHERE owner_id = $1 AND quote_id IS NULL AND created_at < NOW() - INTERVAL '1 day' RETURNING url, thumb_url", [me]);
+  const old = await db.query("DELETE FROM quote_images WHERE owner_id = $1 AND quote_id IS NULL AND request_id IS NULL AND created_at < NOW() - INTERVAL '1 day' RETURNING url, thumb_url", [me]);
   for (const o of old.rows) imgs.removeStored(o.url, o.thumb_url).catch(() => {});
   const used = (await db.query('SELECT COALESCE(SUM(size),0)::bigint AS n FROM quote_images WHERE owner_id = $1', [me])).rows[0].n;
   if (Number(used) + buf.length > PHOTO_QUOTA) return res.status(413).json({ error: 'SPATIU_POZE_DEPASIT' });
-  const pending = (await db.query('SELECT COUNT(*)::int AS n FROM quote_images WHERE owner_id = $1 AND quote_id IS NULL', [me])).rows[0].n;
+  const pending = (await db.query('SELECT COUNT(*)::int AS n FROM quote_images WHERE owner_id = $1 AND quote_id IS NULL AND request_id IS NULL', [me])).rows[0].n;
   if (pending >= MAX_PHOTOS * 3) return res.status(409).json({ error: 'PREA_MULTE_POZE' });
   let p;
   try { p = await imgs.process(buf, k); } catch { return res.status(400).json({ error: 'POZA_INVALIDA' }); }

@@ -81,6 +81,32 @@
     return d.image;
   }
 
+  /* selector de poze (max `max`): încarcă imediat, apoi id-urile se trimit odată cu formularul */
+  function photoPicker(max, initial, msg) {
+    const photos = (initial || []).map((i) => ({ id: i.id, thumb: i.thumb || i.url })), strip = el("div", "rfq-photos"), file = el("input");
+    file.type = "file"; file.accept = "image/*"; file.multiple = true; file.hidden = true;
+    const label = `Adaugă poze (max ${max})`, add = el("button", "ghost rfq-addph", label); add.type = "button"; add.onclick = () => file.click();
+    const paint = () => {
+      strip.replaceChildren(...photos.map((p, i) => { const w = el("span", "rfq-ph"), g = el("img"), x = el("button", "rfq-phx", "×"); g.src = p.thumb; g.alt = ""; x.type = "button"; x.setAttribute("aria-label", "Scoate poza"); x.onclick = () => { photos.splice(i, 1); paint(); }; w.append(g, x); return w; }));
+      add.hidden = photos.length >= max;
+    };
+    file.onchange = async () => {
+      const list = [...file.files].slice(0, max - photos.length); file.value = ""; if (!list.length) return;
+      add.disabled = true; add.textContent = "Se încarcă pozele…";
+      for (const fl of list) { try { const im = await uploadPhoto(fl); photos.push({ id: im.id, thumb: im.thumb || im.url }); paint(); } catch (e) { msg.textContent = errText(e); msg.hidden = false; break; } }
+      add.disabled = false; add.textContent = label; paint();
+    };
+    paint();
+    return { nodes: [strip, add, file], ids: () => photos.map((p) => p.id), busy: () => add.disabled };
+  }
+  /* poze mici pe o cerere (se deschid mari la atingere) */
+  function photoStrip(list, alt) {
+    if (!list || !list.length) return null;
+    const strip = el("div", "rfq-photos sm");
+    list.forEach((im, i) => { const b = el("button", "rfq-ph"); b.type = "button"; b.setAttribute("aria-label", `Poza ${i + 1}`); const g = el("img"); g.src = im.thumb || im.url; g.alt = ""; g.loading = "lazy"; b.append(g); b.onclick = () => openLightbox(list.map((x) => x.url), i, alt); strip.append(b); });
+    return strip;
+  }
+
   /* ---------- cumpărător: lista cererilor ---------- */
   async function viewMine() {
     loading();
@@ -93,6 +119,7 @@
       const m = el("span", "rfq-mid"); m.append(el("b", "", title(r)), el("small", "muted", `${r.county} · ${r.status === "open" ? (r.accepting ? left(r.expires_at) : "se așteaptă alegerea ta") : when(r.created_at)}`));
       const right = el("span", "rfq-right"); const [t, c] = RS[r.status] || [r.status, ""]; right.append(el("em", "rfq-chip " + c, t));
       right.append(el("small", "", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}${r.best_ron ? " · de la " + money(r.best_ron, "RON") : ""}` : "nicio ofertă încă"));
+      if (r.thumb) { const th = el("span", "rfq-rth"), g = el("img"); g.src = r.thumb; g.alt = ""; g.loading = "lazy"; th.append(g); b.append(th); }
       b.append(m, right); b.onclick = () => go("detail", r.id); out.push(b);
     });
     body.replaceChildren(...out);
@@ -111,15 +138,17 @@
     const del = el("input"); del.type = "checkbox"; del.checked = true; const delL = el("label", "rfq-chk"); delL.append(del, " Accept și livrare prin curier");
     const kind = el("select"); Object.entries(KIND).forEach(([v, t]) => kind.append(new Option(t, v)));
     const msg = el("p", "err"); msg.hidden = true;
+    const pp = photoPicker(6, [], msg), phWrap = el("div"); phWrap.append(...pp.nodes);
     const go1 = el("button", "primary", "Trimite cererea"); go1.type = "button";
     go1.onclick = async () => {
+      if (pp.busy()) { msg.textContent = "Așteaptă să se termine încărcarea pozelor."; msg.hidden = false; return; }
       go1.disabled = true; msg.hidden = true;
-      try { const r = await api("/api/requests", "POST", { part: part.value, brand: brand.value, model: model.value, year: year.value, engine: engine.value, vin: vin.value, county: county.value, city: city.value, details: det.value, kind: kind.value, delivery: del.checked, hours: Number(hours.value) }); go("detail", r.request.id); }
+      try { const r = await api("/api/requests", "POST", { part: part.value, brand: brand.value, model: model.value, year: year.value, engine: engine.value, vin: vin.value, county: county.value, city: city.value, details: det.value, kind: kind.value, delivery: del.checked, hours: Number(hours.value), image_ids: pp.ids() }); go("detail", r.request.id); }
       catch (e) { msg.textContent = errText(e); msg.hidden = false; go1.disabled = false; }
     };
     body.replaceChildren(el("p", "muted rfq-intro", "Cererea e publică: oricine o poate vedea și poate oferi, iar dezmembrătorii potriviți sunt anunțați. Ofertanții nu văd ofertele celorlalți, iar contactul tău rămâne ascuns până alegi tu."),
       field("Ce piesă cauți?", part), field("Marca", brand), dl, field("Modelul", model), field("Anul fabricației", year), field("Motorizare", engine), field("Serie de șasiu (VIN)", vin),
-      field("Ce fel de piese accepți?", kind), field("Județ", county), field("Localitate", city), field("Detalii", det), delL, field("Cât timp primești oferte?", hours), msg, go1);
+      field("Ce fel de piese accepți?", kind), field("Județ", county), field("Localitate", city), field("Detalii", det), field("Poze (opțional)", phWrap, "Maximum 6 poze · JPG, PNG sau WebP. Ajută ofertanții să recunoască piesa."), delL, field("Cât timp primești oferte?", hours), msg, go1);
   }
 
   /* ---------- cumpărător: o cerere cu ofertele ei ---------- */
@@ -130,6 +159,7 @@
     const hd = el("section", "rfq-head"); hd.append(el("h3", "", title(r)));
     hd.append(el("p", "muted", [r.engine, r.vin && "VIN " + r.vin, r.county + (r.city ? ", " + r.city : ""), r.delivery ? "acceptă livrare" : "doar ridicare", KIND[r.kind]].filter(Boolean).join(" · ")));
     if (r.details) hd.append(el("p", "", r.details));
+    { const ph = photoStrip(d.photos, r.part); if (ph) hd.append(ph); }
     const [t, c] = RS[r.status] || [r.status, ""];
     const sp = el("p"); sp.append(el("em", "rfq-chip " + c, t));
     if (r.status === "open") sp.append(el("small", "muted", r.accepting ? ` ${left(r.expires_at)} ca să primești oferte` : " termenul pentru oferte a trecut; poți alege dintre cele primite"));
@@ -234,6 +264,7 @@
     [[r.brand + (r.model ? " " + r.model : "") + (r.year ? " · " + r.year : ""), "car"], [r.engine, ""], [r.county, "loc"], [r.kind !== "oricare" ? KIND[r.kind] : "", "kind"], [r.delivery ? "livrare" : "ridicare", ""]]
       .forEach(([t, c]) => { if (t) tags.append(el("span", "rfq-tag " + c, t)); });
     card.append(hd, bar, tags); if (r.details) card.append(el("p", "rfq-note", r.details));
+    { const ph = photoStrip(r.photos, r.part); if (ph) card.append(ph); }
     const foot = el("div", "rfq-ask-ft"); foot.append(el("small", "muted", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă primită" : "oferte primite"}` : "încă nicio ofertă"));
     if (r.my_mark === "later") foot.append(el("em", "rfq-chip wait", "Pentru mai târziu")); if (r.my_mark === "ignored") foot.append(el("em", "rfq-chip", "Ignorată"));
     if (r.quote_id) foot.append(el("em", "rfq-chip ok", "Ofertă trimisă"));
@@ -284,6 +315,7 @@
     const card = el("article", "rfq-quote"), top = el("div", "rfq-qtop");
     top.append(el("b", "", title(r)), el("small", "muted", [r.engine, r.vin && "VIN " + r.vin, r.county, r.delivery ? "livrare acceptată" : "doar ridicare"].filter(Boolean).join(" · ")));
     card.append(top); if (r.details) card.append(el("p", "rfq-note", r.details));
+    { const ph = photoStrip(r.photos, r.part); if (ph) card.append(ph); }
     const status = r.quote_status === "won" ? ["Ai câștigat", "sold"] : r.quote_status === "lost" ? ["Cerere închisă", "bad"] : r.quote_status === "sent" ? ["Ofertă trimisă", "ok"] : r.accepting !== false ? [left(r.expires_at), "wait"] : ["", ""];
     if (status[0]) card.append(el("em", "rfq-chip " + status[1], status[0]));
     if (pub) card.append(" ", el("small", "muted", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}` : "nicio ofertă încă"));
@@ -308,16 +340,16 @@
     const note = el("textarea"); note.rows = 2; note.maxLength = 600; note.value = r.note || ""; note.placeholder = "Cod piesă, kilometraj mașină donatoare, detalii. Fără telefon, email sau linkuri.";
     const photos = (r.images || []).map((i) => ({ id: i.id, thumb: i.thumb || i.url })), strip = el("div", "rfq-photos"), file = el("input");
     file.type = "file"; file.accept = "image/*"; file.multiple = true; file.hidden = true;
-    const add = el("button", "ghost rfq-addph", "Adaugă poze (max 4)"); add.type = "button"; add.onclick = () => file.click();
+    const add = el("button", "ghost rfq-addph", "Adaugă poze (max 6)"); add.type = "button"; add.onclick = () => file.click();
     const paint = () => {
       strip.replaceChildren(...photos.map((p, i) => { const w = el("span", "rfq-ph"), g = el("img"), x = el("button", "rfq-phx", "×"); g.src = p.thumb; g.alt = ""; x.type = "button"; x.setAttribute("aria-label", "Scoate poza"); x.onclick = () => { photos.splice(i, 1); paint(); }; w.append(g, x); return w; }));
-      add.hidden = photos.length >= 4;
+      add.hidden = photos.length >= 6;
     };
     file.onchange = async () => {
-      const list = [...file.files].slice(0, 4 - photos.length); file.value = ""; if (!list.length) return;
+      const list = [...file.files].slice(0, 6 - photos.length); file.value = ""; if (!list.length) return;
       add.disabled = true; add.textContent = "Se încarcă pozele…";
       for (const fl of list) { try { const im = await uploadPhoto(fl); photos.push({ id: im.id, thumb: im.thumb || im.url }); paint(); } catch (e) { msg.textContent = errText(e); msg.hidden = false; break; } }
-      add.disabled = false; add.textContent = "Adaugă poze (max 4)"; paint();
+      add.disabled = false; add.textContent = "Adaugă poze (max 6)"; paint();
     };
     const msg = el("p", "err"); msg.hidden = true; const ok = el("button", "primary", "Trimite oferta"); ok.type = "submit";
     f.append(field("Preț", price), field("Monedă", curS), field("Starea piesei", state), field("Garanție", war), field("Transport", ship), field("Județ", cty), pkL, field("Notă", note), strip, add, file, msg, ok); paint();

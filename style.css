@@ -1548,3 +1548,8 @@ button.adm-stat { cursor: pointer; }
 .rfq-row .rfq-mid { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .rfq-row .rfq-right { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; text-align: right; }
 .rfq-row .rfq-right small { white-space: nowrap; }
+
+/* ---- poze la cereri ---- */
+.rfq-photos.sm .rfq-ph { width: 64px; height: 64px; border-radius: 10px; }
+.rfq-row .rfq-rth { flex: none; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; background: var(--light); }
+.rfq-row .rfq-rth img { width: 100%; height: 100%; object-fit: cover; display: block; }
