@@ -28,3 +28,9 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      - key: AUTO_APPROVE_SCORE
+        sync: false
+      - key: AUTO_SPOT_PCT
+        sync: false
+      - key: BLOCKED_WORDS
+        sync: false

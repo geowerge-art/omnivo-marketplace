@@ -89,7 +89,9 @@ router.get('/moderation', requireAuth, requireRole('admin', 'moderator'), ah(asy
               (SELECT COUNT(*)::int FROM users WHERE ${d('created_at')} = g.day::date) AS new_users,
               (SELECT COUNT(*)::int FROM admin_activity WHERE action = 'listing_approved' AND ${d('created_at')} = g.day::date) AS approved,
               (SELECT COUNT(*)::int FROM admin_activity WHERE action IN ('listing_rejected','listing_blocked') AND ${d('created_at')} = g.day::date) AS rejected,
-              (SELECT COUNT(*)::int FROM reports WHERE ${d('created_at')} = g.day::date) AS reports
+              (SELECT COUNT(*)::int FROM reports WHERE ${d('created_at')} = g.day::date) AS reports,
+              (SELECT COUNT(*)::int FROM listings WHERE auto_approved AND ${d('created_at')} = g.day::date) AS auto_approved,
+              (SELECT COUNT(*)::int FROM guard_events WHERE ${d('created_at')} = g.day::date) AS guard_blocks
          FROM generate_series(${TODAY} - ($1::int * 2 - 1), ${TODAY}, '1 day') AS g(day) ORDER BY g.day`, [days]),
     db.query(`SELECT COUNT(*) FILTER (WHERE l.status = 'pending')::int AS pending,
                      EXTRACT(EPOCH FROM (NOW() - MIN(l.created_at) FILTER (WHERE l.status = 'pending'))) / 3600 AS oldest_h,

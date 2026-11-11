@@ -12,6 +12,7 @@ const { createThrottle } = require('./security');
 const { sendMail, MAIL_READY } = require('./mail');
 const notifyMod = require('./notify');
 const live = require('./live');
+const guard = require('./guard');
 const imgs = require('./images');
 const crypto = require('crypto');
 
@@ -193,6 +194,7 @@ router.post('/admin/dealers/:uid(\\d+)', requireRole('admin', 'moderator'), ah(a
 router.post('/', requireVerified, ah(async (req, res) => {
   const p = parseRequest(req.body);
   if (p.error) return res.status(400).json({ error: p.error });
+  if (await guard.gate(req, res, [p.v.part, p.v.details])) return;
   if (!createAllow('u' + req.user.id)) return res.status(429).json({ error: 'PREA_MULTE_CERERI' });
   const v = p.v;
   const ins = await db.query(
@@ -335,6 +337,7 @@ router.post('/:id(\\d+)/quotes', requireVerified, ah(async (req, res) => {
   const d = await myDealer(req.user.id);   // firma e opțională: persoanele fizice pot oferi și ele
   const p = parseQuote(req.body);
   if (p.error) return res.status(400).json({ error: p.error });
+  if (await guard.gate(req, res, [p.v.note])) return;
   if (!p.v.county && d) p.v.county = d.county;
   if (!p.v.county) return res.status(400).json({ error: 'JUDET_LIPSA' });
   if (!quoteAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });

@@ -16,6 +16,10 @@ module.exports = {
   REQUIRE_VERIFIED_EMAIL: env.REQUIRE_VERIFIED_EMAIL === 'true',
   // 'approved' = anunțurile apar imediat; 'pending' = intră în moderare (când ai panou de admin în frontend)
   NEW_LISTING_STATUS: env.NEW_LISTING_STATUS === 'pending' ? 'pending' : 'approved',
+  // aprobare automată pe scor de încredere (când moderarea e activă, NEW_LISTING_STATUS=pending)
+  AUTO_APPROVE_SCORE: env.AUTO_APPROVE === 'off' ? 101 : (Number(env.AUTO_APPROVE_SCORE) > 0 ? Number(env.AUTO_APPROVE_SCORE) : 60),
+  AUTO_SPOT_PCT: env.AUTO_SPOT_PCT !== undefined && env.AUTO_SPOT_PCT !== '' && Number.isFinite(Number(env.AUTO_SPOT_PCT)) ? Math.min(100, Math.max(0, Number(env.AUTO_SPOT_PCT))) : 5,
+  BLOCKED_WORDS: (env.BLOCKED_WORDS || '').split(',').map((w) => w.trim()).filter(Boolean),
   // promovarea anunțurilor: 'free' = gratuită (cu limite), 'off' = oprită (până adaugi plăți)
   PROMO_MODE: env.PROMO_MODE === 'off' ? 'off' : 'free',
   // facturare: BILLING=on => urcarea, promovarea și planurile se plătesc cu credite (prețurile sunt în pricing.js); altfel rămân gratuite

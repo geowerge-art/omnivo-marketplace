@@ -8,6 +8,7 @@ const plans = require('./plans');
 const billing = require('./billing');
 const studio = require('./studio');
 const notify = require('./notify');
+const guard = require('./guard');
 
 const router = express.Router();
 const adminRouter = express.Router();
@@ -138,21 +139,31 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   } });
 }));
 
+/* ---- verificare în timp ce scrii: avertisment în formular, fără penalizare ---- */
+const checkAllow = createThrottle(90, 60 * 1000);
+router.post('/check', requireAuth, ah(async (req, res) => {
+  if (req.user.role !== 'user' || !checkAllow('u' + req.user.id)) return res.json({ issues: [], review: false });
+  const b = req.body || {};
+  res.set('Cache-Control', 'no-store').json(guard.check([String(b.title || '').slice(0, 200), String(b.description || '').slice(0, 4000)]));
+}));
+
 /* ---- creare ---- */
 router.post('/', requireAuth, requireVerified, ah(async (req, res) => {
   if (!createAllow('u' + req.user.id + ':' + clientIp(req))) return res.status(429).json({ error: 'PREA_MULTE_ANUNTURI' });
   const p = await parse(req.body || {});
   if (p.error) return res.status(400).json({ error: p.error, field: p.field });
   const v = p.v;
+  if (await guard.gate(req, res, [v.title, v.description])) return;   // telefon / e-mail / link / cuvinte interzise
   if (req.user.role === 'user') {   // limita de anunțuri active a planului (adminii și moderatorii sunt scutiți)
     const act = await db.query("SELECT COUNT(*)::int n FROM listings WHERE user_id = $1 AND status IN ('pending','approved') AND expires_at > NOW()", [req.user.id]);
     if (act.rows[0].n >= plans.limitsOf(req.user).listings) return res.status(403).json({ error: 'LIMITA_ANUNTURI' });
   }
+  const dec = await guard.decide(req.user, v, v.title + '\n' + v.description);   // se publică direct sau merge la moderator, pe scor de încredere
   const r = await db.query(
-    `INSERT INTO listings(user_id, category_id, title, description, price, currency, negotiable, condition, seller_type, county, city, attributes, status, search_text, address)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, status`,
+    `INSERT INTO listings(user_id, category_id, title, description, price, currency, negotiable, condition, seller_type, county, city, attributes, status, search_text, address, auto_approved, trust_score, trust_note)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, status`,
     [req.user.id, v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
-     JSON.stringify(v.attributes), config.NEW_LISTING_STATUS, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), v.address]);
+     JSON.stringify(v.attributes), dec.status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), v.address, dec.auto, dec.score, dec.note]);
   if (r.rows[0].status === 'approved') notify.matchSaved(r.rows[0].id);   // anunț nou → căutări salvate care se potrivesc
   res.status(201).json({ listing: r.rows[0] });
 }));
@@ -172,11 +183,16 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
   if (p.error) return res.status(400).json({ error: p.error, field: p.field });
   const v = p.v;
   const changed = cur.title !== v.title || (cur.description || '') !== v.description || cur.category_id !== v.category_id || same(cur.attributes) !== same(v.attributes);
-  let status = cur.status;
-  if (!asStaff && changed && ['approved', 'sold', 'rejected'].includes(cur.status) && (config.NEW_LISTING_STATUS === 'pending' || cur.status === 'rejected')) {
-    const pend = await db.query("SELECT COUNT(*)::int AS n FROM listings WHERE user_id = $1 AND status = 'pending'", [cur.user_id]);
-    if (pend.rows[0].n >= 20) return res.status(429).json({ error: 'PREA_MULTE_ANUNTURI' });
-    status = 'pending';
+  if (!asStaff && changed && await guard.gate(req, res, [v.title, v.description])) return;
+  let status = cur.status, dec = null;
+  if (!asStaff && changed && ['approved', 'sold', 'rejected'].includes(cur.status)) {
+    // rejectat → revine mereu la moderator; publicat/vândut → rămâne dacă scorul de încredere permite și textul e curat
+    dec = cur.status === 'rejected' ? { status: 'pending', auto: false, score: null, note: 'În verificare: anunț corectat după respingere' } : await guard.decide(req.user, v, v.title + '\n' + v.description, { excludeId: cur.id });
+    if (dec.status === 'pending') {
+      const pend = await db.query("SELECT COUNT(*)::int AS n FROM listings WHERE user_id = $1 AND status = 'pending'", [cur.user_id]);
+      if (pend.rows[0].n >= 20) return res.status(429).json({ error: 'PREA_MULTE_ANUNTURI' });
+      status = 'pending';
+    }
   }
   const r = await db.query(
     `UPDATE listings SET category_id=$1, title=$2, description=$3, price=$4, currency=$5, negotiable=$6, condition=$7, seller_type=$8,
@@ -184,6 +200,7 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
       WHERE id=$14 AND user_id=$15 RETURNING id, status`,
     [v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
      JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, cur.user_id, v.address]);
+  if (dec && r.rowCount) db.query('UPDATE listings SET auto_approved = $2, trust_score = $3, trust_note = $4 WHERE id = $1', [cur.id, status !== 'pending' && dec.auto, dec.score, dec.note]).catch(() => {});
   if (asStaff) {
     const ch = [];
     if (cur.title !== v.title) ch.push('titlu'); if ((cur.description || '') !== v.description) ch.push('descriere');

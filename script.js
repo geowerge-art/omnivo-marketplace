@@ -1,6 +1,13 @@
 const $ = (id) => document.getElementById(id);
 const COUNTIES = ["Alba","Arad","Argeș","Bacău","Bihor","Bistrița-Năsăud","Botoșani","Brașov","Brăila","București","Buzău","Caraș-Severin","Călărași","Cluj","Constanța","Covasna","Dâmbovița","Dolj","Galați","Giurgiu","Gorj","Harghita","Hunedoara","Ialomița","Iași","Ilfov","Maramureș","Mehedinți","Mureș","Neamț","Olt","Prahova","Satu Mare","Sălaj","Sibiu","Suceava","Teleorman","Timiș","Tulcea","Vaslui","Vâlcea","Vrancea"];
 const ERR = {
+  TELEFON_IN_TEXT: "Nu pune numere de telefon în titlu sau descriere. Cumpărătorii te pot contacta prin mesaj, iar telefonul îl arăți din Cont › Date generale.",
+  EMAIL_IN_TEXT: "Nu pune adrese de e-mail în titlu sau descriere. Folosește mesajele din Omnivo.",
+  LINK_IN_TEXT: "Nu pune linkuri sau adrese de site în titlu sau descriere.",
+  MESAGERIE_IN_TEXT: "Nu trimite cumpărătorii pe WhatsApp, Telegram sau alte aplicații din textul anunțului. Folosește mesajele din Omnivo.",
+  CUVINTE_INTERZISE: "Textul conține cuvinte sau oferte interzise pe Omnivo. Dacă e o greșeală, scrie-ne la Contact.",
+  PUBLICARE_OPRITA: "Publicarea e oprită temporar din cauza unor încercări repetate de a încălca regulile de conținut. Încearcă din nou mai târziu sau scrie-ne la Contact.",
+  CONT_BLOCAT_AUTO: "Contul a fost blocat automat pentru încălcări repetate ale regulilor. Dacă crezi că e o greșeală, scrie-ne la Contact.",
   LIMITA_ANUNTURI: "Ai atins numărul maxim de anunțuri active al planului tău. Vezi Cont › Planul meu.", PLAN_INVALID: "Plan necunoscut.", DOAR_TITANIUM: "Exportul CSV e disponibil doar pe planul Titanium.",
   REINNOIRE_PREA_DEVREME: "Anunțul se poate reînnoi cu cel mult 7 zile înainte să expire.", REINNOIRE_INDISPONIBILA: "Doar anunțurile active se pot reînnoi.", REACTUALIZARE_PREA_DEVREME: "Poți reactualiza un anunț o singură dată la 24 de ore.", PROMOVARE_INDISPONIBILA: "Promovarea nu este disponibilă acum.", PREA_MULTE_PROMOVARI: "Poți avea cel mult 3 anunțuri promovate în același timp.", PROMOVARE_INVALIDA: "Alege 3, 7 sau 30 de zile.",
   INVALID_LOGIN: "Email, nickname sau parolă greșite.", LOGIN_RATE_LIMIT: "Prea multe încercări. Mai încearcă peste câteva minute.", CONT_BLOCAT: "Contul este blocat.",
@@ -395,6 +402,38 @@ function accGroup(title, items) {
   const d = document.createElement("section"); d.className = "acc-group"; const h = document.createElement("h3"); h.textContent = title;
   const l = document.createElement("div"); l.className = "acc-list"; l.append(...items); d.append(h, l); return d;
 }
+/* sus în cont: acțiunea principală „Adaugă anunț”, cât din plan folosești și, dacă există, creditele */
+function accHero() {
+  const card = document.createElement("section"); card.className = "acc-hero";
+  const top = document.createElement("div"); top.className = "ah-top";
+  const info = document.createElement("div"); info.className = "ah-info";
+  const lab = document.createElement("small"); lab.textContent = "Anunțuri active";
+  const cnt = document.createElement("b"); cnt.textContent = "–";
+  const meter = document.createElement("div"); meter.className = "st-meter"; const fill = document.createElement("i"); meter.append(fill); fill.style.width = "0%";
+  const sub = document.createElement("small"); sub.className = "ah-sub";
+  info.append(lab, cnt, meter, sub);
+  const add = document.createElement("button"); add.type = "button"; add.className = "primary ah-add"; add.textContent = "+ Adaugă anunț";
+  let full = false; add.addEventListener("click", () => (full ? accGo("plan") : openSell()));
+  top.append(info, add); card.append(top);
+  const chips = document.createElement("div"); chips.className = "ah-chips"; card.append(chips);
+  const chip = (txt, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "acc-chip"; b.textContent = txt; b.addEventListener("click", fn); chips.append(b); return b; };
+  loadPlan(true).then((p) => {
+    if (!p || !planCache) return;
+    const used = planCache.d.usage.listings, staff = me.role !== "user";
+    cnt.textContent = staff ? String(used) : `${used} / ${p.listings}`;
+    fill.style.width = staff ? "0%" : Math.min(100, Math.round((used / p.listings) * 100)) + "%";
+    sub.textContent = staff ? "Cont de administrare: fără limită de anunțuri." : used >= p.listings ? `Ai atins limita planului ${p.name}.` : `Mai poți publica ${p.listings - used} anunțuri pe planul ${p.name}.`;
+    if (!staff && used >= p.listings) { full = true; add.textContent = "Limită atinsă · vezi planurile"; }
+    chip(`Plan ${p.name}`, () => accGo("plan"));
+  }).catch(() => {});
+  if (window.loadBilling) loadBilling().then((b) => { if (b && b.enabled) chip(`${b.balance} ${b.balance === 1 ? "credit" : "credite"}`, () => accGo("wallet")); }).catch(() => {});
+  return card;
+}
+function ensureBell() {
+  let b = $("accBell");
+  if (!b) { b = document.createElement("button"); b.type = "button"; b.id = "accBell"; b.className = "acc-bell"; b.setAttribute("aria-label", "Notificări"); b.addEventListener("click", () => accGo("notif")); $("accBack").before(b); }
+  b.hidden = !notifCount; b.textContent = "🔔 " + notifCount;
+}
 function accMenu() {
   const isAdmin = me.role === "admin", isMod = me.role === "moderator";
   const tiles = document.createElement("nav"); tiles.className = "acc-tiles"; tiles.setAttribute("aria-label", "Scurtături cont");
@@ -412,7 +451,7 @@ function accMenu() {
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
   if (isMod || isAdmin) secs.appendChild(accGroup("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])]));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
-  const last = [tiles, secs, out];
+  const last = [accHero(), tiles, secs, out];
   if (isAdmin || isMod) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", () => openAdmin()); last.push(ad); }
   $("accMain").replaceChildren(...last);
   api("/api/listings/mine").then((r) => {
@@ -428,7 +467,7 @@ function accShow(view) {
   if (!me) return accClosePage();
   accCur = view || null;
   $("accName").textContent = me.nickname; $("accSub").textContent = me.name || me.email || ""; loadPlan().then((p) => { if (p && !$("accName").querySelector(".plan-badge")) { const b = document.createElement("span"); b.className = "plan-badge " + p.key; b.textContent = p.name; $("accName").append(" ", b); } }); $("accAv").textContent = (me.nickname || "?").charAt(0).toUpperCase();
-  $("accountPage").scrollTop = 0;
+  $("accountPage").scrollTop = 0; ensureBell();
   if (!accCur) return accMenu();
   const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", wallet: "Portofel și credite", modstudio: "Studio moderare", notif: "Notificări" };
   const h = document.createElement("h2"); h.className = "acc-title"; h.textContent = titles[accCur] || "";
@@ -677,6 +716,30 @@ $("lightbox")?.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") l
   lg?.addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) lbMove(dx < 0 ? 1 : -1); }); }
 
 /* ---- fereastra anunțului ---- */
+/* ---- avertisment anti-fraudă în chat (formule tipice; nu se blochează nimic) ---- */
+const CHAT_RISK = /(?:cod\w*\s+(?:din\s+|primit\s+|de\s+)?(?:prin\s+)?(?:sms|verificare|confirmare)|western\s*union|moneygram|(?:plata|plateste|trimite)\s+(?:in\s+)?avans|\bavans\b|link\s+(?:de\s+)?plata|plateste\s+taxa|curierul\s+plateste|\bhttps?:\/\/)/;
+const chatRisk = (t) => CHAT_RISK.test(fold(t));
+
+/* ---- avertisment în formularul de anunț: telefon / e-mail / link în text ---- */
+let sellCheckTimer = null, sellCheckSeq = 0;
+function sellCheck() {
+  clearTimeout(sellCheckTimer);
+  sellCheckTimer = setTimeout(async () => {
+    const w = $("sellWarn"), seq = ++sellCheckSeq; if (!w || !me) return;
+    const title = $("sellTitle").value, description = $("sellDesc").value;
+    if (!title.trim() && !description.trim()) { w.hidden = true; return; }
+    try {
+      const r = await api("/api/listings/check", "POST", { title, description });
+      if (seq !== sellCheckSeq) return;
+      const lines = r.issues.map((i) => ERR[i.code]).filter(Boolean);
+      if (!lines.length && r.review) lines.push("Anunțul poate fi verificat de un moderator înainte de publicare.");
+      w.replaceChildren(...lines.map((t) => { const p = document.createElement("span"); p.textContent = t; return p; }));
+      w.classList.toggle("soft", !r.issues.length); w.hidden = !lines.length;
+    } catch { w.hidden = true; }
+  }, 700);
+}
+["sellTitle", "sellDesc"].forEach((id) => $(id)?.addEventListener("input", sellCheck));
+
 /* ---- link propriu pentru fiecare anunț, distribuire ---- */
 const slug = (t) => fold(t).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 let detPushed = false, detSkipBack = false, detCur = null; const baseTitle = document.title;
@@ -701,14 +764,14 @@ $("detShare")?.addEventListener("click", async () => {
 
 /* ---- notificări ---- */
 let notifCount = 0, toastTimer = null;
-function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } }
+function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } if (accIsOpen()) ensureBell(); }
 async function loadNotifCount() { notifCount = 0; if (me) { try { notifCount = (await api("/api/notifications/count")).unread; } catch { /* fără notificări */ } } paintNotifCount(); }
 function toast(text, fn) {
   let t = $("toast"); if (!t) { t = document.createElement("button"); t.id = "toast"; t.type = "button"; t.className = "toast"; document.body.appendChild(t); }
   t.textContent = "🔔 " + text; t.hidden = false; t.onclick = () => { t.hidden = true; if (fn) fn(); };
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
 }
-const NK = { rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔" };
+const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔" };
 async function renderNotifs(box) {
   box.replaceChildren(note("Se încarcă…"));
   try {
@@ -1123,6 +1186,7 @@ async function refreshChat() {
           n1.textContent = m.file_name || "Fișier"; n2.textContent = fmtSize(m.file_size) + " · Descarcă"; nm.append(n1, n2); a.append(ic, nm); el.appendChild(a);
         }
         if (m.body) { const tx = document.createElement("span"); tx.className = "cv-txt"; tx.textContent = m.body; el.appendChild(tx); }
+        if (m.body && !m.mine && chatRisk(m.body)) { const w = document.createElement("span"); w.className = "cv-risk"; w.append("⚠ Atenție: nu trimite bani în avans și nu da coduri primite prin SMS. "); const a = document.createElement("a"); a.href = "/siguranta"; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Detalii"; w.append(a); el.appendChild(w); }
         t.textContent = hhmm(m.created_at); t.dateTime = m.created_at;
         if (m.mine) t.append(" ", tickEl(tickState(m)));
         el.appendChild(t); nodes.push(el);

@@ -18,6 +18,7 @@ const isAdmin = (req) => req.user.role === 'admin';
 const adminOnly = (req, res, next) => (isAdmin(req) ? next() : res.status(403).json({ error: 'DOAR_ADMIN' }));
 const plans = require('./plans');
 const notify = require('./notify');
+const guard = require('./guard');
 const clip = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const num = (v, d, max) => Math.min(max, Math.max(1, Math.floor(Number(v)) || d));
 const offset = (v) => Math.min(100000, Math.max(0, Math.floor(Number(v)) || 0));
@@ -72,7 +73,7 @@ router.get('/ads', ah(async (req, res) => {
     where.push(`(l.title ILIKE $${vals.length - 1} OR u.nickname ILIKE $${vals.length - 1} OR u.email ILIKE $${vals.length - 1} OR l.id::text = $${vals.length})`);
   }
   const r = await db.query(
-    `SELECT l.id, l.title, l.price, l.currency, l.status, l.county, l.city, l.condition, l.views, l.created_at, l.mod_note, l.promoted_until, c.name AS category, u.id AS uid, u.nickname, u.email,
+    `SELECT l.id, l.title, l.price, l.currency, l.status, l.county, l.city, l.condition, l.views, l.created_at, l.mod_note, l.trust_note, l.trust_score, l.auto_approved, l.promoted_until, c.name AS category, u.id AS uid, u.nickname, u.email,
             (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb,
             (SELECT COUNT(*)::int FROM reports r WHERE r.listing_id = l.id AND r.status = 'open') AS reports
        FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN users u ON u.id = l.user_id
@@ -118,7 +119,7 @@ router.post('/ads/:id(\\d+)/promote', ah(async (req, res) => {
 /* Tot ce trebuie ca să judeci un anunț: poze, câmpuri, vânzător, raportări, istoric. */
 router.get('/ads/:id(\\d+)', ah(async (req, res) => {
   const r = await db.query(
-    `SELECT l.id, l.title, l.description, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.address, l.status, l.mod_note, l.views,
+    `SELECT l.id, l.title, l.description, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.address, l.status, l.mod_note, l.trust_note, l.trust_score, l.auto_approved, l.views,
             l.created_at, l.updated_at, l.expires_at, l.attributes, l.promoted_until, l.category_id, l.seller_type,
             c.name AS category, p.name AS parent_category,
             u.id AS uid, u.nickname, u.name AS uname, u.email, u.phone, u.status AS ustatus, u.role AS urole, u.created_at AS ucreated, u.email_verified,
@@ -325,7 +326,10 @@ publicRouter.post('/', requireDb, requireAuth, ah(async (req, res) => {
   if (!l) return res.status(404).json({ error: 'NEGASIT' });
   if (l.user_id === req.user.id) return res.status(400).json({ error: 'REPORT_PROPRIU' });
   const dup = await db.query("SELECT 1 FROM reports WHERE listing_id = $1 AND reporter_id = $2 AND status = 'open'", [id, req.user.id]);
-  if (!dup.rowCount) await db.query('INSERT INTO reports(listing_id, reporter_id, reason, details) VALUES($1,$2,$3,$4)', [id, req.user.id, reason, clip((req.body || {}).details, 500)]);
+  if (!dup.rowCount) {
+    await db.query('INSERT INTO reports(listing_id, reporter_id, reason, details) VALUES($1,$2,$3,$4)', [id, req.user.id, reason, clip((req.body || {}).details, 500)]);
+    guard.hideIfReported(id, notify.notify).catch(() => {});   // 2 raportări într-o zi → anunțul se ascunde până îl verifică un moderator
+  }
   res.status(201).json({ ok: true });
 }));
 

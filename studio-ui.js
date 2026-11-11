@@ -116,7 +116,7 @@
   /* ---------- Studio moderare ---------- */
   window.renderModStudio = function (box) {
     let days = 28, metric = "new_listings", data = null;
-    const METRICS = [["new_listings", "Anunțuri noi"], ["approved", "Aprobări"], ["rejected", "Respingeri și blocări"], ["reports", "Raportări noi"], ["new_users", "Utilizatori noi"]];
+    const METRICS = [["new_listings", "Anunțuri noi"], ["approved", "Aprobări"], ["rejected", "Respingeri și blocări"], ["reports", "Raportări noi"], ["new_users", "Utilizatori noi"], ["auto_approved", "Aprobate automat"], ["guard_blocks", "Oprite de filtru"]];
     async function load() { loading(box); try { data = await api(`/api/studio/moderation?days=${days}`); draw(); } catch (e) { fail(box, e); } }
     function draw() {
       const rows = data.series.slice(-days), prev = data.series.slice(0, data.series.length - days), q = data.queue, out = [];

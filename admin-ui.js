@@ -126,6 +126,7 @@
     [F("Categorie", [l.parent_category, l.category].filter(Boolean).join(" › ")), F("Stare", l.condition === "nou" ? "Nou" : l.condition ? "Folosit" : ""), F("Locație", [l.city, l.county].filter(Boolean).join(", ")),
       F("Vizualizări", l.views), F("Publicat", fmtD(l.created_at)), F("Expiră", l.expires_at ? fmtD(l.expires_at) : ""), ...l.attrs.map((a) => F(a.label, a.value))].filter(Boolean).forEach((x) => facts.append(x));
     right.append(facts);
+    if (l.trust_note) { const n = el("div", "adm-box"); n.append(el("h4", "", "Filtru automat"), el("p", "", l.trust_note)); right.append(n); }
     if (l.mod_note) { const n = el("div", "adm-box note"); n.append(el("h4", "", "Motiv moderare"), el("p", "", l.mod_note)); right.append(n); }
     if (l.description) { const b = el("div", "adm-box"); b.append(el("h4", "", "Descriere"), el("p", "", l.description)); right.append(b); }
 
@@ -192,7 +193,7 @@
     let cb = null;
     if (st.selMode) { cb = el("input", "adm-pick"); cb.type = "checkbox"; cb.checked = st.sel.has(a.id); cb.onchange = () => { cb.checked ? st.sel.add(a.id) : st.sel.delete(a.id); st.updateBulk(); }; }
     const it = item({ lead: thumb(a.thumb), title: a.title, tag: pill(a.status), price: price(a),
-      meta: [`${a.category}${a.county ? " · " + a.county : ""}`, `@${a.nickname || "—"} · ${fmt(a.created_at)}${a.views ? " · 👁 " + a.views : ""}`, a.mod_note ? `Motiv: ${a.mod_note}` : ""],
+      meta: [`${a.category}${a.county ? " · " + a.county : ""}`, `@${a.nickname || "—"} · ${fmt(a.created_at)}${a.views ? " · 👁 " + a.views : ""}`, a.mod_note ? `Motiv: ${a.mod_note}` : "", a.trust_note ? `⚙ ${a.trust_note}` : ""],
       flags: [a.reports ? `⚑ ${a.reports} raportări deschise` : ""], acts: st.selMode ? [] : quick, onOpen: () => (cb ? cb.click() : openReview(a.id)) });
     if (cb) it.prepend(cb);
     return it;
