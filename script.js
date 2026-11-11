@@ -22,7 +22,7 @@ let chat = null, chatTimer = null, unreadTimer = null, unread = 0;
 async function api(url, method = "GET", body) {
   const r = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   let d = {}; try { d = await r.json(); } catch { /* răspuns fără JSON */ }
-  if (!r.ok) throw Object.assign(new Error(d.error || "EROARE"), { code: d.error, field: d.field, reason: d.reason, status: r.status });
+  if (!r.ok) throw Object.assign(new Error(d.error || "EROARE"), { code: d.error, field: d.field, reason: d.reason, status: r.status, price: d.price, hours: d.hours });
   return d;
 }
 const PW = { TOO_SHORT: "Parola trebuie să aibă minim 8 caractere.", TOO_LONG: "Parola e prea lungă (maximum 72 de caractere).", COMMON: "Parola e prea comună. Alege alta.", ONLY_DIGITS: "Parola nu poate fi doar cifre. Adaugă litere sau fă-o mai lungă (12+).", REPEATED: "Parola nu poate fi același caracter repetat.", CONTAINS_EMAIL: "Parola nu trebuie să conțină începutul adresei de email.", CONTAINS_NICKNAME: "Parola nu trebuie să conțină nickname-ul." };
@@ -344,7 +344,17 @@ function listingActs(l, ctx = {}) {
   if (l.status === "approved") A("promo", l.promoted ? "Prelungește promovarea" : "Promovează", async () => { leaveDetail(); openPromo(l); }, { main: 1, short: l.promoted ? "Prelungește" : "" });
   if (l.status === "approved") {
     if (ex.k) A("renew", "Reînnoiește (30 zile)", async () => { const r = await api(`/api/listings/${l.id}/renew`, "POST"); showMessage("Reînnoit", `Anunțul este valabil până pe ${dLong(r.expires_at)}.`); after(); }, { main: 1, short: "Reînnoiește" });
-    else A("bump", "Urcă în listă", async () => { await api(`/api/listings/${l.id}/bump`, "POST"); showMessage("Urcat în listă", "Anunțul a urcat în capul listei."); after(); }, { main: 1 });
+    else A("bump", "Urcă în listă", async () => {
+      let paid = 0;
+      try { await api(`/api/listings/${l.id}/bump`, "POST"); }
+      catch (e) {   // e.price vine de la server doar când urcarea mai deasă costă credite
+        if (e.code !== "REACTUALIZARE_PREA_DEVREME" || !e.price) throw e;
+        if (!confirm(`Ai urcat anunțul de curând. Îl urci din nou acum pentru ${e.price} lei din credite?`)) return;
+        await api(`/api/listings/${l.id}/bump`, "POST", { pay: true }); paid = e.price;
+      }
+      if (window.loadBilling) loadBilling(true).catch(() => {});
+      showMessage("Urcat în listă", paid ? `Anunțul a urcat în capul listei (${paid} credite).` : "Anunțul a urcat în capul listei."); after();
+    }, { main: 1 });
   }
   if (l.status === "sold") A("resume", "Repune la vânzare", async () => { await api(`/api/listings/${l.id}/status`, "PATCH", { status: "approved" }); after(); }, { main: 1 });
   if (l.status !== "blocked") A("edit", "Editează", async () => { const { listing } = await api("/api/listings/" + l.id); leaveDetail(); openEdit(listing); }, { main: l.status === "rejected" });
@@ -397,7 +407,7 @@ function accMenu() {
     accGroup("Anunțurile tale", [...status, accItem("Studio · statistici", () => accGo("studio"))]),
     accGroup("Cumpăr", [accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
     accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN"), accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN")]),
-    accGroup("Cont", [accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
+    accGroup("Cont", [accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag"), accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
   if (isMod || isAdmin) secs.appendChild(accGroup("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])]));
@@ -410,6 +420,7 @@ function accMenu() {
     for (const k of Object.keys(c)) { const em = $("accC_" + k); if (!em) continue; const it = em.closest(".acc-item"); it.hidden = !c[k] && !["approved", "pending", "sold"].includes(k); em.textContent = c[k] || ""; em.hidden = !c[k]; }
     const t = $("accTileMine"); if (t) t.textContent = c.approved;
   }).catch(() => {});
+  if (window.loadBilling) loadBilling().then((b) => { const c = $("accCredTag"); if (c && b.enabled) { c.textContent = b.balance + " cr."; c.hidden = false; } }).catch(() => {});
   loadPlan().then((p) => { const c = $("accPlanTag"); if (c && p) { c.textContent = p.name; c.hidden = false; } });
   api("/api/saved-searches").then((r) => { const t = $("accTileSaved"); if (t) t.textContent = r.searches.length; }).catch(() => {});
 }
@@ -419,12 +430,12 @@ function accShow(view) {
   $("accName").textContent = me.nickname; $("accSub").textContent = me.name || me.email || ""; loadPlan().then((p) => { if (p && !$("accName").querySelector(".plan-badge")) { const b = document.createElement("span"); b.className = "plan-badge " + p.key; b.textContent = p.name; $("accName").append(" ", b); } }); $("accAv").textContent = (me.nickname || "?").charAt(0).toUpperCase();
   $("accountPage").scrollTop = 0;
   if (!accCur) return accMenu();
-  const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", modstudio: "Studio moderare", notif: "Notificări" };
+  const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", wallet: "Portofel și credite", modstudio: "Studio moderare", notif: "Notificări" };
   const h = document.createElement("h2"); h.className = "acc-title"; h.textContent = titles[accCur] || "";
   const body = document.createElement("div"); body.id = "accBody"; body.className = "acc-body";
   $("accMain").replaceChildren(h, body);
   accTab = accCur === "favs" ? "favs" : "mine";
-  if (accCur === "saved") renderSaved(body); else if (accCur === "stats" || accCur === "studio") window.renderStudio(body); else if (accCur === "plan") window.renderPlan(body); else if (accCur === "modstudio") window.renderModStudio(body); else if (accCur === "notif") renderNotifs(body); else renderAcc();
+  if (accCur === "saved") renderSaved(body); else if (accCur === "stats" || accCur === "studio") window.renderStudio(body); else if (accCur === "wallet") window.renderWallet(body); else if (accCur === "plan") window.renderPlan(body); else if (accCur === "modstudio") window.renderModStudio(body); else if (accCur === "notif") renderNotifs(body); else renderAcc();
 }
 async function renderAcc() {
   const box = $("accBody"); if (!box) return; box.replaceChildren(note("Se încarcă…"));
@@ -518,12 +529,18 @@ function openPromo(l) {
     b.addEventListener("click", async () => {
       b.disabled = true;
       try { await api(`/api/listings/${l.id}/promote`, "POST", { days: d }); $("promoDialog").close(); showMessage("Promovat", `Anunțul este promovat ${t}.`); renderAcc(); loadListings(); }
-      catch (err) { $("promoDialog").close(); showMessage("Eroare", errText(err)); }
+      catch (err) { $("promoDialog").close(); showMessage("Eroare", errText(err)); if (err.code === "CREDITE_INSUFICIENTE" && confirm("Deschid Portofelul ca să încarci credite?")) { openAccount(); accGo("wallet"); } }
       b.disabled = false;
     });
     box.appendChild(b);
   });
   open("promoDialog");
+  if (window.loadBilling) loadBilling().then((d) => {   // cu BILLING=on se arată prețul pe fiecare buton și soldul
+    if (!d.enabled) return;
+    const byDays = Object.fromEntries(d.pricing.promo.map((p) => [p.days, p.price]));
+    [...box.children].forEach((b, i) => { const dd = [3, 7, 30][i]; if (byDays[dd] != null) b.textContent += ` · ${byDays[dd]} lei`; });
+    $("promoText").textContent += ` Ai ${d.balance} credite (1 credit = 1 leu).`;
+  }).catch(() => {});
 }
 $("promoCancel")?.addEventListener("click", () => $("promoDialog").close());
 function mineRow(l, box) {

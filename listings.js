@@ -5,6 +5,7 @@ const { ah, requireDb } = require('./common');
 const { requireAuth, requireRole, requireVerified } = require('./authmw');
 const { createThrottle, clientIp } = require('./security');
 const plans = require('./plans');
+const billing = require('./billing');
 const studio = require('./studio');
 const notify = require('./notify');
 
@@ -208,14 +209,25 @@ router.patch('/:id(\\d+)/status', requireAuth, ah(async (req, res) => {
   res.json({ listing: r.rows[0] });
 }));
 
-/* ---- reactualizare (UP): o dată la 24 de ore, aduce anunțul sus ---- */
+/* ---- urcare în listă (UP): gratuită o dată la câteva ore; mai des, costă credite (doar dacă BILLING=on și clientul a confirmat cu pay:true) ---- */
 router.post('/:id(\\d+)/bump', requireAuth, ah(async (req, res) => {
+  const hours = billing.freeBumpHours();
   const r = await db.query(
-    "UPDATE listings SET bumped_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'approved' AND COALESCE(bumped_at, 'epoch'::timestamptz) < NOW() - INTERVAL '24 hours' RETURNING id, bumped_at", [req.params.id, req.user.id]);
-  if (r.rowCount) return res.json({ ok: true, bumped_at: r.rows[0].bumped_at });
-  const ex = await db.query("SELECT status FROM listings WHERE id = $1 AND user_id = $2", [req.params.id, req.user.id]);
-  if (!ex.rowCount) return res.status(404).json({ error: 'NEGASIT' });
-  res.status(429).json({ error: 'REACTUALIZARE_PREA_DEVREME' });
+    "UPDATE listings SET bumped_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'approved' AND COALESCE(bumped_at, 'epoch'::timestamptz) < NOW() - ($3 || ' hours')::interval RETURNING id, bumped_at", [req.params.id, req.user.id, String(hours)]);
+  if (r.rowCount) return res.json({ ok: true, bumped_at: r.rows[0].bumped_at, paid: 0 });
+  const ex = (await db.query("SELECT title, status FROM listings WHERE id = $1 AND user_id = $2", [req.params.id, req.user.id])).rows[0];
+  if (!ex) return res.status(404).json({ error: 'NEGASIT' });
+  const price = billing.enabled() && ex.status === 'approved' ? billing.PRICING.bump.price : 0;
+  if (!price) return res.status(429).json({ error: 'REACTUALIZARE_PREA_DEVREME', hours });
+  if ((req.body || {}).pay !== true) return res.status(429).json({ error: 'REACTUALIZARE_PREA_DEVREME', hours, price });   // clientul întreabă omul înainte să scadă credite
+  const out = await billing.withTx(async (c) => {
+    const bal = await billing.spend(c, req.user.id, price, 'bump', Number(req.params.id), 'Urcare în listă: ' + ex.title);
+    if (bal === null) return { err: 'CREDITE_INSUFICIENTE' };
+    await c.query("UPDATE listings SET bumped_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'approved'", [req.params.id, req.user.id]);
+    return { balance: bal };
+  });
+  if (out.err) return res.status(402).json({ error: out.err });
+  res.json({ ok: true, paid: price, balance: out.balance });
 }));
 
 /* ---- reînnoire: încă 30 de zile; se poate cu cel mult 7 zile înainte de expirare sau după ce a expirat ---- */
@@ -238,9 +250,17 @@ router.post('/:id(\\d+)/promote', requireAuth, ah(async (req, res) => {
   if (!own.rowCount) return res.status(404).json({ error: 'NEGASIT' });
   const active = await db.query("SELECT COUNT(*)::int n FROM listings WHERE user_id = $1 AND id <> $2 AND promoted_until > NOW()", [req.user.id, req.params.id]);
   if (active.rows[0].n >= plans.limitsOf(req.user).promos) return res.status(409).json({ error: 'PREA_MULTE_PROMOVARI' });
-  const r = await db.query(
-    "UPDATE listings SET promoted_until = GREATEST(COALESCE(promoted_until, NOW()), NOW()) + ($1 || ' days')::interval, bumped_at = NOW() WHERE id = $2 RETURNING promoted_until", [String(days), req.params.id]);
-  res.json({ ok: true, promoted_until: r.rows[0].promoted_until });
+  const price = billing.enabled() ? billing.PRICING.promo[days] : 0;
+  const sql = "UPDATE listings SET promoted_until = GREATEST(COALESCE(promoted_until, NOW()), NOW()) + ($1 || ' days')::interval, bumped_at = NOW() WHERE id = $2 RETURNING promoted_until";
+  if (!price) { const r = await db.query(sql, [String(days), req.params.id]); return res.json({ ok: true, promoted_until: r.rows[0].promoted_until, paid: 0 }); }
+  const out = await billing.withTx(async (c) => {
+    const bal = await billing.spend(c, req.user.id, price, 'promo', Number(req.params.id), `Promovare ${days} zile`);
+    if (bal === null) return { err: 'CREDITE_INSUFICIENTE' };
+    const r = await c.query(sql, [String(days), req.params.id]);
+    return { balance: bal, promoted_until: r.rows[0].promoted_until };
+  });
+  if (out.err) return res.status(402).json({ error: out.err });
+  res.json({ ok: true, paid: price, balance: out.balance, promoted_until: out.promoted_until });
 }));
 
 router.delete('/:id(\\d+)', requireAuth, ah(async (req, res) => {

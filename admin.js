@@ -7,6 +7,7 @@ const { ah, requireDb } = require('./common');
 const { requireAuth, requireRole } = require('./authmw');
 const { createThrottle } = require('./security');
 const { sendMail, MAIL_READY } = require('./mail');
+const billing = require('./billing');
 
 const router = express.Router();
 const publicRouter = express.Router();
@@ -188,7 +189,7 @@ router.get('/users', ah(async (req, res) => {
   if (q) { vals.push(like(q), q.replace(/\D/g, '') || '-'); where.push(`(u.name ILIKE $${vals.length - 1} OR u.nickname ILIKE $${vals.length - 1} OR u.email ILIKE $${vals.length - 1} OR u.id::text = $${vals.length})`); }
   const r = await db.query(
     `SELECT u.id, u.name, u.nickname, u.email, u.phone, u.role, u.status, u.email_verified, u.created_at, u.block_reason, u.blocked_until,
-            CASE WHEN u.plan_until IS NULL OR u.plan_until > NOW() THEN u.plan ELSE 'basic' END AS plan, u.plan_until,
+            CASE WHEN u.plan_until IS NULL OR u.plan_until > NOW() THEN u.plan ELSE 'basic' END AS plan, u.plan_until, u.credits,
             (SELECT COUNT(*)::int FROM listings l WHERE l.user_id = u.id AND l.status <> 'deleted') AS ads,
             (SELECT COUNT(*)::int FROM reports r JOIN listings l ON l.id = r.listing_id WHERE l.user_id = u.id AND r.status = 'open') AS reported
        FROM users u WHERE ${where.join(' AND ')} ORDER BY u.created_at DESC LIMIT ${num(req.query.limit, 20, 50)} OFFSET ${offset(req.query.offset)}`, vals);
@@ -235,6 +236,17 @@ router.patch('/users/:id(\\d+)/plan', adminOnly, ah(async (req, res) => {
   if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
   await log(req, 'user_plan', 'user', uid, plan + (until ? ` până la ${until.toISOString().slice(0, 10)}` : ' (fără expirare)'));
   res.json({ ok: true });
+}));
+
+/* Dă sau scade credite (doar admin): ex. după o plată prin transfer sau o compensație. */
+router.post('/users/:id(\\d+)/credits', adminOnly, ah(async (req, res) => {
+  const uid = Number(req.params.id), body = req.body || {}, amount = Math.trunc(Number(body.amount)), note = clip(body.note, 150);
+  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 100000) return res.status(400).json({ error: 'CREDITE_INVALID' });
+  if (!(await db.query('SELECT 1 FROM users WHERE id = $1', [uid])).rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  const bal = await billing.adjust(uid, amount, 'admin', note || 'Ajustare de către echipă');
+  if (bal === null) return res.status(409).json({ error: 'CREDITE_INSUFICIENTE' });
+  await log(req, 'credits_adjust', 'user', uid, `${amount > 0 ? '+' : ''}${amount} credite${note ? ': ' + note : ''}`);
+  res.json({ ok: true, balance: bal });
 }));
 
 router.patch('/users/:id(\\d+)/role', adminOnly, ah(async (req, res) => {

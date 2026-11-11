@@ -18,6 +18,10 @@ module.exports = {
   NEW_LISTING_STATUS: env.NEW_LISTING_STATUS === 'pending' ? 'pending' : 'approved',
   // promovarea anunțurilor: 'free' = gratuită (cu limite), 'off' = oprită (până adaugi plăți)
   PROMO_MODE: env.PROMO_MODE === 'off' ? 'off' : 'free',
+  // facturare: BILLING=on => urcarea, promovarea și planurile se plătesc cu credite (prețurile sunt în pricing.js); altfel rămân gratuite
+  BILLING: env.BILLING === 'on',
+  STRIPE_SECRET_KEY: (env.STRIPE_SECRET_KEY || '').trim(),
+  STRIPE_WEBHOOK_SECRET: (env.STRIPE_WEBHOOK_SECRET || '').trim(),
   // date afișate în paginile legale și de contact (completează-le în variabilele de mediu)
   SUPPORT_EMAIL: (env.SUPPORT_EMAIL || '').trim(),
   LEGAL_NAME: (env.LEGAL_NAME || '').trim(),

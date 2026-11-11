@@ -157,7 +157,9 @@
         const tr = el("tr"); tr.append(el("td", "", t)); d.plans.forEach((p) => tr.append(el("td", p.key === d.plan ? "now" : "", f(p)))); body.append(tr);
       });
       tbl.append(body); const sc = el("div", "st-scroll"); sc.append(tbl); out.push(sc);
-      out.push(el("p", "muted st-note", "Planurile superioare se acordă deocamdată de echipa Omnivo. Dacă ai nevoie de mai multe anunțuri sau de statistici pe 90 de zile, scrie-ne."));
+      const bd = window.loadBilling ? await window.loadBilling().catch(() => null) : null;
+      if (bd && bd.enabled && window.planBuy) out.push(window.planBuy(bd, d));
+      else out.push(el("p", "muted st-note", "Planurile superioare se acordă deocamdată de echipa Omnivo. Dacă ai nevoie de mai multe anunțuri sau de statistici pe 90 de zile, scrie-ne."));
       box.replaceChildren(...out);
     } catch (e) { fail(box, e); }
   };

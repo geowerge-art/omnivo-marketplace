@@ -1449,3 +1449,26 @@ button.adm-stat { cursor: pointer; }
 .doc-foot { display: grid; gap: 8px; justify-items: center; padding: 8px 5% 28px; color: var(--muted); }
 .doc-foot nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; }
 .doc-foot a { color: var(--navy); text-decoration: none; font-size: 14px; }
+
+/* ================= PORTOFEL ȘI CREDITE ================= */
+.wl-bal { display: flex; flex-direction: column; gap: 2px; padding: 20px; background: #14110c; color: #e9d3a8; border-radius: 18px; }
+.wl-bal small { color: #c9b48a; }
+.wl-bal b { font-size: 34px; color: #fff; line-height: 1.1; }
+.wl-bal .muted { color: #c9b48a; }
+.wl-note { margin: 12px 0; padding: 12px 14px; background: #fff8e4; border: 1px solid #e6c877; border-radius: 12px; color: #6b5210; }
+.wl-small { font-size: 13px; margin: 8px 2px 0; }
+.wl-packs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 700px) { .wl-packs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.wl-pack { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 16px 8px; border: 1px solid var(--border); border-radius: 16px; background: #fff; font: inherit; cursor: pointer; }
+.wl-pack:hover:not(:disabled) { border-color: var(--gold); box-shadow: 0 4px 14px rgba(20, 17, 12, .08); }
+.wl-pack b { font-size: 18px; color: var(--navy); }
+.wl-pack span { color: var(--muted); }
+.wl-pack em { font-style: normal; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: #e6f5ec; color: #1b6b3f; margin-top: 4px; }
+.wl-pack.cur { border-color: var(--gold); background: #fbf5e6; }
+.wl-pack:disabled { opacity: .5; }
+.wl-prices, .wl-tx { display: grid; background: #fff; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.wl-prices > div, .wl-tx > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.wl-prices > div:last-child, .wl-tx > div:last-child { border-bottom: 0; }
+.wl-tx span { display: flex; flex-direction: column; min-width: 0; }
+.wl-tx b.in { color: #1b6b3f; } .wl-tx b.out { color: #b3261e; }
+.pl-buy { margin-top: 18px; }

@@ -22,3 +22,9 @@ services:
         sync: false
       - key: RESEND_FROM
         sync: false
+      - key: BILLING
+        value: "off"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

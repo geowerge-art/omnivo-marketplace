@@ -17,8 +17,8 @@
   const ROLE = { user: "Utilizator", moderator: "Moderator", admin: "Administrator" };
   const REASON = { inselatorie: "Înșelătorie", interzis: "Interzis", duplicat: "Duplicat", gresit: "Preț/categorie greșită", vandut: "Deja vândut", altul: "Altceva" };
   const ACT = { listing_approved: "Anunț aprobat", listing_rejected: "Anunț respins", listing_blocked: "Anunț blocat", listing_pending: "Anunț trimis în moderare", listing_edit: "Anunț editat", listing_delete: "Anunț șters",
-    user_block: "Cont blocat", user_unblock: "Cont deblocat", user_role: "Rol schimbat", user_delete: "Cont șters", report_resolved: "Raportare rezolvată", report_dismissed: "Raportare respinsă", listing_promote: "Promovare anunț", review_delete: "Recenzie ștearsă" };
-  const ICON = { listing_approved: "✅", listing_rejected: "⛔", listing_blocked: "🚫", listing_pending: "⏳", listing_edit: "✎", listing_delete: "🗑", user_block: "🔒", user_unblock: "🔓", user_role: "🛡", user_delete: "🗑", report_resolved: "⚑", report_dismissed: "⚑", listing_promote: "⭐", review_delete: "★" };
+    user_block: "Cont blocat", user_unblock: "Cont deblocat", user_role: "Rol schimbat", user_delete: "Cont șters", report_resolved: "Raportare rezolvată", report_dismissed: "Raportare respinsă", listing_promote: "Promovare anunț", review_delete: "Recenzie ștearsă", credits_adjust: "Credite ajustate" };
+  const ICON = { listing_approved: "✅", listing_rejected: "⛔", listing_blocked: "🚫", listing_pending: "⏳", listing_edit: "✎", listing_delete: "🗑", user_block: "🔒", user_unblock: "🔓", user_role: "🛡", user_delete: "🗑", report_resolved: "⚑", report_dismissed: "⚑", listing_promote: "⭐", review_delete: "★", credits_adjust: "💰" };
   const PILL = { pending: "warn", approved: "ok", rejected: "bad", blocked: "bad", sold: "mute", deleted: "mute" };
   const DIST = [["approved", "#2e9e5b"], ["pending", "#d9a528"], ["sold", "#8a8a8a"], ["rejected", "#d9705f"], ["blocked", "#b3261e"]];
   const st = { tab: "over", ads: "pending", users: "", reports: "open", q: { ads: "", users: "" }, badge: { pending: 0, reports: 0 }, counts: {}, review: 0, sel: new Set(), selMode: false, updateBulk: () => {} };
@@ -227,6 +227,12 @@
       }, "bad"]);
       else acts.push(["Deblochează", async () => { await api(`/api/admin/users/${u.id}`, "PATCH", { status: "active" }); render(); }, "ok"]);
     }
+    if (me.role === "admin") acts.push([`💰 Credite (${u.credits || 0})`, async () => {
+      const v = prompt(`Câte credite adaugi lui @${u.nickname}? (număr negativ = scazi)`, "10"); if (v === null) return;
+      const n = Math.trunc(Number(v)); if (!n) return showMessage("Eroare", "Scrie un număr întreg, diferit de 0.");
+      const note = prompt("Notă (opțional, apare în istoricul lui):", "") || "";
+      await api(`/api/admin/users/${u.id}/credits`, "POST", { amount: n, note }); render();
+    }]);
     acts.push(["Anunțurile lui", async () => { st.q.ads = u.nickname; st.ads = "all"; go("ads"); }]);
     if (me.role === "admin" && !mine && u.role === "user") acts.push(["Șterge contul", async () => { if (!confirm(`Ștergi definitiv contul @${u.nickname}, cu anunțuri și mesaje? Nu se mai poate recupera.`)) return; await api(`/api/admin/users/${u.id}`, "DELETE"); render(); }, "bad"]);
     const until = u.blocked_until ? `până la ${new Date(u.blocked_until).toLocaleDateString("ro-RO")}` : "definitiv";
