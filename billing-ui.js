@@ -26,6 +26,16 @@
     const out = [], P = d.pricing;
     const bal = el("section", "wl-bal"); bal.append(el("small", "", "Soldul tău"), el("b", "", nf(d.balance) + (d.balance === 1 ? " credit" : " credite")), el("span", "muted", "1 credit = 1 leu"));
     out.push(bal);
+    if (me.role === "admin") {   // doar administratorii: credite pentru contul propriu (test, sau după o plată prin transfer)
+      const ab = el("button", "ghost", "💰 Adaugă credite în contul meu (admin)"); ab.type = "button";
+      ab.onclick = async () => {
+        const v = prompt("Câte credite adaugi în contul tău? (număr negativ = scazi)", "50"); if (v === null) return;
+        const n = Math.trunc(Number(v)); if (!n) return showMessage("Eroare", "Scrie un număr întreg, diferit de 0.");
+        try { await api(`/api/admin/users/${me.id}/credits`, "POST", { amount: n, note: "ajustare din portofel" }); await loadBilling(true); renderWallet(box); }
+        catch (e) { showMessage("Eroare", errText(e)); }
+      };
+      out.push(ab);
+    }
     if (!d.enabled) out.push(el("p", "wl-note", "Deocamdată urcarea în listă și promovarea sunt gratuite. Creditele vor fi necesare după lansarea serviciilor plătite."));
 
     if (d.stripe) {
