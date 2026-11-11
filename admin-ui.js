@@ -174,6 +174,7 @@
       S(d.listings.sold, "Vândute", "", () => { st.ads = "sold"; go("ads"); }),
       S(d.users.blocked, "Conturi blocate", "", () => { st.users = "status:blocked"; go("users"); }));
     if (d.messages.d1 != null) g.append(S(d.messages.d1, "Mesaje în 24h"));
+    if (d.billing) { const bl = d.billing; g.append(S(bl.on ? (bl.stripe ? "Active" : "Fără Stripe") : "Oprite", "Plăți cu credite", `Facturare: ${bl.on ? "pornită" : "oprită (BILLING)"} · Stripe: ${bl.stripe ? "conectat" : "lipsește cheia"} · webhook: ${bl.webhook ? "setat" : "lipsește"}`, null, bl.on && !bl.stripe)); }
     const total = DIST.reduce((s, [k]) => s + (st.counts[k] || 0), 0);
     const dist = el("section", "adm-card"); dist.style.marginTop = "14px"; dist.append(el("h3", "adm-h", "Anunțurile pe stări"));
     const bar = el("div", "adm-dist"), leg = el("div", "adm-legend");

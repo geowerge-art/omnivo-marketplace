@@ -383,7 +383,21 @@
   <script src="/cities.js"></script>
   <script src="/autofill.js"></script>
   <script src="/script.js"></script>
+  <dialog id="dataDialog" class="sheet">
+    <button class="dialog-close" id="dataClose" aria-label="Închide">✕</button>
+    <h2>Datele mele</h2>
+    <p class="muted">Ai dreptul să primești o copie a datelor tale și să îți ștergi contul. Detalii în <a href="/confidentialitate">politica de confidențialitate</a>.</p>
+    <button class="ghost" id="dataExport" type="button">⬇ Descarcă datele mele (JSON)</button>
+    <p class="muted wl-small">Include profilul, anunțurile, favoritele, mesajele trimise, recenziile, plățile și sesiunile. Parolele nu sunt incluse.</p>
+    <div class="sec">Șterge contul</div>
+    <p id="dataWarn" class="muted">Se șterg definitiv contul, anunțurile cu poze, favoritele, căutările salvate, mesajele și recenziile. Nu se mai poate recupera.</p>
+    <label for="dataPw">Parola ta</label><input id="dataPw" type="password" autocomplete="current-password">
+    <label for="dataConfirm">Scrie <b>STERGE</b> ca să confirmi</label><input id="dataConfirm" autocomplete="off" autocapitalize="characters">
+    <p class="err" id="dataErr" hidden></p>
+    <button class="primary" id="dataDelete" type="button" style="background:#b3261e;border-color:#b3261e">Șterge definitiv contul</button>
+  </dialog>
   <script src="/admin-ui.js"></script>
+  <script src="/privacy-ui.js"></script>
   <script src="/profile-ui.js"></script>
   <script src="/billing-ui.js"></script>
   <script src="/studio-ui.js"></script>

@@ -9,6 +9,7 @@ const { createThrottle } = require('./security');
 const { sendMail, MAIL_READY } = require('./mail');
 const billing = require('./billing');
 
+const { eraseUser } = require('./erase');
 const router = express.Router();
 const publicRouter = express.Router();
 router.use(requireDb, requireRole('admin', 'moderator'));
@@ -56,7 +57,7 @@ router.get('/overview', ah(async (req, res) => {
     db.query("SELECT status, COUNT(*)::int n FROM listings WHERE status <> 'deleted' GROUP BY status")
   ]);
   const by_status = Object.fromEntries(byStatus.rows.map((x) => [x.status, x.n]));
-  res.json({ users, listings, reports, messages: msgs, recent: recent.rows, activity: activity.rows, by_status });
+  res.json({ users, listings, reports, messages: msgs, recent: recent.rows, activity: activity.rows, by_status, billing: { on: config.BILLING, stripe: !!config.STRIPE_SECRET_KEY, webhook: !!config.STRIPE_WEBHOOK_SECRET } });
 }));
 
 /* ---- anunțuri ---- */
@@ -271,8 +272,8 @@ router.delete('/users/:id(\\d+)', adminOnly, ah(async (req, res) => {
   const t = (await db.query('SELECT role FROM users WHERE id = $1', [uid])).rows[0];
   if (!t) return res.status(404).json({ error: 'NEGASIT' });
   if (t.role === 'admin') return res.status(400).json({ error: 'CANNOT_DELETE_ADMIN' });
-  await db.query('DELETE FROM users WHERE id = $1', [uid]);
-  await log(req, 'user_delete', 'user', uid, 'cont șters');
+  const gone = await eraseUser(uid); // șterge și anunțurile + pozele (altfel rămâneau publice, fără proprietar)
+  await log(req, 'user_delete', 'user', uid, `cont șters, ${gone.listings} anunțuri, ${gone.images} poze`);
   res.json({ ok: true });
 }));
 
