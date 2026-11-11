@@ -20,6 +20,7 @@ async function main() {
     const ping = () => fetch(config.APP_URL + '/api/health', { signal: AbortSignal.timeout(15000) }).catch(() => {});
     setTimeout(ping, 60 * 1000).unref(); setInterval(ping, 10 * 60 * 1000).unref();
   }
+  require('./keepalive').start(); // ping la 10 minute, ca serviciul să nu adoarmă pe Render
   process.on('SIGTERM', () => server.close(() => (db.hasDb() ? db.pool.end() : null)));
 }
 

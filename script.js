@@ -764,14 +764,25 @@ $("detShare")?.addEventListener("click", async () => {
 
 /* ---- notificări ---- */
 let notifCount = 0, toastTimer = null;
-function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } if (accIsOpen()) ensureBell(); }
+function paintBell() {
+  const b = $("hdrBell"); if (!b) return;
+  const n = $("hdrBellN"); b.hidden = !me; b.classList.toggle("has", !!notifCount);
+  n.hidden = !notifCount; n.textContent = notifCount > 9 ? "9+" : notifCount;
+  b.setAttribute("aria-label", notifCount ? `Notificări: ${notifCount} necitite` : "Notificări");
+}
+$("hdrBell")?.addEventListener("click", () => {
+  if (!me) return openAuth();
+  if (accIsOpen()) return accGo("notif");
+  refreshUnread(); accShowPage(); history.pushState({ acc: "notif" }, "", "#cont"); accShow("notif");   // o singură intrare în istoric: Înapoi ajunge direct în pagina de unde ai venit
+});
+function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } paintBell(); if (accIsOpen()) ensureBell(); }
 async function loadNotifCount() { notifCount = 0; if (me) { try { notifCount = (await api("/api/notifications/count")).unread; } catch { /* fără notificări */ } } paintNotifCount(); }
 function toast(text, fn) {
   let t = $("toast"); if (!t) { t = document.createElement("button"); t.id = "toast"; t.type = "button"; t.className = "toast"; document.body.appendChild(t); }
   t.textContent = "🔔 " + text; t.hidden = false; t.onclick = () => { t.hidden = true; if (fn) fn(); };
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
 }
-const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔" };
+const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", review: "★" };
 async function renderNotifs(box) {
   box.replaceChildren(note("Se încarcă…"));
   try {
@@ -784,7 +795,7 @@ async function renderNotifs(box) {
       const mid = document.createElement("span"); mid.className = "nt-mid";
       const t = document.createElement("b"); t.textContent = n.title; const b = document.createElement("small"); b.textContent = n.body;
       const w = document.createElement("em"); w.textContent = when(n.created_at); mid.append(t, b, w);
-      r.append(ic, mid); r.addEventListener("click", () => { if (n.listing_id) openDetail(n.listing_id); else if (/^rfq/.test(n.kind) && window.openRequests) openRequests(); });
+      r.append(ic, mid); r.addEventListener("click", () => { if (n.listing_id) openDetail(n.listing_id); else if (n.kind === "review" && window.openProfile && me) openProfile(me.id, "reviews"); else if (/^rfq/.test(n.kind) && window.openRequests) openRequests(); });
       return r;
     }));
     if (d.unread) { api("/api/notifications/read", "POST").then(() => { notifCount = 0; paintNotifCount(); }).catch(() => {}); }
@@ -1072,7 +1083,7 @@ function startLive() {
     else if ($("inboxDialog").open) renderInbox();
   });
   on("msg_status", (d) => { setTicks(d.ids, d.status); if ($("inboxDialog").open) renderInbox(); });
-  on("notify", (d) => { notifCount++; paintNotifCount(); toast(d.title, () => { if (d.listing_id) openDetail(d.listing_id); else if (/^rfq/.test(d.kind) && window.openRequests) openRequests(); else openAccount(); }); if (accIsOpen() && accCur === "notif") renderNotifs($("accBody")); });
+  on("notify", (d) => { notifCount++; paintNotifCount(); toast(d.title, () => { if (d.listing_id) openDetail(d.listing_id); else if (d.kind === "review" && window.openProfile && me) openProfile(me.id, "reviews"); else if (/^rfq/.test(d.kind) && window.openRequests) openRequests(); else openAccount(); }); if (accIsOpen() && accCur === "notif") renderNotifs($("accBody")); });
   on("rfq", () => { if (window.rfqRefresh) rfqRefresh(); });
   on("rfq_msg", () => { if (window.rfqMsg) rfqMsg(); });
   on("presence", (d) => { if (chat && d.uid === chat.withId) setPresence({ online: d.online, last_seen: new Date().toISOString() }); });

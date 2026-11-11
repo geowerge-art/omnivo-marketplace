@@ -246,10 +246,10 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const r = (await db.query('SELECT *, (expires_at > NOW()) AS accepting FROM part_requests WHERE id = $1 AND user_id = $2', [Number(req.params.id), req.user.id])).rows[0];
   if (!r) return res.status(404).json({ error: 'NEGASIT' });
   const q = await db.query(
-    `SELECT q.id, q.price, q.currency, q.state, q.warranty_days, q.shipping, q.pickup, q.note, q.status, q.created_at, q.updated_at,
+    `SELECT q.id, q.price, q.currency, q.state, q.warranty_days, q.shipping, q.pickup, q.note, q.status, q.created_at, q.updated_at, q.completed_at,
             COALESCE(d.company, uq.nickname) AS company, COALESCE(NULLIF(q.county, ''), d.county) AS dealer_county, d.city AS dealer_city, COALESCE(d.status = 'approved', FALSE) AS verified,
-            (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = q.dealer_id) AS rating,
-            (SELECT COUNT(*)::int FROM reviews WHERE seller_id = q.dealer_id) AS rating_count,
+            (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating,
+            (SELECT COUNT(*)::int FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating_count,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
             CASE WHEN q.status = 'won' THEN q.dealer_id END AS dealer_id,
             CASE WHEN q.status = 'won' AND u.show_phone THEN u.phone END AS phone,
@@ -258,7 +258,8 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
       WHERE q.request_id = $1 AND q.status IN ('sent','won','lost')
       ORDER BY (q.status = 'won') DESC, (CASE WHEN q.currency = 'EUR' THEN 5 ELSE 1 END) * (q.price + COALESCE(q.shipping, 0)), q.id`, [r.id]);
   const photos = (await db.query("SELECT id, url, thumb_url AS thumb FROM quote_images WHERE request_id = $1 ORDER BY position, id", [r.id])).rows;
-  res.set('Cache-Control', 'no-store').json({ request: r, quotes: q.rows, photos });
+  const qs = q.rows.length ? (await db.query('SELECT id, quote_id, body, answer, created_at, answered_at FROM quote_questions WHERE quote_id = ANY($1::int[]) ORDER BY id', [q.rows.map((x) => x.id)])).rows : [];
+  res.set('Cache-Control', 'no-store').json({ request: r, quotes: q.rows.map((x) => ({ ...x, questions: qs.filter((y) => y.quote_id === x.id) })), photos });
 }));
 
 router.post('/:id(\\d+)/cancel', ah(async (req, res) => {
@@ -324,13 +325,17 @@ router.get('/inbox', ah(async (req, res) => {
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.request_id = r.id) AS photos,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
             q.id AS quote_id, q.price, q.currency, q.state, q.warranty_days, q.shipping, q.pickup, q.note, q.status AS quote_status,
-            CASE WHEN q.status = 'won' THEN u.nickname END AS buyer, CASE WHEN q.status = 'won' THEN r.user_id END AS buyer_id
+            CASE WHEN q.status = 'won' THEN u.nickname END AS buyer, CASE WHEN q.status = 'won' THEN r.user_id END AS buyer_id, q.completed_at,
+            CASE WHEN q.status = 'won' THEN (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = r.user_id AND role = 'buyer') END AS buyer_rating,
+            CASE WHEN q.status = 'won' THEN (SELECT COUNT(*)::int FROM reviews WHERE seller_id = r.user_id AND role = 'buyer') END AS buyer_rating_count
        FROM part_requests r JOIN users u ON u.id = r.user_id LEFT JOIN quotes q ON q.request_id = r.id AND q.dealer_id = $1
       WHERE r.user_id <> $1 AND (q.id IS NOT NULL AND q.status <> 'withdrawn'
             OR ($2 = 'approved' AND r.status = 'open' AND r.expires_at > NOW()
                 AND (cardinality($3::text[]) = 0 OR r.brand_key = ANY($3::text[])) AND (cardinality($4::text[]) = 0 OR r.county = ANY($4::text[]))))
       ORDER BY r.id DESC LIMIT 100`, [req.user.id, d.status, d.brands, d.counties]);
-  res.set('Cache-Control', 'no-store').json({ dealer: d.status ? d : null, requests: r.rows });
+  const ids = r.rows.map((x) => x.quote_id).filter(Boolean);
+  const qs = ids.length ? (await db.query('SELECT id, quote_id, body, answer, created_at, answered_at FROM quote_questions WHERE quote_id = ANY($1::int[]) ORDER BY id', [ids])).rows : [];
+  res.set('Cache-Control', 'no-store').json({ dealer: d.status ? d : null, requests: r.rows.map((x) => ({ ...x, questions: qs.filter((y) => y.quote_id === x.quote_id) })) });
 }));
 
 router.post('/:id(\\d+)/quotes', requireVerified, ah(async (req, res) => {
@@ -422,7 +427,7 @@ router.get('/img/:id(\\d+)', ah(async (req, res) => {
 /* ---------- chatul ofertei câștigătoare (doar cei doi) ---------- */
 async function chatCtx(qid, me) {
   const r = (await db.query(
-    `SELECT q.id, q.dealer_id, r.user_id AS buyer_id, r.part, r.brand, r.model, r.year, COALESCE(d.company, ud.nickname) AS company, ub.nickname AS buyer
+    `SELECT q.id, q.dealer_id, q.completed_at, r.user_id AS buyer_id, r.part, r.brand, r.model, r.year, COALESCE(d.company, ud.nickname) AS company, ub.nickname AS buyer
        FROM quotes q JOIN part_requests r ON r.id = q.request_id JOIN users ud ON ud.id = q.dealer_id LEFT JOIN dealers d ON d.user_id = q.dealer_id JOIN users ub ON ub.id = r.user_id
       WHERE q.id = $1 AND q.status = 'won'`, [qid])).rows[0];
   if (!r || (r.dealer_id !== me && r.buyer_id !== me)) return null;
@@ -434,7 +439,12 @@ router.get('/quote/:qid(\\d+)/chat', ah(async (req, res) => {
   if (!c) return res.status(404).json({ error: 'NEGASIT' });
   const rows = (await db.query('SELECT id, body, created_at, (sender_id = $2) AS mine FROM quote_messages WHERE quote_id = $1 ORDER BY id DESC LIMIT 300', [c.id, req.user.id])).rows.reverse();
   await db.query('UPDATE quote_messages SET read_at = NOW() WHERE quote_id = $1 AND sender_id <> $2 AND read_at IS NULL', [c.id, req.user.id]);
-  res.set('Cache-Control', 'no-store').json({ with: req.user.id === c.buyer_id ? c.company : c.buyer, title: [c.part, c.brand, c.model, c.year].filter(Boolean).join(' '), messages: rows });
+  const asBuyer = req.user.id === c.buyer_id, otherId = asBuyer ? c.dealer_id : c.buyer_id;
+  const mineRv = (await db.query('SELECT rating, body FROM reviews WHERE reviewer_id = $1 AND quote_id = $2', [req.user.id, c.id])).rows[0] || null;
+  res.set('Cache-Control', 'no-store').json({
+    with: asBuyer ? c.company : c.buyer, title: [c.part, c.brand, c.model, c.year].filter(Boolean).join(' '), messages: rows,
+    deal: { completed: !!c.completed_at, completed_at: c.completed_at, as: asBuyer ? 'buyer' : 'dealer', other_id: otherId, other_name: asBuyer ? c.company : c.buyer, review: mineRv }
+  });
 }));
 
 router.post('/quote/:qid(\\d+)/chat', ah(async (req, res) => {
@@ -447,6 +457,79 @@ router.post('/quote/:qid(\\d+)/chat', ah(async (req, res) => {
   if (live.isOnline(to)) live.send(to, 'rfq_msg', { quote_id: c.id });
   else notify(to, 'rfq_msg', null, `Mesaj nou: ${[c.part, c.brand].join(' ')}`, body.slice(0, 120));
   res.status(201).json({ message: { id: m.id, created_at: m.created_at, body, mine: true } });
+}));
+
+/* ---------- finalizarea tranzacției + recenzii în ambele sensuri ---------- */
+const dealAllow = createThrottle(30, 60 * 60 * 1000);
+const REVIEW_LINK_RE = /(https?:\/\/|www\.|\S+@\S+\.\S+)/i;
+const dealTitle = (c) => [c.part, c.brand, c.model, c.year].filter(Boolean).join(' ');
+
+/* oricare dintre cei doi (cumpărătorul sau ofertantul câștigător) marchează tranzacția ca finalizată; abia apoi se pot lăsa recenzii */
+router.post('/quote/:qid(\\d+)/complete', ah(async (req, res) => {
+  const c = await chatCtx(Number(req.params.qid), req.user.id);
+  if (!c) return res.status(404).json({ error: 'NEGASIT' });
+  if (c.completed_at) return res.json({ ok: true, completed_at: c.completed_at });
+  if (!dealAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const r = await db.query('UPDATE quotes SET completed_at = NOW(), completed_by = $2, updated_at = NOW() WHERE id = $1 AND completed_at IS NULL RETURNING completed_at', [c.id, req.user.id]);
+  if (r.rowCount) {
+    const other = req.user.id === c.buyer_id ? c.dealer_id : c.buyer_id;
+    notify(other, 'rfq_done', null, `Tranzacție finalizată: ${dealTitle(c)}`, `@${req.user.nickname} a marcat tranzacția ca finalizată. Poți lăsa acum o recenzie.`);
+  }
+  res.json({ ok: true, completed_at: r.rows[0] ? r.rows[0].completed_at : new Date() });
+}));
+
+/* cumpărătorul îl recenzează pe ofertant (ca vânzător), ofertantul pe cumpărător (ca cumpărător); una per persoană, se poate modifica */
+router.put('/quote/:qid(\\d+)/rating', ah(async (req, res) => {
+  const c = await chatCtx(Number(req.params.qid), req.user.id), b = req.body || {}, rating = Number(b.rating), body = String(b.body || '').trim().slice(0, 500);
+  if (!c) return res.status(404).json({ error: 'NEGASIT' });
+  if (!c.completed_at) return res.status(409).json({ error: 'TRANZACTIE_NEFINALIZATA' });
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'RECENZIE_STELE' });
+  if (body && REVIEW_LINK_RE.test(body)) return res.status(400).json({ error: 'LINK_INTERZIS' });
+  if (!dealAllow('r' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const asBuyer = req.user.id === c.buyer_id, target = asBuyer ? c.dealer_id : c.buyer_id, role = asBuyer ? 'seller' : 'buyer';
+  const r = await db.query(
+    `INSERT INTO reviews(seller_id, reviewer_id, quote_id, rating, body, role) VALUES($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (reviewer_id, quote_id) WHERE quote_id IS NOT NULL DO UPDATE SET rating = EXCLUDED.rating, body = EXCLUDED.body, updated_at = NOW()
+     RETURNING (xmax = 0) AS created`, [target, req.user.id, c.id, rating, body || null, role]);
+  if (r.rows[0].created) notify(target, 'review', null, `Ai primit o recenzie de ${rating} ${rating === 1 ? 'stea' : 'stele'}`, `De la @${req.user.nickname}, pentru ${dealTitle(c)}.`);
+  res.json({ ok: true, created: r.rows[0].created, review: { rating, body } });
+}));
+
+/* ---------- întrebări la o ofertă (înainte de alegere): contactul rămâne ascuns, deci doar text ---------- */
+const askAllow = createThrottle(40, 60 * 60 * 1000);
+const MAX_QUESTIONS = 5;
+router.post('/quote/:qid(\\d+)/questions', ah(async (req, res) => {
+  const body = String((req.body || {}).body || '').trim();
+  if (body.length < 3 || body.length > 300) return res.status(400).json({ error: 'INTREBARE_INVALIDA' });
+  if (CONTACT_RE.test(body)) return res.status(400).json({ error: 'FARA_CONTACT_IN_INTREBARE' });
+  const q = (await db.query(
+    `SELECT q.id, q.dealer_id, r.id AS request_id, r.part, r.brand FROM quotes q JOIN part_requests r ON r.id = q.request_id
+      WHERE q.id = $1 AND q.status = 'sent' AND r.status = 'open' AND r.user_id = $2`, [Number(req.params.qid), req.user.id])).rows[0];
+  if (!q) return res.status(404).json({ error: 'NEGASIT' });
+  if (!askAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const n = (await db.query('SELECT COUNT(*)::int AS n FROM quote_questions WHERE quote_id = $1', [q.id])).rows[0].n;
+  if (n >= MAX_QUESTIONS) return res.status(409).json({ error: 'PREA_MULTE_INTREBARI' });
+  const ins = await db.query('INSERT INTO quote_questions(quote_id, asker_id, body) VALUES($1,$2,$3) RETURNING id, created_at', [q.id, req.user.id, body]);
+  notify(q.dealer_id, 'rfq_q', null, `Întrebare la oferta ta: ${[q.part, q.brand].join(' ')}`, body.slice(0, 120));
+  live.send(q.dealer_id, 'rfq', { request_id: q.request_id });
+  res.status(201).json({ question: { id: ins.rows[0].id, quote_id: q.id, body, answer: null, created_at: ins.rows[0].created_at } });
+}));
+
+router.post('/question/:id(\\d+)/answer', ah(async (req, res) => {
+  const answer = String((req.body || {}).answer || '').trim();
+  if (answer.length < 1 || answer.length > 500) return res.status(400).json({ error: 'RASPUNS_INVALID' });
+  if (CONTACT_RE.test(answer)) return res.status(400).json({ error: 'FARA_CONTACT_IN_INTREBARE' });
+  const x = (await db.query(
+    `SELECT qq.id, qq.answer, qq.quote_id, q.dealer_id, r.id AS request_id, r.user_id AS buyer_id, r.part, r.brand
+       FROM quote_questions qq JOIN quotes q ON q.id = qq.quote_id JOIN part_requests r ON r.id = q.request_id
+      WHERE qq.id = $1 AND q.dealer_id = $2 AND q.status IN ('sent', 'won')`, [Number(req.params.id), req.user.id])).rows[0];
+  if (!x) return res.status(404).json({ error: 'NEGASIT' });
+  if (x.answer) return res.status(409).json({ error: 'DEJA_RASPUNS' });
+  if (!askAllow('a' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  await db.query('UPDATE quote_questions SET answer = $2, answered_at = NOW() WHERE id = $1 AND answer IS NULL', [x.id, answer]);
+  notify(x.buyer_id, 'rfq_a', null, `Răspuns la întrebarea ta: ${[x.part, x.brand].join(' ')}`, answer.slice(0, 120));
+  live.send(x.buyer_id, 'rfq', { request_id: x.request_id });
+  res.json({ ok: true });
 }));
 
 module.exports = { KINDS, STATES, router, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey };

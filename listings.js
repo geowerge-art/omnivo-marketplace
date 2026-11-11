@@ -125,7 +125,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const imgs = await db.query('SELECT id, url FROM listing_images WHERE listing_id = $1 ORDER BY position, id', [l.id]);
   res.json({ listing: {
     images: imgs.rows.map((i) => i.url),
-    seller_id: l.user_id, seller_since: l.seller_since, seller_rating: (await db.query('SELECT COALESCE(ROUND(AVG(rating)::numeric, 1), 0)::float AS avg, COUNT(*)::int AS n FROM reviews WHERE seller_id = $1', [l.user_id]).catch(() => ({ rows: [{ avg: 0, n: 0 }] }))).rows[0], mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
+    seller_id: l.user_id, seller_since: l.seller_since, seller_rating: (await db.query('SELECT COALESCE(ROUND(AVG(rating)::numeric, 1), 0)::float AS avg, COUNT(*)::int AS n FROM reviews WHERE seller_id = $1 AND role = \'seller\'', [l.user_id]).catch(() => ({ rows: [{ avg: 0, n: 0 }] }))).rows[0], mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
     // datele brute de care are nevoie formularul de editare; le primește doar proprietarul
     edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,

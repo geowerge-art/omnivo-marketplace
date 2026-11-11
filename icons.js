@@ -16,9 +16,10 @@
     "plus": '<path d="M12 5v14M5 12h14"/>',
     "lupa": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/>',
     "cont": '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-    "chat": '<path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z"/>'
+    "chat": '<path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z"/>',
+    "clopot": '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>'
   };
-  const nav = new Set(["acasa", "meniu", "plus", "lupa", "cont", "chat"]);
+  const nav = new Set(["acasa", "meniu", "plus", "lupa", "cont", "chat", "clopot"]);
   window.icon = function (name, size) {
     const k = P[name] ? name : "alt", s = size || (nav.has(k) ? 24 : 40);
     const vb = nav.has(k) ? "0 0 24 24" : "0 0 48 48";

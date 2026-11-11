@@ -10,7 +10,11 @@
     DEZMEMBRATOR_NEAPROBAT: "Contul tău de dezmembrător nu e încă aprobat.", CERERE_INCHISA: "Cererea s-a închis între timp.", OFERTA_NEGASITA: "Oferta nu mai e disponibilă.",
     POZA_INVALIDA: "Poza nu e bună. Alege un JPG, PNG sau WebP.", PREA_MULTE_POZE: "Ai prea multe poze neatașate. Trimite oferta sau scoate câteva.", STORAGE_EROARE: "Pozele nu se pot salva acum. Încearcă din nou.",
     FARA_CONTACT_IN_CERERE: "Cererea e publică: nu scrie telefon, email sau linkuri. Contactul se dă în chat, după ce alegi o ofertă.",
-    FIRMA_INVALIDA: "Scrie numele firmei.", CUI_INVALID: "CUI-ul trebuie să aibă doar cifre (cu sau fără RO în față)."
+    FIRMA_INVALIDA: "Scrie numele firmei.", CUI_INVALID: "CUI-ul trebuie să aibă doar cifre (cu sau fără RO în față).",
+    TRANZACTIE_NEFINALIZATA: "Marchează întâi tranzacția ca finalizată, apoi poți lăsa recenzia.", INTREBARE_INVALIDA: "Scrie întrebarea (între 3 și 300 de caractere).",
+    FARA_CONTACT_IN_INTREBARE: "Nu scrie telefon, email sau linkuri. Contactul se schimbă în chat, după ce cumpărătorul alege oferta.",
+    PREA_MULTE_INTREBARI: "Ai pus deja numărul maxim de întrebări la această ofertă.", RASPUNS_INVALID: "Scrie răspunsul (maximum 500 de caractere).", DEJA_RASPUNS: "Ai răspuns deja la această întrebare.",
+    LINK_INTERZIS: "Comentariul nu poate conține linkuri sau adrese de email.", RECENZIE_STELE: "Alege între 1 și 5 stele."
   });
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const nf = (n) => Number(n).toLocaleString("ro-RO");
@@ -181,13 +185,84 @@
     body.replaceChildren(...out);
   }
 
+  /* ---------- întrebări la o ofertă (înainte de alegere) ---------- */
+  function textForm(placeholder, max, label, send) {
+    const f = el("form", "rfq-qform"), ta = el("textarea"); ta.rows = 2; ta.maxLength = max; ta.placeholder = placeholder;
+    const msg = el("p", "err"); msg.hidden = true; const ok = el("button", "primary", label); ok.type = "submit";
+    f.append(ta, msg, ok);
+    f.onsubmit = async (e) => { e.preventDefault(); ok.disabled = true; msg.hidden = true; try { await send(ta.value); } catch (err) { msg.textContent = errText(err); msg.hidden = false; ok.disabled = false; } };
+    return f;
+  }
+  /* cumpărătorul: întrebările lui și răspunsurile; poate pune încă o întrebare cât oferta e deschisă */
+  function buyerQa(r, q) {
+    const qs = q.questions || [], canAsk = q.status === "sent" && r.status === "open";
+    if (!qs.length && !canAsk) return null;
+    const wrap = el("div", "rfq-qa-wrap");
+    qs.forEach((x) => { const it = el("div", "rfq-qa-it"); it.append(el("p", "rfq-qa-q", x.body), el("p", x.answer ? "rfq-qa-a" : "rfq-qa-wait", x.answer || "Ofertantul nu a răspuns încă")); wrap.append(it); });
+    if (canAsk && qs.length < 5) {
+      const ask = el("button", "ghost", "Întreabă ofertantul"); ask.type = "button";
+      ask.onclick = () => ask.replaceWith(textForm("Ex.: Se potrivește pe seria de șasiu din cerere? Ce kilometraj are mașina donatoare? Fără telefon sau linkuri.", 300, "Trimite întrebarea", async (t) => { await api(`/api/requests/quote/${q.id}/questions`, "POST", { body: t }); viewDetail(r.id); }));
+      wrap.append(ask);
+    }
+    return wrap;
+  }
+  /* ofertantul: întrebările primite; le răspunde pe loc */
+  function dealerQa(r, onDone) {
+    const qs = r.questions || []; if (!qs.length) return null;
+    const wrap = el("div", "rfq-qa-wrap"); wrap.append(el("b", "", "Întrebările cumpărătorului"));
+    qs.forEach((x) => {
+      const it = el("div", "rfq-qa-it"); it.append(el("p", "rfq-qa-q", x.body));
+      if (x.answer) it.append(el("p", "rfq-qa-a", x.answer));
+      else it.append(textForm("Răspunsul tău (fără telefon, email sau linkuri)", 500, "Trimite răspunsul", async (t) => { await api(`/api/requests/question/${x.id}/answer`, "POST", { answer: t }); (onDone || viewOffers)(); }));
+      wrap.append(it);
+    });
+    return wrap;
+  }
+
+  /* ---------- tranzacție finalizată + recenzii în ambele sensuri ---------- */
+  const starsTxt = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  function reviewBox(qid, deal, reload) {
+    const box = el("div", "rfq-rv"), who = deal.as === "buyer" ? "vânzătorul" : "cumpărătorul";
+    if (deal.review) {
+      const row = el("p", "rfq-rv-mine"); row.append(el("span", "prof-stars", starsTxt(deal.review.rating)), ` Recenzia ta pentru ${deal.other_name}`);
+      box.append(row); if (deal.review.body) box.append(el("p", "muted", deal.review.body));
+      const ed = el("button", "link-btn", "Modifică recenzia"); ed.type = "button"; ed.onclick = () => form(deal.review.rating, deal.review.body || ""); box.append(ed);
+      return box;
+    }
+    form(0, ""); return box;
+    function form(start, text) {
+      let rating = start;
+      const stars = el("div", "rv-stars"), ta = el("textarea"), msg = el("p", "err"), ok = el("button", "primary", "Trimite recenzia");
+      ta.rows = 3; ta.maxLength = 500; ta.value = text; ta.placeholder = deal.as === "buyer" ? "Ai primit piesa? Era cum s-a descris?" : "Cum a fost cumpărătorul? A plătit și a ridicat la timp?"; msg.hidden = true; ok.type = "button";
+      const paint = () => [...stars.children].forEach((b, i) => { b.classList.toggle("on", i < rating); b.setAttribute("aria-pressed", String(i < rating)); });
+      [1, 2, 3, 4, 5].forEach((n) => { const b = el("button", "rv-star", "★"); b.type = "button"; b.setAttribute("aria-label", n + (n === 1 ? " stea" : " stele")); b.onclick = () => { rating = n; paint(); }; stars.append(b); });
+      paint();
+      ok.onclick = async () => {
+        if (!rating) { msg.textContent = "Alege câte stele dai."; msg.hidden = false; return; }
+        ok.disabled = true; msg.hidden = true;
+        try { await api(`/api/requests/quote/${qid}/rating`, "PUT", { rating, body: ta.value }); reload(); } catch (e) { msg.textContent = errText(e); msg.hidden = false; ok.disabled = false; }
+      };
+      box.replaceChildren(el("b", "", `Recenzează ${who} ${deal.other_name}`), stars, ta, msg, ok);
+    }
+  }
+  function paintDeal(box, qid, deal, reload) {
+    const out = [], prof = el("button", "link-btn", `Vezi profilul lui ${deal.other_name}`); prof.type = "button"; prof.onclick = () => window.openProfile && window.openProfile(deal.other_id);
+    if (!deal.completed) {
+      out.push(el("p", "muted", "Ați terminat tranzacția? Marchează-o ca finalizată, apoi vă puteți recenza reciproc."));
+      const b = el("button", "ghost", "Marchează tranzacția ca finalizată"); b.type = "button";
+      b.onclick = async () => { if (!confirm("Marchezi tranzacția ca finalizată? Nu se mai poate anula.")) return; b.disabled = true; try { await api(`/api/requests/quote/${qid}/complete`, "POST"); reload(); } catch (e) { showMessage("Eroare", errText(e)); b.disabled = false; } };
+      out.push(b);
+    } else { out.push(el("p", "rfq-done", "✔ Tranzacție finalizată")); out.push(reviewBox(qid, deal, reload)); }
+    out.push(prof); box.replaceChildren(...out);
+  }
+
   function quoteCard(r, q, best) {
     const card = el("article", "rfq-quote" + (q.status === "won" ? " won" : q.status === "lost" ? " lost" : ""));
     const top = el("div", "rfq-qtop"); const nm = el("b", "", q.company);
     const rate = q.rating ? ` · ★ ${q.rating} (${q.rating_count})` : "";
     top.append(nm, el("small", "muted", [q.dealer_city, q.dealer_county].filter(Boolean).join(", ") + rate));
     top.append(el("em", "rfq-chip", q.verified ? "Firmă verificată" : "Persoană fizică"));
-    if (q.status === "won") top.append(el("em", "rfq-chip sold", "Câștigătoare")); else if (best) top.append(el("em", "rfq-chip ok", "Cel mai mic total"));
+    if (q.status === "won") { top.append(el("em", "rfq-chip sold", "Câștigătoare")); if (q.completed_at) top.append(el("em", "rfq-chip ok", "Finalizată")); } else if (best) top.append(el("em", "rfq-chip ok", "Cel mai mic total"));
     const pr = el("div", "rfq-price"); pr.append(el("b", "", money(q.price, q.currency)));
     pr.append(el("span", "muted", q.shipping == null ? " + transport de stabilit" : q.shipping === 0 ? " · transport gratuit" : ` + ${money(q.shipping, q.currency)} transport`));
     const facts = el("ul", "rfq-facts"); [STATE[q.state], q.warranty_days ? `Garanție ${q.warranty_days} zile` : "Fără garanție", q.pickup ? "Ridicare din parc" : "Doar livrare"].forEach((f) => facts.append(el("li", "", f)));
@@ -197,6 +272,7 @@
       q.images.forEach((im, i) => { const b = el("button", "rfq-ph"); b.type = "button"; b.setAttribute("aria-label", `Poza ${i + 1}`); const g = el("img"); g.src = im.thumb || im.url; g.alt = ""; g.loading = "lazy"; b.append(g); b.onclick = () => openLightbox(q.images.map((x) => x.url), i, q.company); strip.append(b); });
       card.append(strip);
     }
+    { const qa = buyerQa(r, q); if (qa) card.append(qa); }
     if (q.status === "sent" && r.status === "open") {
       const b = el("button", "primary", "Alege această ofertă"); b.type = "button";
       b.onclick = async () => {
@@ -207,7 +283,7 @@
     }
     if (q.status === "won") {
       if (q.phone) { const a = el("a", "ghost rfq-call", "Sună: " + q.phone); a.href = "tel:" + q.phone.replace(/[^\d+]/g, ""); card.append(a); }
-      const c = el("button", "primary", "Deschide chatul"); c.type = "button"; c.onclick = () => go("chat", q.id); card.append(c);
+      const c = el("button", "primary", q.completed_at ? "Chat și recenzie" : "Deschide chatul"); c.type = "button"; c.onclick = () => go("chat", q.id); card.append(c);
     }
     return card;
   }
@@ -218,13 +294,15 @@
     const list = el("div", "rfq-chat"), ta = el("textarea"); ta.rows = 2; ta.maxLength = 2000; ta.placeholder = "Scrie un mesaj…";
     const send = el("button", "primary", "Trimite"); send.type = "button";
     const back = el("button", "link-btn", "‹ Înapoi"); back.type = "button"; back.onclick = () => go(st.from === "offers" ? "offers" : "detail", st.id);
-    const ttl = el("h3", "");
-    body.replaceChildren(back, ttl, list, ta, send);
-    let sig = "";
+    const ttl = el("h3", ""), deal = el("section", "rfq-deal");
+    body.replaceChildren(back, ttl, deal, list, ta, send);
+    let sig = "", dsig = "";
     const load = async () => {
       try {
         const d = await api(`/api/requests/quote/${qid}/chat`); const s = d.messages.map((m) => m.id).join(",");
-        ttl.textContent = `${d.title} · ${d.with}`; if (s === sig) return; sig = s;
+        ttl.textContent = `${d.title} · ${d.with}`;
+        const ds = JSON.stringify(d.deal); if (ds !== dsig) { dsig = ds; paintDeal(deal, qid, d.deal, load); }   // formularul de recenzie se redesenează doar când se schimbă starea, nu la fiecare reîmprospătare
+        if (s === sig) return; sig = s;
         list.replaceChildren(...(d.messages.length ? d.messages.map((m) => { const b = el("div", "rfq-msg" + (m.mine ? " mine" : "")); b.append(el("span", "", m.body), el("small", "", when(m.created_at))); return b; }) : [el("p", "muted", "Scrie primul mesaj: stabiliți livrarea, plata și ridicarea.")]));
         list.scrollTop = list.scrollHeight;
       } catch (e) { list.replaceChildren(el("p", "err", errText(e))); }
@@ -320,8 +398,12 @@
     if (status[0]) card.append(el("em", "rfq-chip " + status[1], status[0]));
     if (pub) card.append(" ", el("small", "muted", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}` : "nicio ofertă încă"));
     if (r.quote_id) card.append(el("p", "rfq-price", `Oferta ta: ${money(r.price, r.currency)}${r.shipping == null ? "" : r.shipping === 0 ? " · transport gratuit" : " + " + money(r.shipping, r.currency) + " transport"}`));
+    { const qa = dealerQa(r, onDone); if (qa) card.append(qa); }
     if (r.mine) card.append(el("p", "muted", "Aceasta este cererea ta."));
-    else if (r.quote_status === "won") { const c = el("button", "primary", `Chat cu ${r.buyer}`); c.type = "button"; c.onclick = () => { st.quote = r.quote_id; st.from = "offers"; go("chat", r.quote_id); }; card.append(c); }
+    else if (r.quote_status === "won") {
+      const br = r.buyer_rating_count ? ` · ★ ${r.buyer_rating} (${r.buyer_rating_count})` : " · fără recenzii ca cumpărător";
+      card.append(el("p", "muted", `Cumpărător: @${r.buyer}${br}${r.completed_at ? " · tranzacție finalizată" : ""}`));
+      const c = el("button", "primary", r.completed_at ? `Chat și recenzie · ${r.buyer}` : `Chat cu ${r.buyer}`); c.type = "button"; c.onclick = () => { st.quote = r.quote_id; st.from = "offers"; go("chat", r.quote_id); }; card.append(c); }
     else if (r.accepting !== false && r.quote_status !== "lost") {
       const b = el("button", r.quote_id ? "ghost" : "primary", r.quote_id ? "Modifică oferta" : "Trimite ofertă"); b.type = "button";
       b.onclick = () => { if (!me) return openAuth(); b.replaceWith(quoteForm(r, onDone)); }; card.append(b);
