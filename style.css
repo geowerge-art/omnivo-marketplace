@@ -1521,3 +1521,6 @@ button.adm-stat { cursor: pointer; }
 .rfq-ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .rfq-phx { position: absolute; top: 3px; right: 3px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(20,17,12,.75); color: #fff; font-size: 16px; line-height: 24px; padding: 0; cursor: pointer; }
 .rfq-addph { margin-top: 4px; }
+.rfq-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 0; }
+.rfq-filters input[type=search] { grid-column: 1 / -1; height: 50px; padding: 0 14px; }
+.rfq-filters input, .rfq-filters select { height: 50px; min-width: 0; padding: 0 12px; }

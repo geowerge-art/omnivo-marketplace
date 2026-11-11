@@ -405,7 +405,7 @@ function accMenu() {
   const secs = document.createElement("div"); secs.className = "acc-sections";
   secs.append(
     accGroup("Anunțurile tale", [...status, accItem("Studio · statistici", () => accGo("studio"))]),
-    accGroup("Cumpăr", [accItem("Cere oferte pentru o piesă", () => window.openRequests && window.openRequests()), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
+    accGroup("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests()), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
     accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN"), accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN")]),
     accGroup("Cont", [accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag"), accItem("Datele mele și ștergerea contului", () => window.openData && window.openData()), accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );
