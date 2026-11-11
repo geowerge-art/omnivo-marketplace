@@ -395,6 +395,38 @@ function accGroup(title, items) {
   const d = document.createElement("section"); d.className = "acc-group"; const h = document.createElement("h3"); h.textContent = title;
   const l = document.createElement("div"); l.className = "acc-list"; l.append(...items); d.append(h, l); return d;
 }
+/* sus în cont: acțiunea principală „Adaugă anunț”, cât din plan folosești și, dacă există, creditele */
+function accHero() {
+  const card = document.createElement("section"); card.className = "acc-hero";
+  const top = document.createElement("div"); top.className = "ah-top";
+  const info = document.createElement("div"); info.className = "ah-info";
+  const lab = document.createElement("small"); lab.textContent = "Anunțuri active";
+  const cnt = document.createElement("b"); cnt.textContent = "–";
+  const meter = document.createElement("div"); meter.className = "st-meter"; const fill = document.createElement("i"); meter.append(fill); fill.style.width = "0%";
+  const sub = document.createElement("small"); sub.className = "ah-sub";
+  info.append(lab, cnt, meter, sub);
+  const add = document.createElement("button"); add.type = "button"; add.className = "primary ah-add"; add.textContent = "+ Adaugă anunț";
+  let full = false; add.addEventListener("click", () => (full ? accGo("plan") : openSell()));
+  top.append(info, add); card.append(top);
+  const chips = document.createElement("div"); chips.className = "ah-chips"; card.append(chips);
+  const chip = (txt, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "acc-chip"; b.textContent = txt; b.addEventListener("click", fn); chips.append(b); return b; };
+  loadPlan(true).then((p) => {
+    if (!p || !planCache) return;
+    const used = planCache.d.usage.listings, staff = me.role !== "user";
+    cnt.textContent = staff ? String(used) : `${used} / ${p.listings}`;
+    fill.style.width = staff ? "0%" : Math.min(100, Math.round((used / p.listings) * 100)) + "%";
+    sub.textContent = staff ? "Cont de administrare: fără limită de anunțuri." : used >= p.listings ? `Ai atins limita planului ${p.name}.` : `Mai poți publica ${p.listings - used} anunțuri pe planul ${p.name}.`;
+    if (!staff && used >= p.listings) { full = true; add.textContent = "Limită atinsă · vezi planurile"; }
+    chip(`Plan ${p.name}`, () => accGo("plan"));
+  }).catch(() => {});
+  if (window.loadBilling) loadBilling().then((b) => { if (b && b.enabled) chip(`${b.balance} ${b.balance === 1 ? "credit" : "credite"}`, () => accGo("wallet")); }).catch(() => {});
+  return card;
+}
+function ensureBell() {
+  let b = $("accBell");
+  if (!b) { b = document.createElement("button"); b.type = "button"; b.id = "accBell"; b.className = "acc-bell"; b.setAttribute("aria-label", "Notificări"); b.addEventListener("click", () => accGo("notif")); $("accBack").before(b); }
+  b.hidden = !notifCount; b.textContent = "🔔 " + notifCount;
+}
 function accMenu() {
   const isAdmin = me.role === "admin", isMod = me.role === "moderator";
   const tiles = document.createElement("nav"); tiles.className = "acc-tiles"; tiles.setAttribute("aria-label", "Scurtături cont");
@@ -412,7 +444,7 @@ function accMenu() {
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
   if (isMod || isAdmin) secs.appendChild(accGroup("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])]));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
-  const last = [tiles, secs, out];
+  const last = [accHero(), tiles, secs, out];
   if (isAdmin || isMod) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", () => openAdmin()); last.push(ad); }
   $("accMain").replaceChildren(...last);
   api("/api/listings/mine").then((r) => {
@@ -428,7 +460,7 @@ function accShow(view) {
   if (!me) return accClosePage();
   accCur = view || null;
   $("accName").textContent = me.nickname; $("accSub").textContent = me.name || me.email || ""; loadPlan().then((p) => { if (p && !$("accName").querySelector(".plan-badge")) { const b = document.createElement("span"); b.className = "plan-badge " + p.key; b.textContent = p.name; $("accName").append(" ", b); } }); $("accAv").textContent = (me.nickname || "?").charAt(0).toUpperCase();
-  $("accountPage").scrollTop = 0;
+  $("accountPage").scrollTop = 0; ensureBell();
   if (!accCur) return accMenu();
   const titles = { mine: "Anunțurile mele", favs: "Favorite", saved: "Căutări salvate", stats: "Studio", studio: "Studio", plan: "Planul meu", wallet: "Portofel și credite", modstudio: "Studio moderare", notif: "Notificări" };
   const h = document.createElement("h2"); h.className = "acc-title"; h.textContent = titles[accCur] || "";
@@ -701,7 +733,7 @@ $("detShare")?.addEventListener("click", async () => {
 
 /* ---- notificări ---- */
 let notifCount = 0, toastTimer = null;
-function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } }
+function paintNotifCount() { const c = $("accNotifN"); if (c) { c.textContent = notifCount || ""; c.hidden = !notifCount; } if (accIsOpen()) ensureBell(); }
 async function loadNotifCount() { notifCount = 0; if (me) { try { notifCount = (await api("/api/notifications/count")).unread; } catch { /* fără notificări */ } } paintNotifCount(); }
 function toast(text, fn) {
   let t = $("toast"); if (!t) { t = document.createElement("button"); t.id = "toast"; t.type = "button"; t.className = "toast"; document.body.appendChild(t); }
