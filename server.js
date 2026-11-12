@@ -10,6 +10,9 @@ async function main() {
     await ensureAdmin();
     // curăță sesiunile expirate din oră în oră
     setInterval(() => db.query('DELETE FROM sessions WHERE expires_at < NOW()').catch(() => {}), 3600000).unref();
+    // anunțurile șterse de peste 30 de zile se elimină definitiv (la pornire și apoi din oră în oră)
+    const purge = () => require('./listings').purgeDeleted().catch((e) => console.error('purge anunțuri:', e.message));
+    setTimeout(purge, 30 * 1000).unref(); setInterval(purge, 3600000).unref();
     // „Cere oferte”: expirări, reamintiri și anunțuri fără să aștepte o vizită pe site
     setInterval(() => require('./requests').sweep().catch((e) => console.error('rfq sweep:', e.message)), 10 * 60 * 1000).unref();
   } else {

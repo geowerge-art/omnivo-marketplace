@@ -8,7 +8,7 @@ const ERR = {
   CUVINTE_INTERZISE: "Textul conține cuvinte sau oferte interzise pe Omnivo. Dacă e o greșeală, scrie-ne la Contact.",
   PUBLICARE_OPRITA: "Publicarea e oprită temporar din cauza unor încercări repetate de a încălca regulile de conținut. Încearcă din nou mai târziu sau scrie-ne la Contact.",
   CONT_BLOCAT_AUTO: "Contul a fost blocat automat pentru încălcări repetate ale regulilor. Dacă crezi că e o greșeală, scrie-ne la Contact.",
-  LIMITA_ANUNTURI: "Ai atins numărul maxim de anunțuri active al planului tău. Vezi Cont › Planul meu.", PLAN_INVALID: "Plan necunoscut.", DOAR_TITANIUM: "Exportul CSV e disponibil doar pe planul Titanium.",
+  ANUNT_STERS: "Anunțul a fost șters, așa că nu mai poți scrie în această conversație.", ANUNT_VANDUT: "Anunțul a fost vândut, așa că nu mai poți scrie în această conversație.", LIMITA_ANUNTURI: "Ai atins numărul maxim de anunțuri active al planului tău. Vezi Cont › Planul meu.", PLAN_INVALID: "Plan necunoscut.", DOAR_TITANIUM: "Exportul CSV e disponibil doar pe planul Titanium.",
   REINNOIRE_PREA_DEVREME: "Anunțul se poate reînnoi cu cel mult 7 zile înainte să expire.", REINNOIRE_INDISPONIBILA: "Doar anunțurile active se pot reînnoi.", REACTUALIZARE_PREA_DEVREME: "Poți reactualiza un anunț o singură dată la 24 de ore.", PROMOVARE_INDISPONIBILA: "Promovarea nu este disponibilă acum.", PREA_MULTE_PROMOVARI: "Poți avea cel mult 3 anunțuri promovate în același timp.", PROMOVARE_INVALIDA: "Alege 3, 7 sau 30 de zile.",
   INVALID_LOGIN: "Email, nickname sau parolă greșite.", LOGIN_RATE_LIMIT: "Prea multe încercări. Mai încearcă peste câteva minute.", CONT_BLOCAT: "Contul este blocat.",
   EMAIL_EXISTS: "Există deja un cont cu acest email.", NICKNAME_EXISTS: "Nickname-ul este luat.", NICKNAME_INVALID: "Nickname invalid (3-24 caractere: litere, cifre, . _ -).",
@@ -292,7 +292,7 @@ async function toggleFav(id) {
 }
 
 /* ---- contul meu: anunțurile mele, favorite, mesaje, setări ---- */
-const ST = { approved: ["Activ", "ok"], pending: ["În moderare", "wait"], rejected: ["Respins", "bad"], sold: ["Vândut", "sold"], blocked: ["Blocat", "bad"] };
+const ST = { approved: ["Activ", "ok"], pending: ["În moderare", "wait"], rejected: ["Respins", "bad"], sold: ["Vândut", "sold"], blocked: ["Blocat", "bad"], deleted: ["Șters", "bad"] };
 let accCur = null;                                   // null = meniul contului, altfel „mine" | „favs" | „saved" | „stats"
 const accIsOpen = () => !$("accountPage").hidden;
 const note = (txt) => { const p = document.createElement("p"); p.className = "muted"; p.textContent = txt; return p; };
@@ -348,6 +348,11 @@ const aico = (k, sz = 22) => `<svg viewBox="0 0 24 24" width="${sz}" height="${s
 function listingActs(l, ctx = {}) {
   const acts = [], ex = expState(l), after = (gone) => { if (ctx.detail) { if (gone) $("detailDialog").close(); else openDetail(l.id); } if (accIsOpen()) renderAcc(); loadListings(); };
   const A = (key, label, fn, o = {}) => acts.push({ key, label, fn, ...o });
+  if (l.status === "deleted") {   // în „Șterse”: doar reactivare sau ștergere definitivă
+    A("resume", "Reactivează", async () => { await api(`/api/listings/${l.id}/restore`, "POST"); after(); }, { main: 1 });
+    A("del", "Șterge definitiv", async () => { if (!confirm(`Ștergi definitiv anunțul „${l.title}”?\nNu mai poate fi recuperat, iar conversațiile legate de el dispar.`)) return; await api("/api/listings/" + l.id, "DELETE"); after(true); }, { danger: 1, main: 1 });
+    return acts;
+  }
   const leaveDetail = () => { if (ctx.detail) $("detailDialog").close(); };
   if (l.status === "approved") A("promo", l.promoted ? "Prelungește promovarea" : "Promovează", async () => { leaveDetail(); openPromo(l); }, { main: 1, short: l.promoted ? "Prelungește" : "" });
   if (l.status === "approved") {
@@ -370,7 +375,7 @@ function listingActs(l, ctx = {}) {
   if (l.status === "approved") A("sold", "Marchează vândut", async () => { await api(`/api/listings/${l.id}/status`, "PATCH", { status: "sold" }); after(); });
   if (!ctx.detail) A("view", "Previzualizează", async () => openDetail(l.id));
   if (!ctx.detail) A("stats", "Vezi statisticile", async () => accGo("stats"));
-  A("del", "Șterge", async () => { if (!confirm(`Ștergi anunțul „${l.title}”?`)) return; await api("/api/listings/" + l.id, "DELETE"); after(true); }, { danger: 1 });
+  A("del", "Șterge", async () => { if (!confirm(`Ștergi anunțul „${l.title}”?\nRămâne 30 de zile în „Șterse”, de unde îl poți reactiva.`)) return; await api("/api/listings/" + l.id, "DELETE"); after(true); }, { danger: 1 });
   return acts;
 }
 async function runAct(a, btn) {
@@ -393,7 +398,7 @@ $("actDialog")?.addEventListener("click", (e) => { if (e.target === $("actDialog
 const accCounts = () => ({
   approved: accMine.filter((l) => l.status === "approved" && !isExpired(l)).length, pending: accMine.filter((l) => l.status === "pending").length,
   expired: accMine.filter(isExpired).length, sold: accMine.filter((l) => l.status === "sold").length,
-  promo: accMine.filter((l) => l.promoted && !isExpired(l)).length, rejected: accMine.filter((l) => ["rejected", "blocked"].includes(l.status)).length
+  promo: accMine.filter((l) => l.promoted && !isExpired(l)).length, rejected: accMine.filter((l) => ["rejected", "blocked"].includes(l.status)).length, deleted: accMine.filter((l) => l.status === "deleted").length
 });
 function accTile(txt, n, fn, id) {
   const b = document.createElement("button"); b.type = "button"; b.className = "acc-tile";
@@ -439,7 +444,7 @@ function accMenu() {
   const isAdmin = me.role === "admin", isMod = me.role === "moderator";
   const tiles = document.createElement("nav"); tiles.className = "acc-tiles"; tiles.setAttribute("aria-label", "Scurtături cont");
   tiles.append(accTile("Anunțuri", accMine.length ? accCounts().approved : "–", () => { accFilter = "approved"; accGo("mine"); }, "accTileMine"), accTile("Mesaje", unread || 0, openInbox, "accTileMsgs"), accTile("Favorite", favIds.size, () => accGo("favs")), accTile("Căutări", "–", () => accGo("saved"), "accTileSaved"));
-  const status = [["approved", "Active"], ["pending", "În moderare"], ["expired", "Expirate"], ["sold", "Vândute"], ["promo", "Promovate"], ["rejected", "Respinse"]].map(([k, t]) => {
+  const status = [["approved", "Active"], ["pending", "În moderare"], ["expired", "Expirate"], ["sold", "Vândute"], ["promo", "Promovate"], ["rejected", "Respinse"], ["deleted", "Șterse"]].map(([k, t]) => {
     const it = accItem(t, () => { accFilter = k; accGo("mine"); }, "", "accC_" + k); it.dataset.k = k; if (k !== "approved" && k !== "pending" && k !== "sold") it.hidden = true; return it;
   });
   const secs = document.createElement("div"); secs.className = "acc-sections";
@@ -540,7 +545,7 @@ function drawMine(box) {
   if (accFilter === "all") accFilter = "approved";
   const cnt = (k) => accMine.filter((l) => inF(l, k)).length;
   const tabs = document.createElement("div"); tabs.className = "acc-tabs";
-  [["approved", "Active"], ["pending", "În moderare"], ["expired", "Expirate"], ["sold", "Vândute"], ["promo", "Promovate"], ["rejected", "Respinse"]].forEach(([k, t]) => {
+  [["approved", "Active"], ["pending", "În moderare"], ["expired", "Expirate"], ["sold", "Vândute"], ["promo", "Promovate"], ["rejected", "Respinse"], ["deleted", "Șterse"]].forEach(([k, t]) => {
     if (k !== "approved" && !cnt(k) && accFilter !== k) return;
     const b = document.createElement("button"); b.type = "button"; b.className = accFilter === k ? "on" : ""; b.textContent = `${t} ${cnt(k)}`;
     b.addEventListener("click", () => { accFilter = k; drawMine(box); }); tabs.appendChild(b);
@@ -584,7 +589,7 @@ function openPromo(l) {
 }
 $("promoCancel")?.addEventListener("click", () => $("promoDialog").close());
 function mineRow(l, box) {
-  const r = document.createElement("article"); r.className = "mc" + (isExpired(l) ? " is-exp" : "");
+  const r = document.createElement("article"); r.className = "mc" + (isExpired(l) ? " is-exp" : "") + (l.status === "deleted" ? " is-del" : "");
   const top = document.createElement("div"); top.className = "mc-top";
   const th = document.createElement("div"); th.className = "mc-th";
   if (l.thumb) { const g = document.createElement("img"); g.src = l.thumb; g.alt = ""; g.loading = "lazy"; th.appendChild(g); } else th.innerHTML = icon(iconOf[l.category_slug] || "alt", 30);
@@ -597,14 +602,15 @@ function mineRow(l, box) {
   if (l.promoted && l.status === "approved") { const pr = document.createElement("span"); pr.className = "mc-promo"; pr.textContent = "⭐ Promovat până pe " + dShort(l.promoted_until); mid.appendChild(pr); }
   const dots = document.createElement("button"); dots.type = "button"; dots.className = "mc-dots"; dots.setAttribute("aria-label", "Gestionează acest anunț"); dots.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>';
   dots.addEventListener("click", (e) => { e.stopPropagation(); openActSheet(l); });
-  top.append(th, mid, dots); [th, t, p].forEach((el) => el.addEventListener("click", () => openDetail(l.id)));
+  top.append(th, mid, dots); if (l.status !== "deleted") [th, t, p].forEach((el) => el.addEventListener("click", () => openDetail(l.id)));
   const stats = document.createElement("div"); stats.className = "mc-stats";
   [["view", l.views || 0, "Vizualizări"], ["msg", l.msgs || 0, "Mesaje"], ["heart", l.favs || 0, "Salvări la favorite"]].forEach(([k, n, tt]) => { const s = document.createElement("span"); s.title = tt; s.setAttribute("aria-label", `${tt}: ${n}`); s.innerHTML = aico(k, 20); s.append(" " + n); stats.appendChild(s); });
   r.append(top, stats);
+  if (l.status === "deleted" && l.deleted_at) { const left = Math.max(0, Math.ceil((new Date(l.deleted_at).getTime() + 30 * DAY - Date.now()) / DAY)); const n = document.createElement("p"); n.className = "mc-note"; n.textContent = `Se șterge definitiv automat pe ${dShort(new Date(l.deleted_at).getTime() + 30 * DAY)} (${left === 1 ? "mai e 1 zi" : `mai sunt ${left} zile`}).`; r.appendChild(n); }
   const mains = listingActs(l).filter((a) => a.main).slice(0, 2);
   if (mains.length) {
     const row = document.createElement("div"); row.className = "mc-btns";
-    mains.forEach((a, i) => { const b = document.createElement("button"); b.type = "button"; b.className = i === 0 && a.key === "promo" ? "mc-b dark" : "mc-b"; b.textContent = a.short || a.label; b.addEventListener("click", () => runAct(a, b)); row.appendChild(b); });
+    mains.forEach((a, i) => { const b = document.createElement("button"); b.type = "button"; b.className = (i === 0 && a.key === "promo" ? "mc-b dark" : "mc-b") + (a.danger ? " danger" : ""); b.textContent = a.short || a.label; b.addEventListener("click", () => runAct(a, b)); row.appendChild(b); });
     r.appendChild(row);
   } else if (l.status === "pending") { const n = document.createElement("p"); n.className = "mc-note"; n.textContent = "Anunțul este verificat de un moderator și apare în scurt timp."; r.appendChild(n); }
   return r;
@@ -673,7 +679,7 @@ async function loadListings() {
   const box = $("products"); box.setAttribute("aria-busy", "true");
   try {
     const url = mode === "mine" ? "/api/listings/mine" : mode === "admin" ? "/api/admin/listings?status=pending" : "/api/listings?" + new URLSearchParams(filter);
-    const { listings } = await api(url);
+    let { listings } = await api(url); if (mode === "mine") listings = listings.filter((l) => l.status !== "deleted");
     box.replaceChildren(...listings.map(card));
     $("emptyMessage").hidden = listings.length > 0;
     $("emptyMessage").textContent = mode === "public" ? "Nu am găsit anunțuri. Fii primul care adaugă unul!" : "Nimic de afișat aici.";
@@ -1107,6 +1113,8 @@ window.addEventListener("pageshow", () => { if (me && !live && !liveStopped) sta
 
 const roleLabel = (r) => (r === "seller" ? "Vânzător" : "Cumpărător");
 function roleBadge(r) { const b = document.createElement("em"); b.className = "role-b " + (r === "seller" ? "seller" : "buyer"); b.textContent = roleLabel(r); return b; }
+const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg>';
+function setGoneMark(x, st) { if (st === "sold") { x.textContent = "Vândut"; x.setAttribute("aria-label", "Vândut"); } else { x.innerHTML = TRASH; x.setAttribute("aria-label", "Anunț șters"); } }
 function prodThumb(src, cls) { const im = document.createElement("img"); im.className = cls; im.alt = ""; im.loading = "lazy"; im.src = src; return im; }
 const sel = { on: false, keys: new Set() };
 const tkey = (t) => t.listing_id + ":" + t.other;
@@ -1139,7 +1147,9 @@ async function renderInbox() {
     const ti = document.createElement("span"); ti.className = "cp-ti"; ti.textContent = t.title;
     const sm = document.createElement("small"); if (t.mine) sm.append(tickEl(tickState(t)), " "); sm.append(t.attach && !t.body ? (t.attach === "file" ? "📎 Fișier" : "📷 Poză") : t.body);
     mid.append(top, ti, sm); b.append(avatar(t.other_name, t.other), mid);
-    if (t.thumb) b.appendChild(prodThumb(t.thumb, "cp-prod"));
+    const gone = t.listing_status === "deleted" || t.listing_status === "sold";
+    if (gone) { b.classList.add("gone"); const g = document.createElement("span"); g.className = "cp-gone" + (t.listing_status === "sold" ? " sold" : ""); g.textContent = t.listing_status === "sold" ? "Vândut" : "Anunț șters"; ti.appendChild(g); }
+    if (t.thumb) { if (gone) { const w = document.createElement("span"); w.className = "cp-pw"; w.append(prodThumb(t.thumb, "cp-prod")); const x = document.createElement("span"); x.className = "cp-ad-x"; setGoneMark(x, t.listing_status); w.appendChild(x); b.appendChild(w); } else b.appendChild(prodThumb(t.thumb, "cp-prod")); }
     if (t.unread) { const d = document.createElement("span"); d.className = "dot"; d.textContent = t.unread; b.appendChild(d); }
     const chk = document.createElement("span"); chk.className = "cp-chk"; chk.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'; b.prepend(chk);
     let pressT = 0, longDone = false;
@@ -1161,9 +1171,16 @@ async function openInbox() {
   catch (err) { if (err.status === 401) { setMe(null); openAuth(); } else showMessage("Eroare", errText(err)); }
 }
 
+/* anunț șters sau vândut: poza se albește cu semn, antetul nu se mai poate apăsa și nu se mai scrie */
+function setChatGone(st) {
+  const ad = $("chatAd"), x = $("chatAdX"), lab = $("chatAdSt"), on = st === "deleted" || st === "sold";
+  ad.classList.toggle("gone", on); ad.classList.toggle("sold", st === "sold"); ad.disabled = on; x.hidden = lab.hidden = !on;
+  if (on) { setGoneMark(x, st); lab.textContent = st === "sold" ? "Anunț vândut" : "Anunț șters"; }
+  const inp = $("chatInput"); if (inp) inp.placeholder = st === "deleted" ? "Anunțul a fost șters – nu mai poți scrie" : st === "sold" ? "Anunțul a fost vândut – nu mai poți scrie" : "Scrie un mesaj…";
+}
 async function openChat(listingId, withId, title) {
   chat = { listingId, withId, sig: "", blocked: false, first: true };
-  $("chatTitle").textContent = title || "Anunț"; $("chatWith").textContent = "Conversație"; $("chatRoles").textContent = ""; $("chatAdImg").hidden = true; $("chatAv").textContent = "?"; $("chatPop").hidden = true; setPresence(null); fitChat(); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
+  $("chatTitle").textContent = title || "Anunț"; $("chatWith").textContent = "Conversație"; $("chatRoles").textContent = ""; $("chatAdImg").hidden = true; setChatGone(null); $("chatAv").textContent = "?"; $("chatPop").hidden = true; setPresence(null); fitChat(); $("chatLog").replaceChildren(); $("chatInput").value = ""; show($("chatErr"), "");
   open("chatDialog"); fitChat(); autoGrow();
   await refreshChat();
   clearInterval(chatTimer); chatTimer = setInterval(() => { if (!document.hidden) refreshChat(); }, live ? 20000 : 8000);   // cu conexiune live, interogarea e doar plasă de siguranță
@@ -1179,7 +1196,8 @@ async function refreshChat() {
     { const im = $("chatAdImg"); if (d.listing.thumb) { if (im.getAttribute("src") !== d.listing.thumb) im.src = d.listing.thumb; im.hidden = false; } else im.hidden = true; } const av = avatar(d.other.nickname, d.other.id); $("chatAv").textContent = av.textContent; $("chatAv").style.background = av.style.background;
     if (!$("chatPresence").classList.contains("typing")) setPresence(d.presence);
     $("chatBlock").textContent = c.blocked ? "Deblochează utilizatorul" : "Blochează utilizatorul";
-    $("chatInput").disabled = $("chatSend").disabled = $("chatAttach").disabled = c.blocked;
+    c.gone = d.listing.status === "deleted" || d.listing.status === "sold"; setChatGone(c.gone ? d.listing.status : null);
+    $("chatInput").disabled = $("chatSend").disabled = $("chatAttach").disabled = c.blocked || c.gone;
     const mine = d.messages.filter((m) => m.mine), last = d.messages.length ? d.messages[d.messages.length - 1].id : 0;
     const sig = `${d.messages.length}:${last}:${mine.filter((m) => m.read).length}:${mine.filter((m) => m.delivered).length}`;
     if (sig !== c.sig) {
@@ -1262,7 +1280,7 @@ async function pickUpload(e, isDoc) {
       } else await sendAttach(c, "/api/messages/image", { "content-type": "image/jpeg" }, await compress(f));
     }
   } catch (err) { if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); } else show($("chatErr"), errText(err)); }
-  if (chat) $("chatAttach").disabled = chat.blocked;
+  if (chat) $("chatAttach").disabled = chat.blocked || chat.gone;
 }
 $("chatFileGal")?.addEventListener("change", (e) => pickUpload(e, false));
 $("chatFileCam")?.addEventListener("change", (e) => pickUpload(e, false));
@@ -1282,7 +1300,7 @@ $("chatForm")?.addEventListener("submit", async (e) => {
   show($("chatErr"), ""); $("chatSend").disabled = true;
   try { await api("/api/messages", "POST", { listing_id: c.listingId, to: c.withId, body }); $("chatInput").value = ""; autoGrow(); c.sig = ""; await refreshChat(); $("chatInput").focus(); }
   catch (err) { if (err.status === 401) { $("chatDialog").close(); setMe(null); openAuth(); } else show($("chatErr"), errText(err)); }
-  if (chat) $("chatSend").disabled = chat.blocked;
+  if (chat) $("chatSend").disabled = chat.blocked || chat.gone;
 });
 $("chatBlock")?.addEventListener("click", async () => {
   const c = chat; if (!c) return; $("chatPop").hidden = true;

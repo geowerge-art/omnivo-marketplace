@@ -92,3 +92,8 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - Fișiere: `033_delivery.sql` (`users.ship_addr`, `quotes.ship_to`), `requests.js`, `requests-ui.js`, `requests.test.js`, `requests.ui.test.js`.
 - **Atenție:** `POST /api/requests/:id/award/:qid` cere acum `delivery`; clientul vechi fără adresă primește eroare.
 - Verificat pe Postgres: alegere fără adresă refuzată, adresă salvată în cont, vizibilă câștigătorului, modificare, refuz după expediere (33 de scenarii). Neverificat: aspectul formularului pe telefon.
+
+## Anunțuri șterse, chat și agrafă (034)
+- **Șterse (30 de zile):** ștergerea mută anunțul în „Anunțurile mele › Șterse” (coloane noi `deleted_at`, `deleted_from`, migrarea 034). De acolo: **Reactivează** (revine direct, cu statusul de dinainte, respectând limita planului) sau **Șterge definitiv** (cu confirmare; pozele din Storage și conversațiile dispar). După 30 de zile se șterge automat (curățenie la pornire și din oră în oră, `purgeDeleted` în `listings.js`). Rută nouă: `POST /api/listings/:id/restore`.
+- **Chat cu anunț șters sau vândut:** conversația rămâne în inbox și în chat; poza anunțului apare albită, cu semn de coș (șters) sau „Vândut”; antetul nu se mai poate apăsa; nu se mai poate scrie (`ANUNT_STERS` / `ANUNT_VANDUT` pe `POST /api/messages`). Dacă anunțul e șters definitiv, conversația dispare.
+- **Agrafa din chat:** cercurile colorate (Galerie / Cameră / Fișier) aveau culoarea în `style=""` inline, blocat de CSP (`styleSrc 'self'`), iar iconițele sunt albe, deci nu se vedeau. Culorile sunt acum în `style.css`.

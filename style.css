@@ -1689,3 +1689,25 @@ button.adm-stat { cursor: pointer; }
 .rfq-steps li { flex: 1; text-align: center; font-size: .78em; font-weight: 700; padding: 6px 2px; border-radius: 8px; background: #eee; color: #777; }
 .rfq-steps li.done { background: #dff1e2; color: #2d6a3a; }
 .rfq-steps li.now { background: #14110c; color: #e9d3a8; }
+
+/* iconițele din meniul agrafei (culorile erau inline și le bloca CSP-ul) */
+.cp-att i.c-gal{background:#8e5cf0}.cp-att i.c-cam{background:#e0527a}.cp-att i.c-doc{background:#3b82d6}
+.cp-att i svg{display:block;width:20px;height:20px}
+/* chat: anunț șters / vândut = poză albită cu semn, antet inactiv */
+.cp-ad-ph{position:relative;flex:none;width:44px;height:44px;display:block}
+.cp-ad-ph .cp-ad-img[hidden]{display:none}
+.cp-ad-x{position:absolute;inset:0;display:grid;place-items:center;border-radius:8px;background:rgba(255,255,255,.72);color:#b3261e;font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.cp-ad-x[hidden]{display:none}.cp-ad-x svg{width:24px;height:24px;display:block}
+.cp-ad-st{display:block;font-size:12px;font-weight:700;color:#b3261e}.cp-ad-st[hidden]{display:none}
+.cp-ad.gone{cursor:default;pointer-events:none;background:#f3f1ec}
+.cp-ad.gone .cp-ad-img{filter:grayscale(1);opacity:.45}.cp-ad.gone .cp-ad-t{color:#8a8578;text-decoration:line-through}.cp-ad.gone>i{display:none}
+.cp-ad.gone.sold .cp-ad-x{color:#7a5a1e}.cp-ad.gone.sold .cp-ad-st{color:#7a5a1e}.cp-ad.gone.sold .cp-ad-t{text-decoration:none}
+/* inbox: același semn pe poza din listă */
+.cp-pw{position:relative;flex:none;display:block;width:44px;height:44px}.cp-pw .cp-prod{display:block}
+.cp-row.gone .cp-prod{filter:grayscale(1);opacity:.45}.cp-row.gone .cp-ti{color:#8a8578}
+.cp-row .cp-gone{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;background:#f6dcd9;color:#b3261e;font-size:11px;font-weight:800}
+.cp-row .cp-gone.sold{background:#f1e5c8;color:#7a5a1e}
+/* Anunțurile mele › Șterse */
+.mc.is-del .mc-th img,.mc.is-del .mc-th svg{filter:grayscale(1);opacity:.5}.mc.is-del .mc-t{color:#8a8578}
+.mc.is-del .mc-th,.mc.is-del .mc-t,.mc.is-del .mc-p{cursor:default}
+.mc-b.danger{color:#b3261e;border-color:#e3b2ad}

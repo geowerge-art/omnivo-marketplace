@@ -44,12 +44,12 @@ router.get('/', ah(async (req, res) => {
        SELECT id, listing_id, body, (SELECT c.kind FROM chat_images c WHERE c.id = messages.image_id) AS attach, created_at, read_at, delivered_at, (sender_id = $1) AS mine,
               CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other
          FROM messages WHERE sender_id = $1 OR recipient_id = $1)
-     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, l.user_id AS seller_id,
+     SELECT t.listing_id, t.other, u.nickname AS other_name, l.title, l.status AS listing_status, l.user_id AS seller_id,
             (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb, t.body, t.attach, t.created_at, t.mine, t.read_at, t.delivered_at,
             (SELECT COUNT(*)::int FROM m x WHERE x.listing_id = t.listing_id AND x.other = t.other AND NOT x.mine AND x.read_at IS NULL AND x.created_at > COALESCE(h.cleared_at, 'epoch'::timestamptz)) AS unread
        FROM (SELECT DISTINCT ON (listing_id, other) * FROM m ORDER BY listing_id, other, id DESC) t
        JOIN users u ON u.id = t.other
-       JOIN listings l ON l.id = t.listing_id AND l.status <> 'deleted'
+       JOIN listings l ON l.id = t.listing_id
        LEFT JOIN chat_hidden h ON h.user_id = $1 AND h.listing_id = t.listing_id AND h.other_id = t.other
       WHERE (h.cleared_at IS NULL OR t.created_at > h.cleared_at) AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = t.other)
       ORDER BY t.id DESC LIMIT 100`, [req.user.id]);
@@ -61,7 +61,7 @@ router.get('/thread', ah(async (req, res) => {
   const listingId = toId(req.query.listing), other = toId(req.query.with), me = req.user.id;
   if (!listingId || !other || other === me) return res.status(400).json({ error: 'DATE_INVALIDE' });
   const [lr, ur] = await Promise.all([
-    db.query("SELECT l.id, l.user_id, l.title, l.status, (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb FROM listings l WHERE l.id = $1 AND l.status <> 'deleted'", [listingId]),
+    db.query("SELECT l.id, l.user_id, l.title, l.status, (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb FROM listings l WHERE l.id = $1", [listingId]),
     db.query("SELECT id, nickname FROM users WHERE id = $1 AND status = 'active'", [other])
   ]);
   const l = lr.rows[0];
@@ -94,7 +94,9 @@ router.post('/', requireVerified, ah(async (req, res) => {
   const b = req.body || {}, body = String(b.body || '').trim(), listingId = toId(b.listing_id), me = req.user.id, imageId = b.image_id ? toId(b.image_id) : null;
   if (!listingId || (!body && !imageId) || body.length > MAX_BODY || (b.image_id && !imageId)) return res.status(400).json({ error: 'MESAJ_INVALID' });
   const l = (await db.query('SELECT id, user_id, status FROM listings WHERE id = $1', [listingId])).rows[0];
-  if (!l || !l.user_id || l.status === 'deleted') return res.status(404).json({ error: 'NEGASIT' });
+  if (!l || !l.user_id) return res.status(404).json({ error: 'NEGASIT' });
+  if (l.status === 'deleted') return res.status(409).json({ error: 'ANUNT_STERS' });   // anunț șters sau vândut: conversația rămâne, dar nu se mai scrie în ea
+  if (l.status === 'sold') return res.status(409).json({ error: 'ANUNT_VANDUT' });
 
   let to;
   if (l.user_id !== me) {

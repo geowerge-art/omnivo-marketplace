@@ -94,10 +94,10 @@ router.get('/:id(\\d+)/phone', ah(async (req, res) => {
 router.get('/mine', requireAuth, ah(async (req, res) => {
   // + data expirării, vizualizări, salvări la favorite și mesaje primite, pentru cardurile din „Anunțurile mele”
   const r = await db.query(
-    `SELECT x.*, l2.expires_at, l2.views, l2.updated_at,
+    `SELECT x.*, l2.expires_at, l2.views, l2.updated_at, l2.deleted_at,
             (SELECT COUNT(*)::int FROM favorites f WHERE f.listing_id = x.id) AS favs,
             (SELECT COUNT(*)::int FROM messages m WHERE m.listing_id = x.id AND m.recipient_id = $1) AS msgs
-       FROM (${SELECT} WHERE l.user_id = $1 AND l.status <> 'deleted' ORDER BY l.created_at DESC LIMIT 200) x
+       FROM (${SELECT} WHERE l.user_id = $1 AND (l.status <> 'deleted' OR l.deleted_at > NOW() - INTERVAL '30 days') ORDER BY l.created_at DESC LIMIT 200) x
        JOIN listings l2 ON l2.id = x.id ORDER BY x.created_at DESC`, [req.user.id]);
   res.json({ listings: r.rows });
 }));
@@ -281,12 +281,43 @@ router.post('/:id(\\d+)/promote', requireAuth, ah(async (req, res) => {
 }));
 
 router.delete('/:id(\\d+)', requireAuth, ah(async (req, res) => {
-  const soft = await db.query("UPDATE listings SET status = 'deleted' WHERE id = $1 AND user_id = $2 AND status <> 'deleted' RETURNING id", [req.params.id, req.user.id]);
+  // prima ștergere = mutare în „Șterse” (30 de zile); a doua, pe un anunț deja șters = ștergere definitivă
+  const soft = await db.query("UPDATE listings SET status = 'deleted', deleted_at = NOW(), deleted_from = status WHERE id = $1 AND user_id = $2 AND status <> 'deleted' RETURNING id", [req.params.id, req.user.id]);
   if (soft.rowCount) return res.json({ ok: true, deleted: 'soft' });
-  const hard = await db.query("DELETE FROM listings WHERE id = $1 AND user_id = $2 AND status = 'deleted' RETURNING id", [req.params.id, req.user.id]);
-  if (!hard.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  const ok = await hardDelete(req.params.id, req.user.id);
+  if (!ok) return res.status(404).json({ error: 'NEGASIT' });
   res.json({ ok: true, deleted: 'hard' });
 }));
+
+/* Ștergere definitivă (anunț, poze din Storage, iar mesajele din chat dispar odată cu anunțul). */
+async function hardDelete(id, userId) {
+  const im = await db.query("SELECT i.url, i.thumb_url FROM listing_images i JOIN listings l ON l.id = i.listing_id WHERE l.id = $1 AND l.status = 'deleted' AND ($2::int IS NULL OR l.user_id = $2)", [id, userId]);
+  const hard = await db.query("DELETE FROM listings WHERE id = $1 AND status = 'deleted' AND ($2::int IS NULL OR user_id = $2) RETURNING id", [id, userId]);
+  if (!hard.rowCount) return false;
+  try { await require('./images').removeStored(...im.rows.flatMap((r) => [r.url, r.thumb_url]).filter(Boolean)); } catch (e) { console.error('hardDelete: poze rămase în Storage:', e.message); }
+  return true;
+}
+
+/* Reactivare din „Șterse”: anunțul revine direct, cu statusul de dinainte (fără moderare nouă). */
+router.post('/:id(\\d+)/restore', requireAuth, ah(async (req, res) => {
+  const cur = (await db.query("SELECT id, deleted_from FROM listings WHERE id = $1 AND user_id = $2 AND status = 'deleted' AND deleted_at > NOW() - INTERVAL '30 days'", [req.params.id, req.user.id])).rows[0];
+  if (!cur) return res.status(404).json({ error: 'NEGASIT' });
+  const to = ['approved', 'pending', 'sold', 'rejected', 'blocked'].includes(cur.deleted_from) ? cur.deleted_from : 'approved';
+  if (to === 'approved' || to === 'pending') {
+    const act = await db.query("SELECT COUNT(*)::int n FROM listings WHERE user_id = $1 AND status IN ('pending','approved') AND expires_at > NOW()", [req.user.id]);
+    if (act.rows[0].n >= plans.limitsOf(req.user).listings) return res.status(403).json({ error: 'LIMITA_ANUNTURI' });
+  }
+  const r = await db.query("UPDATE listings SET status = $1, deleted_at = NULL, deleted_from = NULL, updated_at = NOW() WHERE id = $2 AND user_id = $3 AND status = 'deleted' RETURNING id, status", [to, cur.id, req.user.id]);
+  if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+  res.json({ ok: true, listing: r.rows[0] });
+}));
+
+/* Curățenie: anunțurile șterse de peste 30 de zile se elimină definitiv. Apelată periodic din server.js. */
+async function purgeDeleted() {
+  const old = await db.query("SELECT id FROM listings WHERE status = 'deleted' AND deleted_at < NOW() - INTERVAL '30 days' LIMIT 200");
+  for (const r of old.rows) await hardDelete(r.id, null);
+  return old.rowCount;
+}
 
 /* ---- moderare (admin / moderator) ---- */
 adminRouter.get('/', ah(async (req, res) => {
@@ -305,4 +336,4 @@ adminRouter.patch('/:id(\\d+)', ah(async (req, res) => {
   res.json({ listing: r.rows[0] });
 }));
 
-module.exports = { router, adminRouter };
+module.exports = { router, adminRouter, purgeDeleted };
