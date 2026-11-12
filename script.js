@@ -51,7 +51,7 @@ document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.
 
 /* ---- categorii, sertar, formular ---- */
 function setDrawer(on) { $("drawer").hidden = !on; $("scrim").hidden = !on; document.body.style.overflow = on ? "hidden" : ""; }
-function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); pillCat = null; detectedSlug = ""; resetPriceInputs(); if ($("searchInput")) $("searchInput").value = ""; updatePills(); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
+function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); pillCat = null; if ($("searchInput")) $("searchInput").value = ""; updatePills(); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
 
 async function loadCats() {
   try { cats = (await api("/api/categories")).categories; } catch { return; }
@@ -701,7 +701,7 @@ function card(l) {
   const w = document.createElement("div"); w.append(a, box); return w;
 }
 async function loadListings() {
-  updateSaveBtn(); updateResultsTools();
+  updateSaveBtn();
   const box = $("products"); box.setAttribute("aria-busy", "true");
   try {
     const url = mode === "mine" ? "/api/listings/mine" : mode === "admin" ? "/api/admin/listings?status=pending" : "/api/listings?" + new URLSearchParams(filter);
@@ -916,18 +916,7 @@ async function openDetail(id) {
 
 /* ---- căutare ---- */
 /* ---- căutare + pastile de categorii sub bară ---- */
-let pillCat = null, pillTimer = null, pillSeq = 0, detectedSlug = "";
-/* Bara de sub căutare: prețul min/max apare doar când e o căutare sau o categorie;
-   „Cere oferte” doar când e vorba de piese auto. Pe prima pagină nu se vede nimic. */
-function updateResultsTools() {
-  const box = $("resultsTools"); if (!box) return;
-  const active = mode === "public" && !!(filter.q || filter.category);
-  box.hidden = !active;
-  const slug = filter.category || (filter.q ? detectedSlug : "");
-  const btn = $("cereri-piese-btn"); if (btn) btn.hidden = !(active && slug === "piese-auto");
-  const rs = $("priceReset"); if (rs) rs.hidden = !($("minPrice")?.value || $("maxPrice")?.value);
-}
-function resetPriceInputs() { if ($("minPrice")) $("minPrice").value = ""; if ($("maxPrice")) $("maxPrice").value = ""; }
+let pillCat = null, pillTimer = null, pillSeq = 0;
 function applySearch(scroll) {
   const q = $("searchInput").value.trim();
   filter = {}; if (q) filter.q = q; if (pillCat) filter.category = pillCat.slug;
@@ -943,13 +932,6 @@ function applySearch(scroll) {
   loadListings();
   if (scroll) $("anunturi").scrollIntoView({ behavior: "smooth" });
 }
-$("minPrice")?.addEventListener("change", () => applySearch(false));
-$("maxPrice")?.addEventListener("change", () => applySearch(false));
-$("priceReset")?.addEventListener("click", () => { resetPriceInputs(); applySearch(false); });
-$("cereri-piese-btn")?.addEventListener("click", () => {
-  const q = $("searchInput").value.trim();
-  if (window.openRequests) window.openRequests("new", q);
-});
 function pillEl(c) {
   const b = document.createElement("button"); b.type = "button";
   const on = pillCat && pillCat.slug === c.slug;
@@ -989,10 +971,10 @@ async function updatePills() {
   // --- AFIȘEȘTE CATEGORIEA DETECTATĂ ---
   const detected = document.getElementById("detectedCategory");
   if (!detected) return;
-  if (text.length < 3) { detected.hidden = true; detectedSlug = ""; return; }
+  if (text.length < 3) { detected.hidden = true; return; }
   const remote2 = await api("/api/categories/suggest?title=" + encodeURIComponent(text));
   const suggestions = remote2.suggestions;
-  if (!suggestions.length) { detected.hidden = true; detectedSlug = ""; return; }
+  if (!suggestions.length) { detected.hidden = true; return; }
   // Aleg cea mai bună categorie (scorul cel mai mare)
   const best = suggestions[0];
   detected.hidden = false;
@@ -1000,7 +982,11 @@ async function updatePills() {
   const isPiesaAuto = best.slug === 'piese-auto';
   detected.innerHTML = `<span class="chip cat-chip"><span class="cat-chip-ico">${icon(best.slug, 16)}</span> ${best.name}</span>${best.parent ? `<span class="cat-parent"> în ${best.parent}</span>` : ""}`;
   detected.dataset.slug = best.slug;
-  detectedSlug = best.slug; updateResultsTools();
+  // Afișează butonul "Cerere oferte piese" doar pentru piese-auto
+  const cereriBtn = document.getElementById("cereri-piese-btn");
+  if (cereriBtn) {
+    cereriBtn.style.display = isPiesaAuto ? "inline-block" : "none";
+  }
 }
 $("searchForm")?.addEventListener("submit", (e) => { e.preventDefault(); applySearch(true); });
 $("searchInput")?.addEventListener("input", () => {
