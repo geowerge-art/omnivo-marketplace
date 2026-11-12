@@ -1752,3 +1752,13 @@ button.adm-stat { cursor: pointer; }
 .rfq-steps li { flex: 1; text-align: center; font-size: .78em; font-weight: 700; padding: 6px 2px; border-radius: 8px; background: #eee; color: #777; }
 .rfq-steps li.done { background: #dff1e2; color: #2d6a3a; }
 .rfq-steps li.now { background: #14110c; color: #e9d3a8; }
+
+
+/* --- bara de rezultate: preț + „Cere oferte” (apare doar după căutare / categorie) --- */
+.detected-category[hidden], .filters[hidden], .results-tools[hidden], .cereri-btn[hidden], #priceReset[hidden] { display: none !important; }
+.results-tools { display: flex; flex-direction: column; gap: 12px; margin: 0 0 16px; }
+.results-tools .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.results-tools .filters input { width: 110px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; background: var(--white); }
+.results-tools .filters input:focus { outline: none; border-color: var(--gold); }
+.cereri-btn { align-self: flex-start; padding: 12px 18px; border: none; border-radius: 999px; background: var(--dark); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+.cereri-btn:hover { filter: brightness(1.15); }

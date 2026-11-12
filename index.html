@@ -39,13 +39,7 @@
         <button type="submit" aria-label="Caută"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg></button>
       </form>
       <div id="searchPills" class="pills" aria-label="Categorii" hidden></div>
-      <div class="filters" id="priceFilters" hidden>
-        <span>Preț: </span>
-        <input id="minPrice" type="number" placeholder="min" step="100" aria-label="Preț minim"/>,
-        <input id="maxPrice" type="number" placeholder="max" step="100" aria-label="Preț maxim"/>
-      </div>
       <div id="detectedCategory" class="detected-category" hidden></div>
-      <button id="cereri-piese-btn" class="cereri-btn" style="display:none; margin-top:8px;">Cerere oferte piese</button>
     </section>
     <section class="section for-you" id="pentruTine" hidden>
       <div class="section-heading">
@@ -69,6 +63,7 @@
       <div class="cat-panel" id="catPanel" hidden><ul id="catPanelList"></ul></div>
       <div class="categories">
         <a href="#anunturi"><i class="cat-ic" data-ic="auto-moto" style="--c:#e03a3e"></i><span>Auto și moto</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="piese-auto" style="--c:#8b5a2b"></i><span>Piese auto</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="electronice" style="--c:#2f6fed"></i><span>Electronice</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="casa-gradina" style="--c:#1f9d6b"></i><span>Casă și grădină</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="moda" style="--c:#d6459b"></i><span>Modă</span></a>
@@ -86,6 +81,16 @@
           <h2 id="listTitle">Anunțuri recente</h2>
         </div>
         <button type="button" class="link-btn" id="saveSearchBtn" hidden>🔔 Salvează căutarea</button>
+      </div>
+      <div class="results-tools" id="resultsTools" hidden>
+        <div class="filters" id="priceFilters">
+          <span>Preț:</span>
+          <input id="minPrice" type="number" inputmode="numeric" min="0" placeholder="min" step="100" aria-label="Preț minim"/>
+          <i aria-hidden="true">–</i>
+          <input id="maxPrice" type="number" inputmode="numeric" min="0" placeholder="max" step="100" aria-label="Preț maxim"/>
+          <button type="button" class="link-btn" id="priceReset" hidden>Șterge</button>
+        </div>
+        <button type="button" class="cereri-btn" id="cereri-piese-btn" hidden>Cere oferte pentru această piesă</button>
       </div>
       <div id="products" class="products"></div>
       <p id="emptyMessage" class="empty" hidden>Nu am găsit anunțuri pentru căutarea ta.</p>

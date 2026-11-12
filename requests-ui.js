@@ -188,7 +188,7 @@
       w.append(a, b2, x); rows.push(o); partsBox.append(w); sync();
     };
     const sync = () => { addP.hidden = rows.length >= 8; partsBox.classList.toggle("one", rows.length === 1); };
-    addP.onclick = () => addRow(); addRow();
+    addP.onclick = () => addRow(); addRow(!ed && st.prefill ? st.prefill : ""); st.prefill = "";
     const brand = inp("text", "Ex.: Volkswagen"); brand.setAttribute("list", "rfqBrands"); brand.maxLength = 40;
     const dl = el("datalist"); dl.id = "rfqBrands"; BRANDS.forEach((b) => dl.append(new Option(b)));
     const model = inp("text", "Ex.: Golf 7"), year = inp("number", "2015"); year.min = 1950; year.max = new Date().getFullYear() + 1;
@@ -725,7 +725,8 @@
     }));
   }
 
-  window.openRequests = (view) => {
+  window.openRequests = (view, prefill) => {
+    st.prefill = view === "new" && typeof prefill === "string" ? prefill.slice(0, 200) : "";
     build(); if (typeof accClosePage === "function" && typeof accIsOpen === "function" && accIsOpen()) accClosePage();
     if (!dlg.open) dlg.showModal(); go(view || "board");
   };
