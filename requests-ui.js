@@ -37,6 +37,7 @@
   const title = (r) => [r.part, r.brand, r.model, r.year].filter(Boolean).join(" ");
 
   const st = { view: "mine", id: 0, quote: 0, timer: null };
+  const rfqSum = { open: 0, waiting: 0, new_quotes: 0, new_answers: 0 }; window.rfqSummary = rfqSum;   // oferte și răspunsuri de văzut
   let dlg = null, body = null, head = null;
 
   const CHEV = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
@@ -56,7 +57,7 @@
 
   function tabs() {
     const items = [["board", "Piese căutate"]];
-    if (me) items.push(["mine", "Cererile mele"], ["received", "Oferte primite"], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]);
+    if (me) items.push(["mine", "Cererile mele"], ["received", "Oferte primite" + (rfqSum.new_quotes + rfqSum.new_answers ? ` (${rfqSum.new_quotes + rfqSum.new_answers})` : "")], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]);
     if (me && ["admin", "moderator"].includes(me.role)) items.push(["admin", "Aprobări"]);
     const on = (k) => st.view === k || (k === "mine" && (st.view === "detail" || (st.view === "chat" && st.from !== "offers"))) || (k === "offers" && st.view === "chat" && st.from === "offers");
     $("rfqTabs").replaceChildren(...items.map(([k, n]) => { const b = el("button", "rfq-tab" + (on(k) ? " on" : ""), n); b.type = "button"; b.onclick = () => go(k); return b; }));
@@ -67,7 +68,7 @@
     clearInterval(st.timer); st.timer = null; st.view = view;
     if (view === "detail") st.id = arg;
     if (view !== "chat") st.from = view === "offers" ? "offers" : view === "detail" || view === "mine" ? "buyer" : st.from;
-    tabs();
+    tabs(); setTimeout(() => window.rfqSummaryRefresh && rfqSummaryRefresh(), 800);   // după ce serverul a marcat cererea ca „văzută”
     ({ board: viewBoard, mine: viewMine, new: viewNew, detail: viewDetail, received: viewReceived, offers: viewOffers, dealer: viewDealer, admin: viewAdmin, chat: viewChat })[view](arg);
     body.scrollTop = 0;
   }
@@ -134,6 +135,11 @@
       right.append(el("small", "", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}${r.best_ron ? " · de la " + money(r.best_ron, "RON") : ""}` : "nicio ofertă încă"));
       if (r.thumb) { const th = el("span", "rfq-rth"), g = el("img"); g.src = r.thumb; g.alt = ""; g.loading = "lazy"; th.append(g); b.append(th); }
       b.append(m, right); b.onclick = () => go("detail", r.id); out.push(b);
+      if (r.status === "open") {   // anularea fără să intri în cerere
+        const cn = el("button", "link-btn rfq-cancel", "Anulează cererea"); cn.type = "button";
+        cn.onclick = async () => { if (!confirm("Anulezi cererea? Ofertele primite se închid, iar ofertanții sunt anunțați.")) return; try { await api(`/api/requests/${r.id}/cancel`, "POST"); viewMine(); rfqSummaryRefresh(); } catch (e) { showMessage("Eroare", errText(e)); } };
+        out.push(cn);
+      }
     });
     body.replaceChildren(...out);
   }
@@ -194,6 +200,7 @@
     const sp = el("p"); sp.append(el("em", "rfq-chip " + c, t));
     if (r.status === "open") sp.append(el("small", "muted", r.accepting ? ` ${left(r.expires_at)} ca să primești oferte` : " termenul pentru oferte a trecut; poți alege dintre cele primite"));
     hd.append(sp);
+    if (d.quotes.length) hd.append(el("p", "rfq-count", `${d.quotes.length} ${d.quotes.length === 1 ? "ofertă primită" : "oferte primite"}`));
     out.push(hd);
     if (!d.quotes.length) out.push(el("p", "muted rfq-empty", r.status === "open" ? "Nicio ofertă încă. Dezmembrătorii au fost anunțați; te anunțăm când sosește prima ofertă." : "Cererea nu a primit oferte."));
     out.push(...offersBlock(r, d.quotes));
@@ -612,7 +619,14 @@
     build(); if (typeof accClosePage === "function" && typeof accIsOpen === "function" && accIsOpen()) accClosePage();
     if (!dlg.open) dlg.showModal(); go(view || "board");
   };
-  window.rfqRefresh = () => { if (dlg && dlg.open && ["mine", "offers", "detail"].includes(st.view) && !body.contains(document.activeElement)) go(st.view, st.id); };
+  window.rfqSummaryRefresh = async () => {
+    if (!me) Object.assign(rfqSum, { open: 0, waiting: 0, new_quotes: 0, new_answers: 0 });
+    else { try { Object.assign(rfqSum, await api("/api/requests/summary")); } catch { return; } }
+    const n = rfqSum.new_quotes + rfqSum.new_answers, c = document.getElementById("accRfqN");   // contorul din meniul contului
+    if (c) { const t = n ? `${n} ${n === 1 ? "nouă" : "noi"}` : (rfqSum.waiting ? String(rfqSum.waiting) : ""); c.textContent = t; c.hidden = !t; c.classList.toggle("hot", n > 0); }
+    if (dlg && dlg.open) tabs();
+  };
+  window.rfqRefresh = () => { window.rfqSummaryRefresh(); if (dlg && dlg.open && ["mine", "received", "offers", "detail"].includes(st.view) && !body.contains(document.activeElement)) go(st.view, st.id); };
   window.rfqMsg = () => { if (dlg && dlg.open && st.view === "chat") viewChat(st.quote); };
 
   /* intrare din meniu și din adresă (#cereri) */

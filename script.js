@@ -263,6 +263,7 @@ function setMe(u) {
   me = u; unread = 0; renderUnread(); clearInterval(unreadTimer); stopLive();
   loadFavIds(); loadNotifCount();
   if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); startLive(); }
+  if (window.rfqSummaryRefresh) rfqSummaryRefresh();
 }
 async function authSubmit(e, url, body, errEl) {
   e.preventDefault(); show(errEl, "");
@@ -444,7 +445,7 @@ function accMenu() {
   const secs = document.createElement("div"); secs.className = "acc-sections";
   secs.append(
     accGroup("Anunțurile tale", [...status, accItem("Studio · statistici", () => accGo("studio"))]),
-    accGroup("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests()), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
+    accGroup("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests(), (() => { const x = window.rfqSummary || {}, n = (x.new_quotes || 0) + (x.new_answers || 0); return n ? n + (n === 1 ? " nouă" : " noi") : (x.waiting || ""); })(), "accRfqN"), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
     accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN"), accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN")]),
     accGroup("Cont", [accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag"), accItem("Datele mele și ștergerea contului", () => window.openData && window.openData()), accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );

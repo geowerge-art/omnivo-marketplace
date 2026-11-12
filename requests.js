@@ -288,6 +288,18 @@ router.get('/mine', ah(async (req, res) => {
   res.set('Cache-Control', 'no-store').json({ requests: r.rows });
 }));
 
+/* câte oferte și răspunsuri noi are cumpărătorul (contorul din meniul contului și de pe fila „Oferte primite”) */
+router.get('/summary', ah(async (req, res) => {
+  await sweep();
+  const r = (await db.query(
+    `SELECT COUNT(*) FILTER (WHERE r.status = 'open')::int AS open,
+            COALESCE(SUM((SELECT COUNT(*) FROM quotes q WHERE q.request_id = r.id AND q.status = 'sent')) FILTER (WHERE r.status = 'open'), 0)::int AS waiting,
+            COALESCE(SUM((SELECT COUNT(*) FROM quotes q WHERE q.request_id = r.id AND q.status = 'sent' AND q.updated_at > COALESCE(r.buyer_seen_at, r.created_at))) FILTER (WHERE r.status = 'open'), 0)::int AS new_quotes,
+            COALESCE(SUM((SELECT COUNT(*) FROM quote_questions qq JOIN quotes q ON q.id = qq.quote_id WHERE q.request_id = r.id AND qq.answered_at > COALESCE(r.buyer_seen_at, r.created_at))) FILTER (WHERE r.status = 'open'), 0)::int AS new_answers
+       FROM part_requests r WHERE r.user_id = $1`, [req.user.id])).rows[0];
+  res.set('Cache-Control', 'no-store').json(r);
+}));
+
 /* cererea cu ofertele ei, doar pentru cumpărător; ofertele sunt sortate după preț + transport */
 /* toate ofertele primite la toate cererile mele (deschise, sau cu câștigător ales) */
 router.get('/received', ah(async (req, res) => {

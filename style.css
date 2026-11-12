@@ -1657,3 +1657,8 @@ button.adm-stat { cursor: pointer; }
 .rfq-recv-nm { display: flex; flex-direction: column; min-width: 0; gap: 2px; align-items: flex-start; }
 .rfq-recv-nm small { white-space: normal; }
 .rfq-recv-pr { flex: none; color: var(--navy); }
+
+/* --- cereri: contor în meniu, anulare din listă, câte oferte --- */
+.acc-item .cnt.hot { background: var(--gold); color: #fff; }
+.rfq-cancel { display: block; margin: 2px 0 0 6px; font-size: 14px; color: #9b2c2c; text-decoration: underline; }
+.rfq-count { font-weight: 800; color: var(--navy); margin: 8px 0 0; }
