@@ -163,17 +163,14 @@
 <input id="sellAddr" name="address" maxlength="120" autocomplete="off" placeholder="ex: Cartier Cetate, str. Unirii">
 <fieldset class="contact-box" id="sellContact">
 <legend>Contact în anunț</legend>
-<div id="sellContactHas" hidden>
-<p class="sp-num">Telefon: <b id="sellPhoneShown"></b></p>
+<p class="muted set-note">Completat din „Date generale”. Poți schimba orice aici (de exemplu dacă postezi pentru altcineva): se schimbă doar pe acest anunț, nu și în profilul tău.</p>
+<label for="sellContactName">Persoană de contact</label>
+<input id="sellContactName" maxlength="60" autocomplete="off" placeholder="Nume">
+<label for="sellContactPhone">Telefon</label>
+<input id="sellContactPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" list="sellPhoneList" placeholder="07xx xxx xxx"><datalist id="sellPhoneList"></datalist>
 <label class="check"><input type="checkbox" id="sellShowPhone"> Afișează telefonul în anunț</label>
 <label class="check"><input type="checkbox" id="sellWa"> Am WhatsApp pe acest număr</label>
-<small class="muted">Îl poți schimba din Setări cont. Cumpărătorii te pot contacta oricum prin mesaje.</small>
-</div>
-<div id="sellContactNew" hidden>
-<input id="sellPhoneNew" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="07xx xxx xxx">
-<label class="check"><input type="checkbox" id="sellWaNew" checked> Am WhatsApp pe acest număr</label>
-<small class="muted">Numărul se salvează în contul tău și apare în anunț cu butoane de apel și WhatsApp. Lasă gol dacă vrei doar mesaje.</small>
-</div>
+<small class="muted">Cumpărătorii te pot contacta oricum prin mesaje. Lasă telefonul gol dacă vrei doar mesaje.</small>
 </fieldset>
 <p id="sellErr" class="err" hidden></p>
 <div class="sell-bar"><button class="primary" type="submit" id="sellSubmit">Publică anunțul</button></div>
@@ -223,17 +220,66 @@
     </form>
   </dialog>
 
-  <dialog id="settingsDialog" class="sheet">
+  <dialog id="settingsDialog" class="sheet set-page">
     <button class="dialog-close" id="setClose" aria-label="Închide">✕</button>
-    <h2>Setări cont</h2>
+    <h2>Date generale</h2>
     <form id="setForm" novalidate>
-      <label for="setName">Nume</label><input id="setName" autocomplete="name" maxlength="100" required>
-      <label for="setPhone">Telefon</label><input id="setPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="ex: 0722 123 456">
-      <label class="check"><input type="checkbox" id="setShowPhone"> Arată telefonul pe anunțurile mele (se afișează doar la apăsarea „Arată numărul”)</label>
-      <label class="check"><input type="checkbox" id="setWa"> Am WhatsApp pe acest număr</label>
+      <h3 class="set-h">1. Date personale</h3>
+      <div class="set-kv"><small>Utilizator:</small><b id="setUser"></b></div>
+      <div class="set-kv"><small>Tip cont:</small><span><b id="setPlan"></b> <button type="button" class="linklike" id="setPlanLink">Vezi planurile »</button></span></div>
+      <div class="set-kv"><small>Email:</small>
+        <span class="set-line"><b id="setEmail"></b><button type="button" class="set-btn" id="setEmailBtn">✎ Schimbă email</button><span id="setEmailSt" class="set-st"></span></span>
+        <div class="set-mini" id="setEmailBox" hidden>
+          <input id="setEmailNew" type="email" autocomplete="email" placeholder="Noul email" maxlength="200">
+          <input id="setEmailPw" type="password" autocomplete="current-password" placeholder="Parola ta (pentru confirmare)" maxlength="72">
+          <small class="muted">Îți trimitem un link de confirmare la noua adresă. Până îl apeși, contul rămâne neconfirmat.</small>
+          <p class="err" id="setEmailErr" hidden></p>
+          <div class="set-acts"><button type="button" class="primary" id="setEmailGo">Trimite</button><button type="button" class="set-btn" id="setEmailX">Renunță</button></div>
+        </div>
+      </div>
+      <div class="set-kv"><small>Parola:</small>
+        <span class="set-line"><b>••••••••••</b><button type="button" class="set-btn" id="setPwBtn">✎ Schimbă parola</button></span>
+        <div class="set-mini" id="setPwBox" hidden>
+          <input id="setPwCur" type="password" autocomplete="current-password" placeholder="Parola actuală" maxlength="72">
+          <input id="setPwNew" type="password" autocomplete="new-password" placeholder="Parola nouă (minim 8 caractere)" maxlength="72">
+          <p class="err" id="setPwErr" hidden></p>
+          <div class="set-acts"><button type="button" class="primary" id="setPwGo">Schimbă parola</button><button type="button" class="set-btn" id="setPwX">Renunță</button></div>
+        </div>
+      </div>
+      <div class="set-card"><label for="setPhone">Telefon 1:</label><div class="set-ph"><input id="setPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="07xx xxx xxx"><button type="button" class="set-ic del" data-clr="1" aria-label="Șterge telefonul 1"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div>
+        <label class="check"><input type="checkbox" id="setWa"> Am WhatsApp pe acest număr</label>
+        <label class="check"><input type="checkbox" id="setShowPhone"> Arată telefonul pe anunțurile mele (doar la apăsarea „Contact”)</label></div>
+      <div class="set-card"><label for="setPhone2">Telefon 2:</label><div class="set-ph"><input id="setPhone2" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="07xx xxx xxx"><button type="button" class="set-ic del" data-clr="2" aria-label="Șterge telefonul 2"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div><label class="check"><input type="checkbox" id="setWa2"> Am WhatsApp pe acest număr</label></div><div class="set-card"><label for="setPhone3">Telefon 3:</label><div class="set-ph"><input id="setPhone3" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="07xx xxx xxx"><button type="button" class="set-ic del" data-clr="3" aria-label="Șterge telefonul 3"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div><label class="check"><input type="checkbox" id="setWa3"> Am WhatsApp pe acest număr</label></div><div class="set-card"><label for="setPhone4">Telefon 4:</label><div class="set-ph"><input id="setPhone4" type="tel" inputmode="tel" autocomplete="off" maxlength="20" placeholder="07xx xxx xxx"><button type="button" class="set-ic del" data-clr="4" aria-label="Șterge telefonul 4"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></svg></button></div><label class="check"><input type="checkbox" id="setWa4"> Am WhatsApp pe acest număr</label></div>
+      <label for="setName">Nume și prenume:</label><input id="setName" autocomplete="name" maxlength="100" required>
+
+      <h3 class="set-h">2. Date de livrare</h3>
+      <p class="muted set-note">Se completează singure când adaugi un anunț. În anunț le poți schimba, fără să-ți modifici profilul.</p>
+      <label for="setCounty">Județ / Localitate:</label>
+      <select id="setCounty"></select>
+      <input id="setCity" list="setCityList" maxlength="60" autocomplete="off" placeholder="Localitate"><datalist id="setCityList"></datalist>
+      <label for="setAddr">Detalii adresă:</label>
+      <textarea id="setAddr" rows="3" maxlength="200" placeholder="Stradă, număr, bloc, apartament sau „Ridicare personală”"></textarea>
+
+      <h3 class="set-h">3. Date de facturare <small>(persoană fizică, folosite când cumperi credite)</small></h3>
+      <p class="muted set-note">Rămân private: nu apar niciodată în anunțuri.</p>
+      <label for="setBillName">Nume și prenume:</label><input id="setBillName" maxlength="100" autocomplete="off" placeholder="Numele de pe factură">
+      <label for="setBillAddr">Adresă de domiciliu:</label><textarea id="setBillAddr" rows="3" maxlength="200" autocomplete="off"></textarea>
+      <label for="setBank">Banca:</label><input id="setBank" maxlength="80" autocomplete="off">
+      <label for="setIban">Cod IBAN:</label><input id="setIban" maxlength="40" autocomplete="off" placeholder="RO49 AAAA 1B31 0075 9384 0000">
+
+      <h3 class="set-h">4. Preferință pentru afișarea meniului din „Contul meu”</h3>
+      <label class="check"><input type="radio" name="menupref" value="buyer"> Optimizat pentru cumpărător</label>
+      <label class="check"><input type="radio" name="menupref" value="seller"> Optimizat pentru vânzător</label>
+
+      <h3 class="set-h">5. Acord pentru primirea de informații comerciale</h3>
+      <label class="check"><input type="checkbox" id="setMarketing"> Sunt de acord cu primirea de informații comerciale privind produse și servicii prin mijloace de comunicare electronică.</label>
+
+      <h3 class="set-h">6. Notificări și prezență</h3>
+      <label class="check"><input type="checkbox" id="setBrowserNotif"> Doresc să primesc notificări în browser (la mesaje noi, cât timp site-ul e deschis într-o filă).</label>
       <label class="check"><input type="checkbox" id="setPresence" checked> Arată celorlalți când sunt online și când scriu un mesaj</label>
+
       <p class="err" id="setErr" hidden></p><p class="muted" id="setOk" hidden></p>
-      <button class="primary" type="submit">Salvează</button>
+      <button class="primary" type="submit">Salvează datele</button>
     </form>
   </dialog>
 

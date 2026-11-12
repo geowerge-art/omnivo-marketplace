@@ -18,7 +18,10 @@ const loginIpAllow = S.createThrottle(40, 15 * 60 * 1000);
 
 const publicUser = (u) => ({
   id: u.id, name: u.name, nickname: u.nickname, email: u.email, phone: u.phone,
-  show_phone: u.show_phone, whatsapp: !!u.whatsapp, role: u.role, status: u.status, email_verified: u.email_verified
+  show_phone: u.show_phone, whatsapp: !!u.whatsapp, role: u.role, status: u.status, email_verified: u.email_verified,
+  extra_phones: Array.isArray(u.extra_phones) ? u.extra_phones : [], county: u.county || '', city: u.city || '', address: u.address || '',
+  bill_name: u.bill_name || '', bill_addr: u.bill_addr || '', bank: u.bank || '', iban: u.iban || '',
+  menu_pref: u.menu_pref === 'buyer' ? 'buyer' : 'seller', marketing_ok: !!u.marketing_ok, browser_notif: !!u.browser_notif, plan: u.plan
 });
 
 /* ---- limitare login persistentă (rezistă repornirilor) ---- */
@@ -94,7 +97,7 @@ router.post('/register', ah(async (req, res) => {
   }
 }));
 
-/* ---- profil: nume, telefon, vizibilitatea telefonului ---- */
+/* ---- profil („Date generale”): nume, telefoane, locație, facturare persoană fizică, preferințe ---- */
 router.patch('/me', requireAuth, ah(async (req, res) => {
   const b = req.body || {}, sets = [], vals = [];
   const add = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
@@ -114,10 +117,50 @@ router.patch('/me', requireAuth, ah(async (req, res) => {
   } else if (phone === '') add('show_phone', false);
   if (b.whatsapp !== undefined) add('whatsapp', b.whatsapp === true && (phone !== undefined ? !!phone : !!req.user.phone));
   else if (phone === '') add('whatsapp', false);
+  if (b.extra_phones !== undefined) {   // până la 3 telefoane în plus, fiecare cu propriul WhatsApp
+    if (!Array.isArray(b.extra_phones) || b.extra_phones.length > 3) return res.status(400).json({ error: 'DATE_INVALIDE' });
+    const out = [];
+    for (const x of b.extra_phones) {
+      const ph = String((x && x.phone) || '').trim();
+      if (!ph) continue;
+      if (!S.PHONE_RE.test(ph)) return res.status(400).json({ error: 'TELEFON_INVALID' });
+      out.push({ phone: ph, wa: !!(x && x.wa === true) });
+    }
+    add('extra_phones', JSON.stringify(out));
+  }
+  const txt = (key, max) => { if (b[key] === undefined) return true; const t = String(b[key] || '').trim(); if (t.length > max) return false; add(key, t || null); return true; };
+  if (![['county', 40], ['city', 60], ['address', 200], ['bill_name', 100], ['bill_addr', 200], ['bank', 80]].every(([k, m]) => txt(k, m))) return res.status(400).json({ error: 'DATE_INVALIDE' });
+  if (b.iban !== undefined) {
+    const iban = String(b.iban || '').replace(/\s+/g, '').toUpperCase();
+    if (iban && !/^[A-Z]{2}[0-9A-Z]{13,32}$/.test(iban)) return res.status(400).json({ error: 'IBAN_INVALID' });
+    add('iban', iban || null);
+  }
+  if (b.menu_pref !== undefined) { if (!['buyer', 'seller'].includes(b.menu_pref)) return res.status(400).json({ error: 'DATE_INVALIDE' }); add('menu_pref', b.menu_pref); }
+  if (b.marketing_ok !== undefined) add('marketing_ok', b.marketing_ok === true);
+  if (b.browser_notif !== undefined) add('browser_notif', b.browser_notif === true);
   if (!sets.length) return res.status(400).json({ error: 'DATE_INVALIDE' });
   vals.push(req.user.id);
   const r = await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
   res.json({ user: publicUser(r.rows[0]) });
+}));
+
+/* ---- schimbare email: cere parola; noua adresă trebuie confirmată din nou (până atunci contul rămâne neconfirmat) ---- */
+router.post('/change-email', requireAuth, ah(async (req, res) => {
+  const { password, email } = req.body || {};
+  const em = S.normEmail(email);
+  if (typeof password !== 'string' || !em || !S.EMAIL_RE.test(em) || em.length > 200) return res.status(400).json({ error: 'DATE_INVALIDE' });
+  if (!mailAllow('chmail:' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const r = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+  if (!(await bcrypt.compare(password.slice(0, 72), r.rows[0].password_hash))) return res.status(401).json({ error: 'PAROLA_GRESITA' });
+  if (em === S.normEmail(req.user.email)) return res.status(400).json({ error: 'EMAIL_IDENTIC' });
+  try {
+    const u = await db.query('UPDATE users SET email = $1, email_verified = FALSE WHERE id = $2 RETURNING *', [em, req.user.id]);
+    sendVerification(req, u.rows[0]).catch((e) => console.error('mail confirmare:', e.message));
+    res.json({ user: publicUser(u.rows[0]) });
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'EMAIL_EXISTS' });
+    throw e;
+  }
 }));
 
 /* ---- login (email sau nickname) ---- */

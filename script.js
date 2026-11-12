@@ -8,7 +8,7 @@ const ERR = {
   CUVINTE_INTERZISE: "Textul conține cuvinte sau oferte interzise pe Omnivo. Dacă e o greșeală, scrie-ne la Contact.",
   PUBLICARE_OPRITA: "Publicarea e oprită temporar din cauza unor încercări repetate de a încălca regulile de conținut. Încearcă din nou mai târziu sau scrie-ne la Contact.",
   CONT_BLOCAT_AUTO: "Contul a fost blocat automat pentru încălcări repetate ale regulilor. Dacă crezi că e o greșeală, scrie-ne la Contact.",
-  ANUNT_STERS: "Anunțul a fost șters, așa că nu mai poți scrie în această conversație.", ANUNT_VANDUT: "Anunțul a fost vândut, așa că nu mai poți scrie în această conversație.", LIMITA_ANUNTURI: "Ai atins numărul maxim de anunțuri active al planului tău. Vezi Cont › Planul meu.", PLAN_INVALID: "Plan necunoscut.", DOAR_TITANIUM: "Exportul CSV e disponibil doar pe planul Titanium.",
+  PAROLA_GRESITA: "Parola actuală nu e corectă.", IBAN_INVALID: "IBAN-ul nu pare valid. Verifică-l (ex: RO49 AAAA 1B31 0075 9384 0000).", EMAIL_IDENTIC: "Ai scris același email pe care îl ai deja.", ANUNT_STERS: "Anunțul a fost șters, așa că nu mai poți scrie în această conversație.", ANUNT_VANDUT: "Anunțul a fost vândut, așa că nu mai poți scrie în această conversație.", LIMITA_ANUNTURI: "Ai atins numărul maxim de anunțuri active al planului tău. Vezi Cont › Planul meu.", PLAN_INVALID: "Plan necunoscut.", DOAR_TITANIUM: "Exportul CSV e disponibil doar pe planul Titanium.",
   REINNOIRE_PREA_DEVREME: "Anunțul se poate reînnoi cu cel mult 7 zile înainte să expire.", REINNOIRE_INDISPONIBILA: "Doar anunțurile active se pot reînnoi.", REACTUALIZARE_PREA_DEVREME: "Poți reactualiza un anunț o singură dată la 24 de ore.", PROMOVARE_INDISPONIBILA: "Promovarea nu este disponibilă acum.", PREA_MULTE_PROMOVARI: "Poți avea cel mult 3 anunțuri promovate în același timp.", PROMOVARE_INVALIDA: "Alege 3, 7 sau 30 de zile.",
   INVALID_LOGIN: "Email, nickname sau parolă greșite.", LOGIN_RATE_LIMIT: "Prea multe încercări. Mai încearcă peste câteva minute.", CONT_BLOCAT: "Contul este blocat.",
   EMAIL_EXISTS: "Există deja un cont cu acest email.", NICKNAME_EXISTS: "Nickname-ul este luat.", NICKNAME_INVALID: "Nickname invalid (3-24 caractere: litere, cifre, . _ -).",
@@ -189,10 +189,10 @@ $("sellForm")?.addEventListener("submit", async (e) => {
   try {
     const payload = {
       title: f.get("title"), category_id: f.get("category_id"), price: f.get("price"), currency: f.get("currency"), condition: f.get("condition"),
-      county: f.get("county"), city: f.get("city"), address: f.get("address"), description: f.get("description"), negotiable: f.get("negotiable") === "on", attributes
+      county: f.get("county"), city: f.get("city"), address: f.get("address"), description: f.get("description"), negotiable: f.get("negotiable") === "on", attributes,
+      contact_name: $("sellContactName").value.trim(), contact_phone: $("sellContactPhone").value.trim(), contact_show: $("sellShowPhone").checked && !!$("sellContactPhone").value.trim(), contact_wa: $("sellWa").checked && !!$("sellContactPhone").value.trim()
     };
     const wasEdit = !!editing; let id, note;
-    try { await applySellContact(); } catch (err) { throw err; }
     if (wasEdit) {
       const r = await api(`/api/listings/${editing}`, "PATCH", payload); id = editing;
       note = r.resubmitted ? "Modificările sunt salvate. Anunțul a fost retrimis la moderare și apare după aprobare." : "Modificările au fost salvate.";
@@ -247,10 +247,10 @@ async function openEdit(l, copy) {   // copy = anunț nou, completat după unul 
   if (l.county) $("sellCounty").value = l.county;
   cityManual = true; $("sellCity").value = l.city || ""; $("sellAddr").value = l.address || ""; syncCities();
   $("sellDesc").value = l.description || ""; $("sellForm").elements.negotiable.checked = !!l.negotiable;
-  renderSellContact(); renderExisting(); renderPrev(); open("sellDialog");
+  renderSellContact(l.edit.contact); renderExisting(); renderPrev(); open("sellDialog");
   if (copy) { catManual = true; }
 }
-function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră în cont sau creează unul nou."); if (editing) resetSell(); renderSellContact(); if (!cats.length) loadCats(); open("sellDialog"); $("sellTitle").focus(); }
+function openSell() { if (!me) return openAuth("Ca să adaugi un anunț, intră în cont sau creează unul nou."); if (editing) resetSell(); renderSellContact(); prefillSellFromProfile(); if (!cats.length) loadCats(); open("sellDialog"); $("sellTitle").focus(); }
 ["sellButton", "sellButtonBottom", "bnSell"].forEach((i) => $(i)?.addEventListener("click", openSell));
 
 /* ---- cont ---- */
@@ -454,6 +454,7 @@ function accMenu() {
     accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN"), accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN")]),
     accGroup("Cont", [accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag"), accItem("Datele mele și ștergerea contului", () => window.openData && window.openData()), accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
   );
+  if (me.menu_pref === "buyer" && secs.children.length > 1) secs.insertBefore(secs.children[1], secs.children[0]);   // „Optimizat pentru cumpărător”: „Cumpăr” trece primul
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
   if (isMod || isAdmin) secs.appendChild(accGroup("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])]));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
@@ -625,19 +626,81 @@ async function renderFavs(box) {
     const g = document.createElement("div"); g.className = "acc-grid"; g.replaceChildren(...list.map(card)); box.replaceChildren(g);
   } catch (err) { box.replaceChildren(note(errText(err))); }
 }
+/* ---- Date generale (setări cont) ---- */
+$("setCounty").innerHTML = '<option value="">Județ</option>' + COUNTIES.map((c) => `<option>${c}</option>`).join("");
+function setCities() { const list = (window.CITIES || {})[$("setCounty").value] || []; $("setCityList").innerHTML = list.map((c) => `<option value="${c}">`).join(""); }
+$("setCounty").addEventListener("change", () => { setCities(); if (!$("setCity").value.trim()) { const l = (window.CITIES || {})[$("setCounty").value] || []; if (l.length) $("setCity").value = l[0]; } });
+function paintEmailSt() {
+  const st = $("setEmailSt"); st.replaceChildren(); st.className = "set-st " + (me.email_verified ? "ok" : "bad");
+  if (me.email_verified) { st.textContent = "✓ Verificat"; return; }
+  st.append("✗ Neconfirmat");
+  const b = document.createElement("button"); b.type = "button"; b.className = "linklike"; b.textContent = "Retrimite linkul";
+  b.addEventListener("click", async () => { b.disabled = true; try { await api("/api/auth/resend-verification", "POST"); b.textContent = "Trimis"; } catch (err) { b.disabled = false; show($("setErr"), errText(err)); } });
+  st.appendChild(b);
+}
 function openSettings() {
-  $("setName").value = me.name || ""; $("setPhone").value = me.phone || ""; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; show($("setErr"), ""); $("setOk").hidden = true;
+  $("setUser").textContent = me.nickname || ""; $("setPlan").textContent = me.plan && me.plan !== "basic" ? (me.plan.charAt(0).toUpperCase() + me.plan.slice(1)) : "Cont gratuit";
+  $("setEmail").textContent = me.email || ""; paintEmailSt();
+  ["setEmailBox", "setPwBox"].forEach((i) => { $(i).hidden = true; }); ["setEmailNew", "setEmailPw", "setPwCur", "setPwNew"].forEach((i) => { $(i).value = ""; });
+  $("setName").value = me.name || ""; $("setPhone").value = me.phone || ""; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp;
+  [2, 3, 4].forEach((n) => { const x = (me.extra_phones || [])[n - 2] || {}; $("setPhone" + n).value = x.phone || ""; $("setWa" + n).checked = !!x.wa; });
+  $("setCounty").value = COUNTIES.includes(me.county) ? me.county : ""; setCities(); $("setCity").value = me.city || ""; $("setAddr").value = me.address || "";
+  $("setBillName").value = me.bill_name || ""; $("setBillAddr").value = me.bill_addr || ""; $("setBank").value = me.bank || ""; $("setIban").value = me.iban || "";
+  document.querySelectorAll('input[name="menupref"]').forEach((r) => { r.checked = r.value === (me.menu_pref === "buyer" ? "buyer" : "seller"); });
+  $("setMarketing").checked = !!me.marketing_ok; $("setBrowserNotif").checked = !!me.browser_notif && "Notification" in window && Notification.permission === "granted";
+  show($("setErr"), ""); $("setOk").hidden = true;
   api("/api/messages/prefs").then((p) => { $("setPresence").checked = p.show_presence !== false; }).catch(() => {});
   open("settingsDialog");
 }
 $("setClose").addEventListener("click", () => $("settingsDialog").close());
+$("setPlanLink").addEventListener("click", () => { $("settingsDialog").close(); accGo("plan"); });
+document.querySelectorAll("#setForm [data-clr]").forEach((b) => b.addEventListener("click", () => {
+  const n = b.dataset.clr, k = n === "1" ? "" : n; $("setPhone" + k).value = ""; $("setWa" + k).checked = false; if (n === "1") $("setShowPhone").checked = false;
+}));
+$("setEmailBtn").addEventListener("click", () => { $("setEmailBox").hidden = !$("setEmailBox").hidden; show($("setEmailErr"), ""); });
+$("setEmailX").addEventListener("click", () => { $("setEmailBox").hidden = true; });
+$("setEmailGo").addEventListener("click", async () => {
+  show($("setEmailErr"), ""); $("setEmailGo").disabled = true;
+  try {
+    const r = await api("/api/auth/change-email", "POST", { email: $("setEmailNew").value, password: $("setEmailPw").value });
+    me = r.user; $("setEmail").textContent = me.email; paintEmailSt(); $("setEmailBox").hidden = true; $("setEmailNew").value = $("setEmailPw").value = "";
+    $("setOk").textContent = "Email schimbat. Ți-am trimis un link de confirmare la noua adresă."; $("setOk").hidden = false;
+  } catch (err) { show($("setEmailErr"), errText(err)); }
+  $("setEmailGo").disabled = false;
+});
+$("setPwBtn").addEventListener("click", () => { $("setPwBox").hidden = !$("setPwBox").hidden; show($("setPwErr"), ""); });
+$("setPwX").addEventListener("click", () => { $("setPwBox").hidden = true; });
+$("setPwGo").addEventListener("click", async () => {
+  show($("setPwErr"), ""); $("setPwGo").disabled = true;
+  try {
+    await api("/api/auth/change-password", "POST", { current_password: $("setPwCur").value, new_password: $("setPwNew").value });
+    $("setPwBox").hidden = true; $("setPwCur").value = $("setPwNew").value = ""; $("setOk").textContent = "Parola a fost schimbată. Celelalte dispozitive au fost deconectate."; $("setOk").hidden = false;
+  } catch (err) { show($("setPwErr"), errText(err)); }
+  $("setPwGo").disabled = false;
+});
+$("setBrowserNotif").addEventListener("change", async (e) => {   // notificările din browser cer permisiunea ta
+  if (!e.target.checked) return;
+  if (!("Notification" in window)) { e.target.checked = false; show($("setErr"), "Browserul tău nu suportă notificări."); return; }
+  let perm = Notification.permission;
+  if (perm === "default") { try { perm = await Notification.requestPermission(); } catch { perm = "denied"; } }
+  if (perm !== "granted") { e.target.checked = false; show($("setErr"), "Notificările sunt blocate în browser. Permite-le din setările site-ului și încearcă din nou."); }
+  else show($("setErr"), "");
+});
 $("setForm").addEventListener("submit", async (e) => {
   e.preventDefault(); show($("setErr"), ""); $("setOk").hidden = true;
   const phone = $("setPhone").value.trim();
+  const extra = [2, 3, 4].map((n) => ({ phone: $("setPhone" + n).value.trim(), wa: $("setWa" + n).checked })).filter((x) => x.phone).map((x) => ({ ...x }));
+  const menu = document.querySelector('input[name="menupref"]:checked');
   try {
-    const r = await api("/api/auth/me", "PATCH", { name: $("setName").value, phone, show_phone: $("setShowPhone").checked && !!phone, whatsapp: $("setWa").checked && !!phone });
+    const r = await api("/api/auth/me", "PATCH", {
+      name: $("setName").value, phone, show_phone: $("setShowPhone").checked && !!phone, whatsapp: $("setWa").checked && !!phone, extra_phones: extra.map((x) => ({ phone: x.phone, wa: x.wa })),
+      county: $("setCounty").value, city: $("setCity").value, address: $("setAddr").value,
+      bill_name: $("setBillName").value, bill_addr: $("setBillAddr").value, bank: $("setBank").value, iban: $("setIban").value,
+      menu_pref: menu ? menu.value : "seller", marketing_ok: $("setMarketing").checked, browser_notif: $("setBrowserNotif").checked
+    });
     await api("/api/messages/prefs", "PUT", { show_presence: $("setPresence").checked });
-    me = r.user; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; $("setOk").textContent = "Salvat."; $("setOk").hidden = false;
+    me = r.user; $("setIban").value = me.iban || ""; $("setShowPhone").checked = !!me.show_phone; $("setWa").checked = !!me.whatsapp; $("setOk").textContent = "Datele au fost salvate."; $("setOk").hidden = false;
+    try { if (accIsOpen() && !accCur) accMenu(); } catch { /* meniul se reface la următoarea deschidere */ }
   } catch (err) { show($("setErr"), errText(err)); }
 });
 ["hdrAccount", "bnAccount"].forEach((i) => $(i)?.addEventListener("click", openAccount));
@@ -834,6 +897,7 @@ async function openDetail(id) {
     const who = document.createElement("div"), nm = document.createElement("b"), mt = document.createElement("small");
     nm.textContent = l.seller || "Vânzător"; if (["silver", "gold", "titanium"].includes(l.seller_plan)) { const pb = document.createElement("span"); pb.className = "plan-badge " + l.seller_plan; pb.textContent = l.seller_plan.charAt(0).toUpperCase() + l.seller_plan.slice(1); nm.append(" ", pb); } mt.textContent = [l.seller_type === "firma" ? "Firmă" : "Persoană fizică", l.county].filter(Boolean).join(" · ");
     who.append(nm, mt);
+    if (l.contact_name) { const cn = document.createElement("small"); cn.textContent = "Persoană de contact: " + l.contact_name; who.appendChild(cn); }
     { const sp = l.seller_presence;   // „online acum” / „văzut azi la 21:40”; lipsește dacă vânzătorul și-a ascuns prezența
       if (sp && !sp.hidden) { const pr = document.createElement("small"); pr.className = "ad-pres" + (sp.online ? " online" : ""); pr.textContent = sp.online ? "online acum" : seenText(sp.last_seen); who.appendChild(pr); } }
     sc.append(av, who);
@@ -1086,6 +1150,9 @@ function startLive() {
   const on = (k, fn) => live.addEventListener(k, (ev) => { try { fn(JSON.parse(ev.data)); } catch { /* semnal invalid */ } });
   on("message", (d) => {
     refreshUnread();
+    if (me && me.browser_notif && document.hidden && "Notification" in window && Notification.permission === "granted") {   // doar cât timp site-ul e deschis într-o filă
+      try { const n = new Notification("Mesaj nou pe Omnivo", { body: String(d.body || "Ai primit un mesaj nou").slice(0, 100), tag: "omnivo-msg" }); n.onclick = () => { window.focus(); openInbox(); n.close(); }; } catch { /* notificare indisponibilă */ }
+    }
     if (chat && chat.listingId === d.listing_id && chat.withId === d.from) { chat.sig = ""; refreshChat(); }
     else if ($("inboxDialog").open) renderInbox();
   });
@@ -1401,24 +1468,27 @@ function waLink(p) {
   if (d.startsWith("+")) d = d.slice(1); else if (d.startsWith("00")) d = d.slice(2); else if (d.startsWith("0")) d = "40" + d.slice(1);
   return "https://wa.me/" + d;
 }
-function renderSellContact() {
-  const has = !!(me && me.phone);
-  $("sellContactHas").hidden = !has; $("sellContactNew").hidden = has;
-  if (has) { $("sellPhoneShown").textContent = fmtPhone(me.phone); $("sellShowPhone").checked = !!me.show_phone; $("sellWa").checked = !!me.whatsapp; }
-  else { $("sellPhoneNew").value = ""; $("sellWaNew").checked = true; }
-}
-/* salvează în cont ce ai ales în formularul de anunț (telefon nou, afișare, WhatsApp) */
-async function applySellContact() {
+const savedPhones = () => me ? [{ phone: me.phone, wa: !!me.whatsapp }, ...(me.extra_phones || [])].filter((x) => x.phone) : [];
+/* contactul din anunț: se completează din „Date generale” (sau din anunțul existent), dar se poate schimba doar pe acest anunț */
+function renderSellContact(c) {
   if (!me) return;
-  let body = null;
-  if (me.phone) {
-    const show = $("sellShowPhone").checked, wa = $("sellWa").checked;
-    if (show !== !!me.show_phone || wa !== !!me.whatsapp) body = { show_phone: show, whatsapp: wa };
-  } else {
-    const p = $("sellPhoneNew").value.trim();
-    if (p) body = { phone: p, show_phone: true, whatsapp: $("sellWaNew").checked };
-  }
-  if (body) me = (await api("/api/auth/me", "PATCH", body)).user;
+  const own = !!c && c.show !== null && c.show !== undefined, saved = savedPhones();
+  $("sellContactName").value = (c && c.name) || me.name || "";
+  $("sellContactPhone").value = own ? (c.phone || "") : (me.phone || "");
+  $("sellShowPhone").checked = own ? !!c.show : (me.phone ? !!me.show_phone : true);
+  $("sellWa").checked = own ? !!c.wa : (me.phone ? !!me.whatsapp : true);
+  $("sellPhoneList").innerHTML = saved.map((x) => `<option value="${x.phone.replace(/"/g, "")}">`).join("");
+}
+$("sellContactPhone")?.addEventListener("change", () => {   // ai ales unul dintre telefoanele salvate: bifa WhatsApp urmează numărul
+  const v = $("sellContactPhone").value.trim(), hit = savedPhones().find((x) => x.phone === v); if (hit) $("sellWa").checked = !!hit.wa;
+});
+/* o postare nouă pornește cu județul, localitatea și adresa din „Date generale” (dacă formularul e gol) */
+function prefillSellFromProfile() {
+  if (editing || !me || $("sellTitle").value) return;
+  if (me.county && COUNTIES.includes(me.county)) $("sellCounty").value = me.county;
+  if (me.city) { cityManual = true; $("sellCity").value = me.city; }
+  syncCities();
+  if (me.address && !$("sellAddr").value) $("sellAddr").value = me.address;
 }
 
 /* ---- pagina de postare: card de categorie, „Stare” ca butoane, contor titlu, ciornă salvată ---- */

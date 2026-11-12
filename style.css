@@ -1711,3 +1711,21 @@ button.adm-stat { cursor: pointer; }
 .mc.is-del .mc-th img,.mc.is-del .mc-th svg{filter:grayscale(1);opacity:.5}.mc.is-del .mc-t{color:#8a8578}
 .mc.is-del .mc-th,.mc.is-del .mc-t,.mc.is-del .mc-p{cursor:default}
 .mc-b.danger{color:#b3261e;border-color:#e3b2ad}
+
+/* Date generale */
+.set-page h3.set-h{margin:26px 0 12px;padding:0 4px 8px;border-bottom:2px solid var(--gold);font-size:18px;color:var(--navy)}
+.set-page h3.set-h small{font-weight:500;font-size:13px;color:#7a7466}
+.set-note{margin:-4px 0 10px;font-size:13px}
+.set-kv{margin:0 0 14px}.set-kv>small{display:block;color:#7a7466;margin-bottom:2px}.set-kv b{font-weight:700;color:var(--navy)}
+.set-line{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.set-btn{padding:7px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--navy);font:inherit;font-size:14px;cursor:pointer}
+.set-st{font-weight:700;font-size:14px}.set-st.ok{color:#1a7f37}.set-st.bad{color:#b3261e}
+.set-st button{margin-left:6px}
+.linklike{border:0;background:none;color:#1a5fb4;font:inherit;text-decoration:underline;cursor:pointer;padding:0}
+.set-mini{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:#fbf8f1;display:grid;gap:8px}
+.set-acts{display:flex;gap:10px;align-items:center}
+.set-card{margin:0 0 14px;padding:12px;border-radius:10px;background:#faf8f3}
+.set-card>label:first-child{display:block;margin-bottom:6px}
+.set-ph{display:flex;gap:10px;align-items:center;margin-bottom:8px}.set-ph input{flex:1;min-width:0;margin:0}
+.set-ic{flex:none;width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;background:#fff;color:#b3261e;cursor:pointer}
+.set-page select,.set-page textarea{width:100%}.set-page select{margin-bottom:8px}

@@ -3,7 +3,7 @@ const db = require('./db');
 const config = require('./config');
 const { ah, requireDb } = require('./common');
 const { requireAuth, requireRole, requireVerified } = require('./authmw');
-const { createThrottle, clientIp } = require('./security');
+const { createThrottle, clientIp, PHONE_RE } = require('./security');
 const plans = require('./plans');
 const billing = require('./billing');
 const studio = require('./studio');
@@ -38,6 +38,10 @@ async function parse(b) {
   const condition = ['nou', 'folosit'].includes(b.condition) ? b.condition : null;
   const seller_type = b.seller_type === 'firma' ? 'firma' : 'persoana';
   const county = String(b.county || '').trim().slice(0, 40), city = String(b.city || '').trim().slice(0, 60), address = String(b.address || '').trim().slice(0, 120);
+  // contact doar pe acest anunț (ex.: postezi pentru altcineva); NULL la contact_show = telefonul din cont, ca înainte
+  const contact_name = String(b.contact_name || '').trim().slice(0, 60), contact_phone = String(b.contact_phone || '').trim();
+  if (contact_phone && !PHONE_RE.test(contact_phone)) return { error: 'TELEFON_INVALID' };
+  const contact_show = b.contact_show == null ? null : b.contact_show === true && !!contact_phone, contact_wa = b.contact_wa === true && !!contact_phone;
   const cat = await db.query(
     'SELECT c.id FROM categories c WHERE c.id = $1 AND NOT EXISTS (SELECT 1 FROM categories k WHERE k.parent_id = c.id)', [Number(b.category_id) || 0]);
   if (!cat.rowCount) return { error: 'CATEGORIE_INVALIDA' };
@@ -50,7 +54,7 @@ async function parse(b) {
     else if (d.type === 'select') { if (!(d.options || []).includes(raw)) return { error: 'ATRIBUT_INVALID', field: d.key }; attributes[d.key] = raw; }
     else attributes[d.key] = String(raw).trim().slice(0, 80);
   }
-  return { v: { title, description, price, currency, condition, seller_type, county, city, address, category_id: cat.rows[0].id, attributes, negotiable: b.negotiable === true } };
+  return { v: { title, description, price, currency, condition, seller_type, county, city, address, category_id: cat.rows[0].id, attributes, negotiable: b.negotiable === true, contact_name: contact_name || null, contact_phone: contact_phone || null, contact_wa, contact_show } };
 }
 
 /* ---- public: listare cu filtre ---- */
@@ -85,10 +89,16 @@ const phoneAllow = createThrottle(40, 60 * 60 * 1000);
 router.get('/:id(\\d+)/phone', ah(async (req, res) => {
   if (!phoneAllow('p' + clientIp(req))) return res.status(429).json({ error: 'RATE_LIMIT' });
   const r = await db.query(
-    "SELECT u.phone, u.whatsapp FROM listings l JOIN users u ON u.id = l.user_id WHERE l.id = $1 AND l.status IN ('approved','sold') AND u.show_phone AND u.phone IS NOT NULL", [req.params.id]);
-  if (!r.rowCount) return res.status(404).json({ error: 'NEGASIT' });
+    "SELECT l.contact_phone, l.contact_wa, l.contact_show, u.phone, u.whatsapp, u.show_phone FROM listings l JOIN users u ON u.id = l.user_id WHERE l.id = $1 AND l.status IN ('approved','sold')", [req.params.id]);
+  const x = r.rows[0];
+  let phone = null, wa = false;
+  if (x) {
+    if (x.contact_show !== null) { if (x.contact_show && x.contact_phone) { phone = x.contact_phone; wa = !!x.contact_wa; } }   // contactul ales pe anunț
+    else if (x.show_phone && x.phone) { phone = x.phone; wa = !!x.whatsapp; }                                                   // anunț mai vechi: telefonul din cont
+  }
+  if (!phone) return res.status(404).json({ error: 'NEGASIT' });
   studio.bump(Number(req.params.id), 'phones', studio.whoOf(req));
-  res.json({ phone: r.rows[0].phone, whatsapp: !!r.rows[0].whatsapp });
+  res.json({ phone, whatsapp: wa });
 }));
 
 router.get('/mine', requireAuth, ah(async (req, res) => {
@@ -127,14 +137,14 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
     images: imgs.rows.map((i) => i.url),
     seller_id: l.user_id, seller_since: l.seller_since, seller_rating: (await db.query('SELECT COALESCE(ROUND(AVG(rating)::numeric, 1), 0)::float AS avg, COUNT(*)::int AS n FROM reviews WHERE seller_id = $1 AND role = \'seller\'', [l.user_id]).catch(() => ({ rows: [{ avg: 0, n: 0 }] }))).rows[0], mine: !!owner, seller_presence: owner ? undefined : await require('./live').presenceOf(l.user_id).catch(() => undefined),
     // datele brute de care are nevoie formularul de editare; le primește doar proprietarul
-    edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows } : undefined,
+    edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows, contact: { name: l.contact_name, phone: l.contact_phone, wa: l.contact_wa, show: l.contact_show } } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
     category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type, seller_plan: plans.effective(l),
     address: l.address || null,
     // doar proprietarul: datele din bara de acțiuni de pe pagina anunțului
     owner_info: owner ? { favs: (await db.query('SELECT COUNT(*)::int n FROM favorites WHERE listing_id = $1', [l.id])).rows[0].n, msgs: (await db.query('SELECT COUNT(*)::int n FROM messages WHERE listing_id = $1 AND recipient_id = $2', [l.id, me.id])).rows[0].n, views: l.views, expires_at: l.expires_at, bumped_at: l.bumped_at, updated_at: l.updated_at, promoted_until: l.promoted_until } : undefined,
-    has_phone: !!(l.show_phone && l.seller_phone), // numărul se cere separat (GET /:id/phone), nu stă în pagină
+    has_phone: l.contact_show !== null ? !!(l.contact_show && l.contact_phone) : !!(l.show_phone && l.seller_phone), contact_name: l.contact_name || null, // numărul se cere separat (GET /:id/phone), nu stă în pagină
     attributes: Object.entries(l.attributes || {}).map(([k, v]) => ({ label: label[k] || k, value: v }))
   } });
 }));
@@ -160,10 +170,10 @@ router.post('/', requireAuth, requireVerified, ah(async (req, res) => {
   }
   const dec = await guard.decide(req.user, v, v.title + '\n' + v.description);   // se publică direct sau merge la moderator, pe scor de încredere
   const r = await db.query(
-    `INSERT INTO listings(user_id, category_id, title, description, price, currency, negotiable, condition, seller_type, county, city, attributes, status, search_text, address, auto_approved, trust_score, trust_note)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, status`,
+    `INSERT INTO listings(user_id, category_id, title, description, price, currency, negotiable, condition, seller_type, county, city, attributes, status, search_text, address, auto_approved, trust_score, trust_note, contact_name, contact_phone, contact_wa, contact_show)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id, status`,
     [req.user.id, v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
-     JSON.stringify(v.attributes), dec.status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), v.address, dec.auto, dec.score, dec.note]);
+     JSON.stringify(v.attributes), dec.status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), v.address, dec.auto, dec.score, dec.note, v.contact_name, v.contact_phone, v.contact_wa, v.contact_show]);
   if (r.rows[0].status === 'approved') notify.matchSaved(r.rows[0].id);   // anunț nou → căutări salvate care se potrivesc
   res.status(201).json({ listing: r.rows[0] });
 }));
@@ -179,7 +189,7 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
   if (!cur || cur.status === 'deleted') return res.status(404).json({ error: 'NEGASIT' });
   const asStaff = staff && cur.user_id !== req.user.id;
   if (cur.status === 'blocked' && !staff) return res.status(403).json({ error: 'INTERZIS' });
-  const p = await parse({ seller_type: cur.seller_type, city: cur.city, address: cur.address, ...(req.body || {}) });
+  const p = await parse({ seller_type: cur.seller_type, city: cur.city, address: cur.address, contact_name: cur.contact_name, contact_phone: cur.contact_phone, contact_wa: cur.contact_wa, contact_show: cur.contact_show, ...(req.body || {}) });
   if (p.error) return res.status(400).json({ error: p.error, field: p.field });
   const v = p.v;
   const changed = cur.title !== v.title || (cur.description || '') !== v.description || cur.category_id !== v.category_id || same(cur.attributes) !== same(v.attributes);
@@ -196,10 +206,10 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
   }
   const r = await db.query(
     `UPDATE listings SET category_id=$1, title=$2, description=$3, price=$4, currency=$5, negotiable=$6, condition=$7, seller_type=$8,
-            county=$9, city=$10, attributes=$11, status=$12, search_text=$13, address=$16, updated_at=NOW()
+            county=$9, city=$10, attributes=$11, status=$12, search_text=$13, address=$16, contact_name=$17, contact_phone=$18, contact_wa=$19, contact_show=$20, updated_at=NOW()
       WHERE id=$14 AND user_id=$15 RETURNING id, status`,
     [v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
-     JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, cur.user_id, v.address]);
+     JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, cur.user_id, v.address, v.contact_name, v.contact_phone, v.contact_wa, v.contact_show]);
   if (dec && r.rowCount) db.query('UPDATE listings SET auto_approved = $2, trust_score = $3, trust_note = $4 WHERE id = $1', [cur.id, status !== 'pending' && dec.auto, dec.score, dec.note]).catch(() => {});
   if (asStaff) {
     const ch = [];
