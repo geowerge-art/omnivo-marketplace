@@ -1662,3 +1662,30 @@ button.adm-stat { cursor: pointer; }
 .acc-item .cnt.hot { background: var(--gold); color: #fff; }
 .rfq-cancel { display: block; margin: 2px 0 0 6px; font-size: 14px; color: #9b2c2c; text-decoration: underline; }
 .rfq-count { font-weight: 800; color: var(--navy); margin: 8px 0 0; }
+
+/* „Cere oferte”: piese multiple, oferte pe piese, explicație, traseu */
+.rfq-parts { display: grid; gap: 8px; }
+.rfq-part { display: grid; grid-template-columns: 1fr 34px; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.rfq-part input { grid-column: 1; width: 100%; box-sizing: border-box; }
+.rfq-part .rfq-phx { grid-column: 2; grid-row: 1 / span 2; position: static; width: 30px; height: 30px; }
+.rfq-parts.one .rfq-phx { visibility: hidden; }
+.rfq-parts-list { margin: 6px 0; padding-left: 20px; font-weight: 600; }
+.rfq-parts-list li { margin: 2px 0; }
+.rfq-lines { list-style: none; margin: 8px 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.rfq-lines li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.rfq-lines li:last-child { border-bottom: 0; }
+.rfq-lines .rfq-cover { display: block; background: #f3f8f3; color: #2d6a3a; font-size: .9em; }
+.rfq-lines .rfq-cover.part { background: #fff6e5; color: #8a5a00; }
+.rfq-qlines { display: grid; gap: 8px; margin: 8px 0; }
+.rfq-qline { display: grid; grid-template-columns: 1fr 130px; gap: 8px; align-items: center; }
+.rfq-qline input { width: 100%; box-sizing: border-box; }
+.rfq-qtotal { margin: 4px 0 10px; font-weight: 700; }
+.rfq-how { margin: 8px 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fffdf8; padding: 8px 12px; }
+.rfq-how summary { cursor: pointer; font-weight: 800; color: var(--navy); }
+.rfq-how-steps { list-style: none; counter-reset: s; margin: 10px 0; padding: 0; display: grid; gap: 10px; }
+.rfq-how-steps li { counter-increment: s; position: relative; padding-left: 38px; display: grid; gap: 2px; }
+.rfq-how-steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: #14110c; color: #e9d3a8; font-weight: 800; display: grid; place-items: center; }
+.rfq-steps { list-style: none; display: flex; gap: 4px; margin: 10px 0; padding: 0; }
+.rfq-steps li { flex: 1; text-align: center; font-size: .78em; font-weight: 700; padding: 6px 2px; border-radius: 8px; background: #eee; color: #777; }
+.rfq-steps li.done { background: #dff1e2; color: #2d6a3a; }
+.rfq-steps li.now { background: #14110c; color: #e9d3a8; }

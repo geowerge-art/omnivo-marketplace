@@ -14,8 +14,9 @@ const els = {}; const doc = { createElement: (t) => new El(t), body: new El('bod
 const calls = [];
 const ctx = { document: doc, window: {}, Date, Math, Number, String, Object, Array, Map, Set, Promise, JSON, console, setInterval: () => 0, clearInterval() {}, setTimeout, confirm: () => true, location: { hash: '' }, localStorage: { getItem: () => null, setItem() {} }, navigator: {}, matchMedia: () => ({ matches: false }), history: { replaceState() {} },
   $: (id) => els[id] || (els[id] = new El('div')), api: async (u, m) => { calls.push([u, m || 'GET']); return ctx.__api(u, m); }, me: { id: 5, role: 'user' }, COUNTIES: ['Cluj', 'Bihor'], showMessage: (...a) => calls.push(['msg', ...a]), errText: (e) => String(e && e.message), ERR: {}, openAuth() {}, openLightbox() {} };
+ctx.Option = class extends El { constructor(t, v) { super('option'); this._t = String(t); this.value = v; } };
 ctx.window = ctx; vm.createContext(ctx);
-let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
+let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { howBox, partsList, quoteForm, offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
 vm.runInContext(src, ctx);
 const T = ctx.__t; let ok = 0, bad = 0; const t = (n, p) => { p ? ok++ : bad++; console.log(`${p ? 'ok  ' : 'FAIL'} ${n}`); };
 const text = (n) => n.textContent;
@@ -68,5 +69,14 @@ const R = { id: 7, county: 'Cluj', status: 'open' };
   t('total cu transport: A = 110 lei; B fără transport = 90 lei + transp.', /110 lei/.test(text(s7)) && /90 lei \+ transp\./.test(text(s7)));
   t('oferta de azi are „Nouă”', /Nouă/.test(text(s7)));
   ctx.__api = async () => ({ offers: [] }); await T.viewReceived(); t('fără oferte → mesaj + buton „Cere oferte pentru o piesă”', /Nu ai primit nicio ofertă/.test(text(T.body)) && /Cere oferte pentru o piesă/.test(text(T.body)));
+  // piese multiple
+  const RM = { id: 9, county: 'Cluj', status: 'open', items: [{ id: 1, name: 'Far stânga', details: '' }, { id: 2, name: 'Bară față', details: 'neagră' }, { id: 3, name: 'Capotă', details: '' }] };
+  t('lista pieselor apare doar la cereri cu mai multe piese', !!T.partsList(RM) && T.partsList({ items: [{ id: 1, name: 'x' }] }) === null && /Bară față · neagră/.test(text(T.partsList(RM))));
+  const part = T.quoteCard(RM, Q({ id: 21, company: 'Parțial', price: 150, lines: [{ item_id: 1, name: 'Far stânga', price: 100 }, { item_id: 3, name: 'Capotă', price: 50 }] }), []);
+  t('oferta parțială: preț pe piesă și „Acoperă 2 din 3 piese”', /Far stânga/.test(text(part)) && /100 lei/.test(text(part)) && /Acoperă 2 din 3 piese/.test(text(part)) && /lipsesc: Bară față/.test(text(part)));
+  const full = T.quoteCard(RM, Q({ id: 22, company: 'Complet', price: 300, lines: RM.items.map((i) => ({ item_id: i.id, name: i.name, price: 100 })) }), []);
+  t('oferta completă: „Acoperă toate piesele”', /Acoperă toate piesele/.test(text(full)));
+  const how = T.howBox(true); t('„Cum funcționează” are 4 pași', /Cum funcționează/.test(text(how)) && how.all((n) => n.tagName === 'LI').length === 4);
+  const form = T.quoteForm(RM, () => {}); t('formularul de ofertă are câte un câmp de preț pe piesă', form.all((n) => n.tagName === 'INPUT' && n.attrs.placeholder === 'Preț' ).length === 3 || /Far stânga/.test(text(form)));
   console.log(`\n${ok} trecute, ${bad} eșuate`); process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('EROARE', e); process.exit(1); });

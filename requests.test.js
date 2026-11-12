@@ -95,3 +95,26 @@ test('ofertă: factură și mod de plată', () => {
   assert.strictEqual(b.invoice, true); assert.strictEqual(b.payment, 'ramburs');
   assert.strictEqual(parseQuote({ price: 100, payment: 'bitcoin' }).v.payment, 'oricare');
 });
+
+test('cerere cu mai multe piese: nume unite, maximum 8, fără contact', () => {
+  const r = parseRequest({ ...okReq, part: '', parts: [{ name: 'Far stânga' }, { name: 'Bară față', details: 'neagră' }] });
+  assert.strictEqual(r.v.part, 'Far stânga, Bară față');
+  assert.strictEqual(r.v.items.length, 2);
+  assert.strictEqual(parseRequest(okReq).v.items.length, 1);   // vechiul câmp „part” = o singură piesă
+  assert.strictEqual(parseRequest({ ...okReq, parts: Array.from({ length: 9 }, () => ({ name: 'Piesă' })) }).error, 'PREA_MULTE_PIESE');
+  assert.strictEqual(parseRequest({ ...okReq, parts: [{ name: 'ab' }] }).error, 'PIESA_INVALIDA');
+  assert.strictEqual(parseRequest({ ...okReq, parts: [{ name: 'Far', details: 'sună 0722 123 456' }] }).error, 'FARA_CONTACT_IN_CERERE');
+});
+
+test('ofertă pe piese: total = suma, parțială permisă, piesă străină refuzată', () => {
+  const ids = [11, 12, 13];
+  const q = parseQuote({ lines: [{ item_id: 11, price: 100.5 }, { item_id: 13, price: '50', state: 'noua' }] }, ids);
+  assert.strictEqual(q.v.price, 150.5);
+  assert.strictEqual(q.v.lines.length, 2);
+  assert.strictEqual(parseQuote({ lines: [{ item_id: 99, price: 5 }] }, ids).error, 'PIESA_NECUNOSCUTA');
+  assert.strictEqual(parseQuote({ lines: [{ item_id: 11, price: 5 }, { item_id: 11, price: 6 }] }, ids).error, 'PIESA_NECUNOSCUTA');
+  assert.strictEqual(parseQuote({ lines: [{ item_id: 11, price: 0 }] }, ids).error, 'PRET_INVALID');
+  assert.strictEqual(parseQuote({ lines: [] }, ids).error, 'FARA_PIESE_IN_OFERTA');
+  assert.strictEqual(parseQuote({ price: 100 }, ids).error, 'FARA_PIESE_IN_OFERTA');   // 3 piese cer preț pe piesă
+  assert.strictEqual(parseQuote({ price: 100 }, [11]).v.price, 100);                      // o piesă: prețul întreg
+});

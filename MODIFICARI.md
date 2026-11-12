@@ -74,3 +74,13 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Numele ofertantului** deschide profilul lui (calificativ ca vânzător, recenzii). `dealer_id` se trimite acum și pentru ofertele nealese; telefonul rămâne ascuns până la alegere.
 - Fișiere: `requests.js`, `requests-ui.js`, `style.css`, `requests.offers.test.js` (8 verificări), `requests.ui.test.js` (24 de verificări, rulează interfața într-un DOM simulat).
 - Neverificat: interogarea SQL din `/received` pe Postgres și aspectul pe telefon.
+
+## „Cere oferte”: piese multiple, preț pe piesă, pagini cu adresă proprie, „Cum funcționează”
+- **Mai multe piese într-o cerere** (până la 8): `032_multi_parts.sql` (tabelele `request_items`, `quote_items`; cererile și ofertele vechi primesc automat câte o piesă). `part_requests.part` rămâne (numele pieselor unite), deci filtrele, căutarea și emailurile merg neschimbate.
+- **Oferta are preț pe fiecare piesă**; poate acoperi doar o parte din piese (totalul = suma). La cumpărător: lista prețurilor și „Acoperă 2 din 3 piese · lipsesc: …”. La o cerere cu o singură piesă formularul rămâne ca înainte.
+- **Pagini cu adresă proprie**: `/piese-cautate`, `/piese-cautate/noua`, `/cererile-mele`, `/oferte-primite`, `/cererea/ID`, `/ofertele-mele`, `/chat-oferta/ID`, `/firma`, `/aprobari`. Merge butonul „Înapoi” din browser, iar linkul se poate trimite. `app.js` servește deja `index.html` pentru orice adresă, deci nu a trebuit schimbat. `#cereri` merge în continuare.
+- **„Cum funcționează?”** (4 pași) în panoul „Piese căutate” și în formularul de cerere, plus un traseu pe cerere: Cerută → Așteaptă oferte → Ofertă aleasă → Finalizată.
+- Fișiere: `032_multi_parts.sql`, `requests.js`, `requests-ui.js`, `style.css`, `requests.test.js`, `requests.ui.test.js`.
+- Verificat: migrările 001–032 pe un Postgres 16 gol; 20 de scenarii pe rutele reale (cerere cu 3 piese, ofertă completă și parțială, modificare, alegere, inbox, /received); testele `requests*.test.js` trec; paginile deschise în Chromium (adresă, „Înapoi”, fără erori).
+- Neverificat: serverul întreg cu `express` și `pg` reale; formularul de ofertă pe telefon cu cont conectat.
+- După deploy, în log trebuie să apară `migrare aplicată: 032_multi_parts.sql`.

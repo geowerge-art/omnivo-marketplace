@@ -2,7 +2,7 @@
    Folosește din script.js: $, api, me, COUNTIES, showMessage, errText, ERR, openAuth. Backend: requests.js. */
 (() => {
   Object.assign(ERR, {
-    PIESA_INVALIDA: "Scrie ce piesă cauți (minimum 3 caractere).", MARCA_INVALIDA: "Scrie marca mașinii.", AN_INVALID: "Anul mașinii nu pare corect.",
+    PIESA_INVALIDA: "Scrie ce piesă cauți (minimum 3 caractere).", PREA_MULTE_PIESE: "Poți cere cel mult 8 piese într-o cerere.", FARA_PIESE_IN_OFERTA: "Pune preț la cel puțin o piesă din cerere.", PIESA_NECUNOSCUTA: "Oferta conține o piesă care nu e în cerere.", MARCA_INVALIDA: "Scrie marca mașinii.", AN_INVALID: "Anul mașinii nu pare corect.",
     VIN_INVALID: "Seria de șasiu (VIN) are 11-17 caractere, fără I, O sau Q.", JUDET_LIPSA: "Alege județul.", DETALII_PREA_LUNGI: "Detaliile sunt prea lungi (maximum 1000 de caractere).",
     PREA_MULTE_CERERI: "Ai trimis prea multe cereri azi. Încearcă mâine.", PRET_INVALID: "Scrie un preț valid.", TRANSPORT_INVALID: "Costul transportului nu e valid.",
     GARANTIE_INVALIDA: "Garanția poate fi între 0 și 730 de zile.", NOTA_PREA_LUNGA: "Nota e prea lungă (maximum 600 de caractere).",
@@ -35,6 +35,28 @@
   const RS = { open: ["Deschisă", "ok"], awarded: ["Câștigător ales", "sold"], expired: ["Expirată", "wait"], cancelled: ["Anulată", "bad"] };
   const BRANDS = ["Audi", "BMW", "Dacia", "Ford", "Opel", "Renault", "Skoda", "Volkswagen", "Mercedes", "Toyota", "Peugeot", "Citroen", "Fiat", "Hyundai", "Kia", "Seat", "Honda", "Mazda", "Nissan", "Volvo"];
   const title = (r) => [r.part, r.brand, r.model, r.year].filter(Boolean).join(" ");
+  const multi = (r) => r.items && r.items.length > 1;
+  /* lista pieselor unei cereri (apare doar când sunt mai multe) */
+  const partsList = (r) => { if (!multi(r)) return null; const ul = el("ul", "rfq-parts-list"); r.items.forEach((i) => ul.append(el("li", "", i.name + (i.details ? " · " + i.details : "")))); return ul; };
+  /* explicația pe scurt, pentru cine vede pentru prima dată: cumpărător și ofertant */
+  function howBox(open) {
+    const d = el("details", "rfq-how"); if (open) d.open = true;
+    d.append(el("summary", "", "Cum funcționează?"));
+    const steps = [["1", "Ceri piesele", "Scrii ce piese îți trebuie (până la 8 într-o cerere) și ce mașină ai. Cererea e publică, dar fără datele tale de contact."],
+      ["2", "Primești oferte", "Dezmembrătorii și alți utilizatori îți trimit oferte cu preț pe fiecare piesă. Ei nu văd ofertele celorlalți. Poți pune întrebări la o ofertă."],
+      ["3", "Alegi câștigătoarea", "Compari totalul, garanția, termenul de livrare și părerile despre vânzător, apoi alegi oferta. Abia atunci se deschide chatul cu vânzătorul."],
+      ["4", "Primești piesele", "Vă înțelegeți în chat. Când ai primit piesele, marchezi tranzacția finalizată și lăsați recenzii. Dacă nu se înțelege, o poți anula."]];
+    const ol = el("ol", "rfq-how-steps"); steps.forEach(([n, t, x]) => { const li = el("li"); li.append(el("b", "", t), el("span", "", x)); ol.append(li); });
+    d.append(ol, el("p", "muted", "Ai piese de vânzare? Deschide „Piese căutate”, alege o cerere și trimite oferta: pui un preț pentru fiecare piesă pe care o ai (nu trebuie să le ai pe toate). Răspunsurile sunt gratuite."));
+    return d;
+  }
+  /* unde se află cererea în traseu: Cerută → Oferte → Aleasă → Finalizată */
+  function stepper(r, d) {
+    const won = d.quotes.find((q) => q.status === "won");
+    const at = won && won.completed_at ? 4 : won ? 3 : d.quotes.length ? 2 : 1;
+    const ol = el("ol", "rfq-steps"); ["Cerută", "Așteaptă oferte", "Ofertă aleasă", "Finalizată"].forEach((t, i) => ol.append(el("li", i + 1 < at ? "done" : i + 1 === at ? "now" : "", t)));
+    return ol;
+  }
 
   const st = { view: "mine", id: 0, quote: 0, timer: null };
   const rfqSum = { open: 0, waiting: 0, new_quotes: 0, new_answers: 0 }; window.rfqSummary = rfqSum;   // oferte și răspunsuri de văzut
@@ -52,7 +74,7 @@
     const tabs = el("nav", "rfq-tabs"); tabs.id = "rfqTabs";
     body = el("div", "rfq-body"); body.id = "rfqBody";
     dlg.append(top, tabs, body); document.body.append(dlg);
-    dlg.addEventListener("close", () => { clearInterval(st.timer); st.timer = null; });
+    dlg.addEventListener("close", () => { clearInterval(st.timer); st.timer = null; try { if (!st.pop && parsePath(location.pathname)) history.pushState(null, "", "/"); } catch { /* fără istoric */ } });
   }
 
   function tabs() {
@@ -63,10 +85,21 @@
     $("rfqTabs").replaceChildren(...items.map(([k, n]) => { const b = el("button", "rfq-tab" + (on(k) ? " on" : ""), n); b.type = "button"; b.onclick = () => go(k); return b; }));
   }
 
+  /* fiecare pagină are adresa ei (se poate da mai departe, merge „Înapoi” din browser) */
+  const ROUTES = { board: "/piese-cautate", new: "/piese-cautate/noua", mine: "/cererile-mele", received: "/oferte-primite", offers: "/ofertele-mele", dealer: "/firma", admin: "/aprobari" };
+  const pathFor = (v, a) => (v === "detail" ? "/cererea/" + a : v === "chat" ? "/chat-oferta/" + a : ROUTES[v] || ROUTES.board);
+  function parsePath(p) {
+    p = String(p || "").replace(/\/+$/, "") || "/";
+    for (const [k, v] of Object.entries(ROUTES)) if (v === p) return [k];
+    let m = /^\/cererea\/(\d+)$/.exec(p); if (m) return ["detail", Number(m[1])];
+    m = /^\/chat-oferta\/(\d+)$/.exec(p); if (m) return ["chat", Number(m[1])];
+    return null;
+  }
   function go(view, arg) {
     if (!me && view !== "board") return openAuth();
     clearInterval(st.timer); st.timer = null; st.view = view;
     if (view === "detail") st.id = arg;
+    try { const url = pathFor(view, view === "chat" ? arg || st.quote : st.id); if (!st.pop && typeof history !== "undefined" && location.pathname !== url) history.pushState({ rfq: 1 }, "", url); } catch { /* fără istoric */ }
     if (view !== "chat") st.from = view === "offers" ? "offers" : view === "detail" || view === "mine" ? "buyer" : st.from;
     tabs(); setTimeout(() => window.rfqSummaryRefresh && rfqSummaryRefresh(), 800);   // după ce serverul a marcat cererea ca „văzută”
     ({ board: viewBoard, mine: viewMine, new: viewNew, detail: viewDetail, received: viewReceived, offers: viewOffers, dealer: viewDealer, admin: viewAdmin, chat: viewChat })[view](arg);
@@ -146,7 +179,16 @@
 
   /* ---------- cumpărător: cerere nouă ---------- */
   function viewNew(ed) {
-    const part = el("textarea"); part.rows = 2; part.maxLength = 200; part.placeholder = "Ex.: far stânga, cutie de viteze automată, bară față…";
+    const part = el("textarea");   // doar pentru editare: piesele nu se mai schimbă după ce s-au dat oferte
+    const rows = [], partsBox = el("div", "rfq-parts"), addP = el("button", "ghost rfq-addph", "+ Adaugă încă o piesă"); addP.type = "button";
+    const addRow = (n, dt) => {
+      const w = el("div", "rfq-part"), a = inp("text", "Piesa: ex. far stânga, cutie de viteze…", n || ""), b2 = inp("text", "Detalii (opțional): culoare, variantă", dt || ""), x = el("button", "rfq-phx", "×"), o = { a, b: b2 };
+      a.maxLength = 200; b2.maxLength = 300; x.type = "button"; x.setAttribute("aria-label", "Scoate piesa");
+      x.onclick = () => { if (rows.length > 1) { rows.splice(rows.indexOf(o), 1); w.remove(); sync(); } };
+      w.append(a, b2, x); rows.push(o); partsBox.append(w); sync();
+    };
+    const sync = () => { addP.hidden = rows.length >= 8; partsBox.classList.toggle("one", rows.length === 1); };
+    addP.onclick = () => addRow(); addRow();
     const brand = inp("text", "Ex.: Volkswagen"); brand.setAttribute("list", "rfqBrands"); brand.maxLength = 40;
     const dl = el("datalist"); dl.id = "rfqBrands"; BRANDS.forEach((b) => dl.append(new Option(b)));
     const model = inp("text", "Ex.: Golf 7"), year = inp("number", "2015"); year.min = 1950; year.max = new Date().getFullYear() + 1;
@@ -163,7 +205,7 @@
     const pp = photoPicker(6, [], msg), phWrap = el("div"); phWrap.append(...pp.nodes);
     const go1 = el("button", "primary", ed ? "Salvează modificările" : "Trimite cererea"); go1.type = "button";
     if (ed) {
-      part.value = ed.part; brand.value = ed.brand; model.value = ed.model || ""; year.value = ed.year || ""; engine.value = ed.engine || ""; vin.value = ed.vin || ""; county.value = ed.county; city.value = ed.city || "";
+      part.value = ed.part; partsBox.replaceChildren(...(ed.items && ed.items.length ? [partsList(ed) || el("p", "", ed.items[0].name)] : [el("p", "", ed.part)])); addP.hidden = true; brand.value = ed.brand; model.value = ed.model || ""; year.value = ed.year || ""; engine.value = ed.engine || ""; vin.value = ed.vin || ""; county.value = ed.county; city.value = ed.city || "";
       det.value = ed.details || ""; del.checked = ed.delivery !== false; kind.value = ed.kind || "oricare"; oem.value = ed.oem || ""; fuel.value = ed.fuel || ""; gear.value = ed.gearbox || ""; bodyT.value = ed.body_type || "";
       [part, brand, county, city, hours].forEach((x) => { x.disabled = true; });
     }
@@ -176,13 +218,13 @@
       }
       if (pp.busy()) { msg.textContent = "Așteaptă să se termine încărcarea pozelor."; msg.hidden = false; return; }
       go1.disabled = true; msg.hidden = true;
-      try { const r = await api("/api/requests", "POST", { part: part.value, brand: brand.value, model: model.value, year: year.value, engine: engine.value, vin: vin.value, county: county.value, city: city.value, details: det.value, kind: kind.value, delivery: del.checked, hours: Number(hours.value), oem: oem.value, fuel: fuel.value, gearbox: gear.value, body_type: bodyT.value, image_ids: pp.ids() }); go("detail", r.request.id); }
+      try { const r = await api("/api/requests", "POST", { parts: rows.map((o) => ({ name: o.a.value, details: o.b.value })).filter((p) => p.name.trim() || p.details.trim()), brand: brand.value, model: model.value, year: year.value, engine: engine.value, vin: vin.value, county: county.value, city: city.value, details: det.value, kind: kind.value, delivery: del.checked, hours: Number(hours.value), oem: oem.value, fuel: fuel.value, gearbox: gear.value, body_type: bodyT.value, image_ids: pp.ids() }); go("detail", r.request.id); }
       catch (e) { msg.textContent = errText(e); msg.hidden = false; go1.disabled = false; }
     };
     const intro = ed ? "Poți modifica detaliile cât timp cererea e deschisă. Piesa, marca și județul nu se schimbă, fiindcă ofertele s-au dat pentru ele; ofertanții sunt anunțați de modificare." : "Cererea e publică: oricine o poate vedea și poate oferi, iar dezmembrătorii potriviți sunt anunțați. Ofertanții nu văd ofertele celorlalți, iar contactul tău rămâne ascuns până alegi tu.";
     const cancel = el("button", "ghost", "Renunță"); cancel.type = "button"; cancel.onclick = () => go("detail", ed && ed.id);
     body.replaceChildren(el("p", "muted rfq-intro", intro),
-      field("Ce piesă cauți?", part), field("Marca", brand), dl, field("Modelul", model), field("Anul fabricației", year), field("Motorizare", engine), field("Combustibil", fuel), field("Cutie de viteze", gear), field("Caroserie", bodyT),
+      ...(ed ? [] : [howBox(false)]), field(ed ? "Piesele cerute" : "Ce piese cauți? (până la 8)", partsBox), ...(ed ? [] : [addP]), field("Marca", brand), dl, field("Modelul", model), field("Anul fabricației", year), field("Motorizare", engine), field("Combustibil", fuel), field("Cutie de viteze", gear), field("Caroserie", bodyT),
       field("Cod piesă (OEM)", oem, "Ajută ofertanții să găsească exact piesa. Îl găsești pe piesa veche sau în cartea mașinii."), field("Serie de șasiu (VIN)", vin, "Văzută doar de dezmembrătorii verificați și de cei care trimit ofertă."),
       field("Ce fel de piese accepți?", kind), field("Județ", county), field("Localitate", city), field("Detalii", det), ...(ed ? [] : [field("Poze (opțional)", phWrap, "Maximum 6 poze · JPG, PNG sau WebP. Ajută ofertanții să recunoască piesa.")]), delL, ...(ed ? [] : [field("Cât timp primești oferte?", hours)]), msg, go1, ...(ed ? [cancel] : []));
   }
@@ -194,8 +236,10 @@
     const r = d.request, out = [], back = el("button", "link-btn", "‹ Toate cererile"); back.type = "button"; back.onclick = () => go("mine"); out.push(back);
     const hd = el("section", "rfq-head"); hd.append(el("h3", "", title(r)));
     hd.append(el("p", "muted", [r.engine, ...carTags(r), r.vin && "VIN " + r.vin, r.county + (r.city ? ", " + r.city : ""), r.delivery ? "acceptă livrare" : "doar ridicare", KIND[r.kind], r.edited_at && "modificată"].filter(Boolean).join(" · ")));
+    { const pl = partsList(r); if (pl) hd.append(pl); }
     if (r.details) hd.append(el("p", "", r.details));
     { const ph = photoStrip(d.photos, r.part); if (ph) hd.append(ph); }
+    if (["open", "awarded"].includes(r.status)) hd.append(stepper(r, d));
     const [t, c] = RS[r.status] || [r.status, ""];
     const sp = el("p"); sp.append(el("em", "rfq-chip " + c, t));
     if (r.status === "open") sp.append(el("small", "muted", r.accepting ? ` ${left(r.expires_at)} ca să primești oferte` : " termenul pentru oferte a trecut; poți alege dintre cele primite"));
@@ -402,8 +446,14 @@
     const pr = el("div", "rfq-price");
     if (q.shipping == null) { pr.append(el("b", "", money(q.price, q.currency)), el("span", "muted", " + transport de stabilit")); }
     else { pr.append(el("b", "", "Total " + money(totalOf(q), q.currency)), el("span", "muted", q.shipping === 0 ? " · transport gratuit" : ` · piesa ${money(q.price, q.currency)} + transport ${money(q.shipping, q.currency)}`)); }
+    let linesEl = null;
+    if (q.lines && q.lines.length && (q.lines.length > 1 || multi(r))) {
+      linesEl = el("ul", "rfq-lines");
+      q.lines.forEach((l) => { const li = el("li"); li.append(el("span", "", l.name), el("b", "", money(l.price, q.currency))); linesEl.append(li); });
+      if (multi(r)) { const miss = r.items.filter((i) => !q.lines.some((l) => l.item_id === i.id)); linesEl.append(el("li", "rfq-cover" + (miss.length ? " part" : ""), miss.length ? `Acoperă ${q.lines.length} din ${r.items.length} piese · lipsesc: ${miss.map((i) => i.name).join(", ")}` : "Acoperă toate piesele")); }
+    }
     const facts = el("ul", "rfq-facts"); [STATE[q.state], q.warranty_days ? `Garanție ${q.warranty_days} zile` : "Fără garanție", etaText(q.eta_days), q.invoice ? "Emite factură" : "", PAY[q.payment], q.pickup ? "Ridicare din parc" : "Doar livrare"].filter(Boolean).forEach((f) => facts.append(el("li", "", f)));
-    card.append(top, pr, facts); if (q.note) card.append(el("p", "rfq-note", q.note));
+    card.append(top, pr); if (linesEl) card.append(linesEl); card.append(facts); if (q.note) card.append(el("p", "rfq-note", q.note));
     if (q.images && q.images.length) {
       const strip = el("div", "rfq-photos");
       q.images.forEach((im, i) => { const b = el("button", "rfq-ph"); b.type = "button"; b.setAttribute("aria-label", `Poza ${i + 1}`); const g = el("img"); g.src = im.thumb || im.url; g.alt = ""; g.loading = "lazy"; b.append(g); b.onclick = () => openLightbox(q.images.map((x) => x.url), i, q.company); strip.append(b); });
@@ -457,7 +507,7 @@
     const seen = el("select"); [["new", "Încă n-am răspuns"], ["all", "Toate cererile"], ["offered", "Am trimis ofertă"], ["later", "Pentru mai târziu"], ["ignored", "Nu mă interesează"]].forEach(([v, t]) => seen.append(new Option(t, v)));
     const list = el("div", "rfq-list"), bar = el("div", "rfq-filters"); bar.append(q, brand, county, dl); if (me) bar.append(seen);
     const nb = el("button", "primary", me ? "Caut o piesă" : "Intră în cont ca să ceri sau să oferi"); nb.type = "button"; nb.onclick = () => (me ? go("new") : openAuth());
-    body.replaceChildren(el("p", "muted rfq-intro", "Piese căutate chiar acum de cumpărători din toată țara. Ai piesa? Trimite o ofertă; ceilalți ofertanți nu o văd."), nb, bar, list);
+    body.replaceChildren(el("p", "muted rfq-intro", "Piese căutate chiar acum de cumpărători din toată țara. Ai piesa? Trimite o ofertă; ceilalți ofertanți nu o văd."), howBox(!me), nb, bar, list);
     let seq = 0, tm = null;
     const load = async () => {
       const my = ++seq; list.replaceChildren(el("p", "muted", "Se încarcă…"));
@@ -478,7 +528,7 @@
     const tags = el("div", "rfq-tags");
     [[r.brand + (r.model ? " " + r.model : "") + (r.year ? " · " + r.year : ""), "car"], [r.engine, ""], ...carTags(r).map((t) => [t, ""]), [r.vin ? "VIN " + r.vin : r.has_vin ? "VIN după ce trimiți o ofertă" : "", ""], [r.county, "loc"], [r.kind !== "oricare" ? KIND[r.kind] : "", "kind"], [r.delivery ? "livrare" : "ridicare", ""]]
       .forEach(([t, c]) => { if (t) tags.append(el("span", "rfq-tag " + c, t)); });
-    card.append(hd, bar, tags); if (r.details) card.append(el("p", "rfq-note", r.details));
+    card.append(hd, bar, tags); { const pl = partsList(r); if (pl) card.append(pl); } if (r.details) card.append(el("p", "rfq-note", r.details));
     { const ph = photoStrip(r.photos, r.part); if (ph) card.append(ph); }
     const foot = el("div", "rfq-ask-ft"); foot.append(el("small", "muted", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă primită" : "oferte primite"}` : "încă nicio ofertă"));
     if (r.my_mark === "later") foot.append(el("em", "rfq-chip wait", "Pentru mai târziu")); if (r.my_mark === "ignored") foot.append(el("em", "rfq-chip", "Ignorată"));
@@ -530,7 +580,7 @@
   function inboxCard(r, onDone, pub) {
     const card = el("article", "rfq-quote"), top = el("div", "rfq-qtop");
     top.append(el("b", "", title(r)), el("small", "muted", [r.engine, ...carTags(r), r.vin && "VIN " + r.vin, r.county, r.delivery ? "livrare acceptată" : "doar ridicare"].filter(Boolean).join(" · ")));
-    card.append(top); if (r.details) card.append(el("p", "rfq-note", r.details));
+    card.append(top); { const pl = partsList(r); if (pl) card.append(pl); } if (r.details) card.append(el("p", "rfq-note", r.details));
     { const ph = photoStrip(r.photos, r.part); if (ph) card.append(ph); }
     const status = r.quote_status === "won" ? ["Ai câștigat", "sold"] : r.quote_status === "lost" ? ["Cerere închisă", "bad"] : r.quote_status === "rejected" ? ["Ofertă respinsă", "bad"] : r.quote_status === "sent" ? ["Ofertă trimisă", "ok"] : r.accepting !== false ? [left(r.expires_at), "wait"] : ["", ""];
     if (status[0]) card.append(el("em", "rfq-chip " + status[1], status[0]));
@@ -553,6 +603,16 @@
 
   function quoteForm(r, onDone) {
     const f = el("form", "rfq-qform"), price = inp("number", "Preț piesă", r.price); price.min = 1; price.step = "0.01";
+    // cerere cu mai multe piese: preț pe fiecare piesă; las gol ce nu ai
+    const lineIn = [], linesBox = el("div", "rfq-qlines"), totalEl = el("p", "rfq-qtotal");
+    if (multi(r)) {
+      r.items.forEach((it) => {
+        const have = (r.lines || []).find((l) => l.item_id === it.id), w = el("label", "rfq-qline"), i = inp("number", "Preț", have ? have.price : ""); i.min = 0.01; i.step = "0.01";
+        w.append(el("span", "", it.name + (it.details ? " · " + it.details : "")), i); linesBox.append(w); lineIn.push([it, i]); i.oninput = tot;
+      });
+    }
+    function tot() { const n = lineIn.filter(([, i]) => Number(i.value) > 0), s = n.reduce((a, [, i]) => a + Number(i.value), 0); totalEl.textContent = n.length ? `Ai pus preț la ${n.length} din ${lineIn.length} piese · total ${nf(Math.round(s * 100) / 100)}` : "Pune preț la cel puțin o piesă. Piesele pe care nu le ai le lași goale."; }
+    tot();
     const curS = el("select"); [["RON", "lei"], ["EUR", "€"]].forEach(([v, t]) => curS.append(new Option(t, v))); curS.value = r.currency || "RON";
     const state = el("select"); Object.entries(STATE).forEach(([v, t]) => state.append(new Option(t, v))); state.value = r.state || "buna";
     const war = inp("number", "Zile garanție (0 = fără)", r.warranty_days != null ? r.warranty_days : 0); war.min = 0; war.max = 730;
@@ -577,10 +637,10 @@
       add.disabled = false; add.textContent = "Adaugă poze (max 6)"; paint();
     };
     const msg = el("p", "err"); msg.hidden = true; const ok = el("button", "primary", "Trimite oferta"); ok.type = "submit";
-    f.append(field("Preț", price), field("Monedă", curS), field("Starea piesei", state), field("Garanție", war), field("Termen de livrare", eta), field("Transport", ship), field("Plată acceptată", pay), invL, field("Județ", cty), pkL, field("Notă", note), strip, add, file, msg, ok); paint();
+    f.append(...(multi(r) ? [el("p", "muted", "Pune prețul pentru fiecare piesă pe care o ai. Poți oferi doar o parte din ele."), linesBox, totalEl] : [field("Preț", price)]), field("Monedă", curS), field("Starea piesei", state), field("Garanție", war), field("Termen de livrare", eta), field("Transport", ship), field("Plată acceptată", pay), invL, field("Județ", cty), pkL, field("Notă", note), strip, add, file, msg, ok); paint();
     f.onsubmit = async (e) => {
       e.preventDefault(); ok.disabled = true; msg.hidden = true;
-      try { await api(`/api/requests/${r.id}/quotes`, "POST", { price: price.value, currency: curS.value, state: state.value, warranty_days: war.value, eta_days: eta.value, invoice: inv.checked, payment: pay.value, shipping: ship.value, pickup: pk.checked, county: cty.value, note: note.value, image_ids: photos.map((p) => p.id) }); (onDone || viewOffers)(); }
+      try { await api(`/api/requests/${r.id}/quotes`, "POST", { ...(multi(r) ? { lines: lineIn.filter(([, i]) => Number(i.value) > 0).map(([it, i]) => ({ item_id: it.id, price: i.value, state: state.value })) } : { price: price.value }), currency: curS.value, state: state.value, warranty_days: war.value, eta_days: eta.value, invoice: inv.checked, payment: pay.value, shipping: ship.value, pickup: pk.checked, county: cty.value, note: note.value, image_ids: photos.map((p) => p.id) }); (onDone || viewOffers)(); }
       catch (err) { msg.textContent = errText(err); msg.hidden = false; ok.disabled = false; }
     };
     return f;
@@ -631,6 +691,11 @@
 
   /* intrare din meniu și din adresă (#cereri) */
   const nav = document.getElementById("mainMenu");
-  if (nav) { const a = el("a", "", "Oferte piese"); a.href = "#cereri"; a.addEventListener("click", (e) => { e.preventDefault(); openRequests(); }); nav.append(a); }
-  if (location.hash === "#cereri") setTimeout(() => openRequests(), 800);
+  if (nav) { const a = el("a", "", "Oferte piese"); a.href = ROUTES.board; a.addEventListener("click", (e) => { e.preventDefault(); openRequests(); }); nav.append(a); }
+  const startRoute = parsePath(location.pathname) || (location.hash === "#cereri" ? ["board"] : null);
+  if (startRoute) setTimeout(() => { build(); if (typeof accClosePage === "function" && typeof accIsOpen === "function" && accIsOpen()) accClosePage(); if (!dlg.open) dlg.showModal(); go(me ? startRoute[0] : "board", startRoute[1]); }, 800);
+  if (typeof window.addEventListener === "function") window.addEventListener("popstate", () => {
+    const r = parsePath(location.pathname); st.pop = true;
+    try { if (r) { build(); if (!dlg.open) dlg.showModal(); go(r[0], r[1]); } else if (dlg && dlg.open) dlg.close(); } finally { st.pop = false; }
+  });
 })();

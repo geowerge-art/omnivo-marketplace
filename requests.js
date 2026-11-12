@@ -31,6 +31,7 @@ const MAX_NOTIFY = 300;     // câți dezmembrători primesc notificare în apli
 const MAX_EMAIL = 100;      // câți primesc și email
 const STATES = ['noua', 'excelenta', 'buna', 'uzata', 'de-reparat'];
 const KINDS = ['oricare', 'second-hand', 'noi'];
+const MAX_ITEMS = 8;
 const MARKS = ['later', 'ignored'];
 const SEEN = ['new', 'all', 'offered', 'later', 'ignored'];
 const FUELS = ['benzina', 'motorina', 'gpl', 'hibrid', 'electric'], GEARS = ['manuala', 'automata'];
@@ -52,7 +53,20 @@ const CONTACT_RE = /@|https?:\/\/|www\.|(?:\+|\b00)\s?\d[\d\s().-]{8,}\d|\b0[\s.
 
 /* ---------- validări (funcții pure, testate în requests.test.js) ---------- */
 function parseRequest(b = {}) {
-  const part = String(b.part || '').trim(), brand = String(b.brand || '').trim(), model = String(b.model || '').trim().slice(0, 60);
+  // piese multiple: b.parts = [{name, details}]; fără parts, câmpul vechi „part” e o singură piesă
+  let items;
+  if (Array.isArray(b.parts) && b.parts.length) {
+    if (b.parts.length > MAX_ITEMS) return { error: 'PREA_MULTE_PIESE' };
+    items = [];
+    for (const x of b.parts) {
+      const name = String((x && x.name) || '').trim(), det = String((x && x.details) || '').trim();
+      if (name.length < 3 || name.length > 200) return { error: 'PIESA_INVALIDA' };
+      if (det.length > 300) return { error: 'DETALII_PREA_LUNGI' };
+      if (CONTACT_RE.test(name) || CONTACT_RE.test(det)) return { error: 'FARA_CONTACT_IN_CERERE' };
+      items.push({ name, details: det });
+    }
+  }
+  const part = items ? items.map((x) => x.name).join(', ').slice(0, 200) : String(b.part || '').trim(), brand = String(b.brand || '').trim(), model = String(b.model || '').trim().slice(0, 60);
   if (part.length < 3 || part.length > 200) return { error: 'PIESA_INVALIDA' };
   if (brand.length < 2 || brand.length > 40) return { error: 'MARCA_INVALIDA' };
   let year = null;
@@ -71,27 +85,46 @@ function parseRequest(b = {}) {
   if (details.length > 1000) return { error: 'DETALII_PREA_LUNGI' };
   // cererile sunt publice: fără telefon, email sau linkuri (contactul se dă doar după ce alegi oferta)
   if (CONTACT_RE.test(details) || CONTACT_RE.test(part) || CONTACT_RE.test(model)) return { error: 'FARA_CONTACT_IN_CERERE' };
-  return { v: { part, brand, brand_key: brandKey(brand), model, year, engine: String(b.engine || '').trim().slice(0, 60), vin, details,
+  if (!items) items = [{ name: part, details: '' }];
+  return { v: { items, part, brand, brand_key: brandKey(brand), model, year, engine: String(b.engine || '').trim().slice(0, 60), vin, details,
     county, city: String(b.city || '').trim().slice(0, 60), delivery: b.delivery !== false, hours, kind: KINDS.includes(b.kind) ? b.kind : 'oricare',
     oem, fuel: FUELS.includes(b.fuel) ? b.fuel : '', gearbox: GEARS.includes(b.gearbox) ? b.gearbox : '', body_type: BODIES.includes(b.body_type) ? b.body_type : '' } };
 }
 
-function parseQuote(b = {}) {
-  const price = Number(b.price);
-  if (b.price === '' || b.price === null || !Number.isFinite(price) || price <= 0 || price > 10000000) return { error: 'PRET_INVALID' };
+/* itemIds = piesele cererii. Cu b.lines = [{item_id, price, state}] oferta are preț pe piesă (poate acoperi doar o parte din piese);
+   totalul = suma liniilor. Fără lines, b.price e prețul pentru toată cererea. */
+function parseQuote(b = {}, itemIds = null) {
+  let lines = null, price;
+  if (Array.isArray(b.lines)) {
+    if (!b.lines.length) return { error: 'FARA_PIESE_IN_OFERTA' };
+    lines = []; const seen = new Set();
+    for (const l of b.lines) {
+      const id = Number(l && l.item_id), p = Number(l && l.price);
+      if (itemIds && !itemIds.includes(id)) return { error: 'PIESA_NECUNOSCUTA' };
+      if (!Number.isInteger(id) || seen.has(id)) return { error: 'PIESA_NECUNOSCUTA' };
+      if (l.price === '' || l.price === null || !Number.isFinite(p) || p <= 0 || p > 10000000) return { error: 'PRET_INVALID' };
+      seen.add(id); lines.push({ item_id: id, price: Math.round(p * 100) / 100, state: STATES.includes(l.state) ? l.state : null });
+    }
+    price = Math.round(lines.reduce((a, l) => a + l.price, 0) * 100) / 100;
+    if (price > 10000000) return { error: 'PRET_INVALID' };
+  } else {
+    price = Number(b.price);
+    if (b.price === '' || b.price === null || !Number.isFinite(price) || price <= 0 || price > 10000000) return { error: 'PRET_INVALID' };
+    if (itemIds && itemIds.length > 1) return { error: 'FARA_PIESE_IN_OFERTA' };   // cerere cu mai multe piese: preț pe piesă obligatoriu
+  }
   const shipping = num(b.shipping);
   if (shipping !== null && (!Number.isFinite(shipping) || shipping < 0 || shipping > 100000)) return { error: 'TRANSPORT_INVALID' };
   const warranty = b.warranty_days === '' || b.warranty_days == null ? 0 : Number(b.warranty_days);
   if (!Number.isInteger(warranty) || warranty < 0 || warranty > 730) return { error: 'GARANTIE_INVALIDA' };
   const eta = b.eta_days === '' || b.eta_days == null ? null : Number(b.eta_days);
   if (eta !== null && (!Number.isInteger(eta) || eta < 0 || eta > 60)) return { error: 'TERMEN_INVALID' };
-  const state = STATES.includes(b.state) ? b.state : 'buna';
+  const state = STATES.includes(b.state) ? b.state : (lines && lines[0].state) || 'buna';
   const note = String(b.note || '').trim();
   if (note.length > 600) return { error: 'NOTA_PREA_LUNGA' };
   // fără telefon / email în ofertă: contactul se schimbă doar după alegere, în chat
   if (CONTACT_RE.test(note)) return { error: 'FARA_CONTACT_IN_OFERTA' };
   const county = String(b.county || '').trim().slice(0, 40);
-  return { v: { county, price, currency: b.currency === 'EUR' ? 'EUR' : 'RON', state, warranty_days: warranty, shipping, pickup: b.pickup !== false, note, eta_days: eta,
+  return { v: { lines, county, price, currency: b.currency === 'EUR' ? 'EUR' : 'RON', state, warranty_days: warranty, shipping, pickup: b.pickup !== false, note, eta_days: eta,
     invoice: b.invoice === true || b.invoice === 'true', payment: PAYMENTS.includes(b.payment) ? b.payment : 'oricare' } };
 }
 
@@ -155,6 +188,9 @@ async function sweep() {
   }
 }
 
+const ITEMS_SQL = (rid) => `(SELECT COALESCE(json_agg(json_build_object('id', ri.id, 'name', ri.name, 'details', ri.details) ORDER BY ri.position, ri.id), '[]'::json) FROM request_items ri WHERE ri.request_id = ${rid})`;
+const LINES_SQL = (qid) => `(SELECT COALESCE(json_agg(json_build_object('item_id', qi.item_id, 'name', ri.name, 'price', qi.price, 'state', qi.state) ORDER BY ri.position, ri.id), '[]'::json) FROM quote_items qi JOIN request_items ri ON ri.id = qi.item_id WHERE qi.quote_id = ${qid})`;
+const itemIdsOf = async (rid) => (await db.query('SELECT id FROM request_items WHERE request_id = $1 ORDER BY position, id', [rid])).rows.map((x) => x.id);
 const reqTitle = (r) => [r.part, r.brand, r.model, r.year].filter(Boolean).join(' ');
 
 async function myDealer(uid) {
@@ -170,7 +206,7 @@ router.get('/open', ah(async (req, res) => {
   const r = await db.query(
     `SELECT r.id, r.part, r.brand, r.model, r.year, r.engine, CASE WHEN r.user_id = $1::int OR mq.id IS NOT NULL OR EXISTS (SELECT 1 FROM dealers dd WHERE dd.user_id = $1::int AND dd.status = 'approved') THEN r.vin ELSE '' END AS vin, (r.vin <> '') AS has_vin,
             r.oem, r.fuel, r.gearbox, r.body_type, r.edited_at, r.details, r.county, r.delivery, r.kind, r.expires_at, r.created_at,
-            mk.mark AS my_mark,
+            mk.mark AS my_mark, ${ITEMS_SQL('r.id')} AS items, ${LINES_SQL('mq.id')} AS lines,
             (SELECT COUNT(*)::int FROM quotes x WHERE x.request_id = r.id AND x.status = 'sent') AS quotes,
             COALESCE(r.user_id = $1::int, FALSE) AS mine,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.request_id = r.id) AS photos,
@@ -248,6 +284,8 @@ router.post('/', requireVerified, ah(async (req, res) => {
      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14,$15,$16,$17,$18, NOW() + make_interval(hours => $13)) RETURNING id, expires_at`,
     [req.user.id, v.part, v.brand, v.brand_key, v.model, v.year, v.engine, v.vin, v.details, v.county, v.city, v.delivery, v.hours, v.kind, v.oem, v.fuel, v.gearbox, v.body_type]);
   const id = ins.rows[0].id;
+  await db.query(`INSERT INTO request_items(request_id, position, name, details) SELECT $1, t.i - 1, t.n, t.d FROM unnest($2::text[], $3::text[]) WITH ORDINALITY AS t(n, d, i)`,
+    [id, v.items.map((x) => x.name), v.items.map((x) => x.details)]);
   const photoIds = Array.isArray((req.body || {}).image_ids) ? [...new Set(req.body.image_ids.map(toId).filter(Boolean))].slice(0, MAX_PHOTOS) : [];
   if (photoIds.length) await attachRequestImages(id, req.user.id, photoIds);
   res.status(201).json({ request: { id, expires_at: ins.rows[0].expires_at } });
@@ -278,7 +316,7 @@ async function distribute(id, buyerId, r) {
 router.get('/mine', ah(async (req, res) => {
   await sweep();
   const r = await db.query(
-    `SELECT r.id, r.part, r.brand, r.model, r.year, r.county, r.status, r.expires_at, r.created_at, (r.expires_at > NOW()) AS accepting,
+    `SELECT r.id, r.part, r.brand, r.model, r.year, r.county, r.status, r.expires_at, r.created_at, (r.expires_at > NOW()) AS accepting, ${ITEMS_SQL('r.id')} AS items,
             (SELECT COUNT(*)::int FROM quotes q WHERE q.request_id = r.id AND q.status IN ('sent','won','lost')) AS quotes,
             (SELECT MIN(q.price + COALESCE(q.shipping,0)) FROM quotes q WHERE q.request_id = r.id AND q.status IN ('sent','won') AND q.currency = 'RON') AS best_ron,
             (SELECT i.thumb_url FROM quote_images i WHERE i.request_id = r.id ORDER BY i.position, i.id LIMIT 1) AS thumb,
@@ -319,10 +357,10 @@ router.get('/received', ah(async (req, res) => {
 
 router.get('/:id(\\d+)', ah(async (req, res) => {
   await sweep();
-  const r = (await db.query('SELECT *, (expires_at > NOW()) AS accepting FROM part_requests WHERE id = $1 AND user_id = $2', [Number(req.params.id), req.user.id])).rows[0];
+  const r = (await db.query(`SELECT *, (expires_at > NOW()) AS accepting, ${ITEMS_SQL('part_requests.id')} AS items FROM part_requests WHERE id = $1 AND user_id = $2`, [Number(req.params.id), req.user.id])).rows[0];
   if (!r) return res.status(404).json({ error: 'NEGASIT' });
   const q = await db.query(
-    `SELECT q.id, q.price, q.currency, q.state, q.warranty_days, q.eta_days, q.invoice, q.payment, q.shipping, q.pickup, q.note, q.status, q.created_at, q.updated_at, q.completed_at,
+    `SELECT q.id, q.price, q.currency, q.state, q.warranty_days, q.eta_days, q.invoice, q.payment, q.shipping, q.pickup, q.note, q.status, q.created_at, q.updated_at, q.completed_at, ${LINES_SQL('q.id')} AS lines,
             COALESCE(d.company, uq.nickname) AS company, COALESCE(NULLIF(q.county, ''), d.county) AS dealer_county, d.city AS dealer_city, COALESCE(d.status = 'approved', FALSE) AS verified,
             (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating,
             (SELECT COUNT(*)::int FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating_count,
@@ -407,7 +445,7 @@ router.get('/inbox', ah(async (req, res) => {
   const d = (await myDealer(req.user.id)) || { status: null, brands: [], counties: [] };
   const r = await db.query(
     `SELECT r.id, r.part, r.brand, r.model, r.year, r.engine, r.vin, r.oem, r.fuel, r.gearbox, r.body_type, r.edited_at, r.details, r.county, r.city, r.delivery, r.status, r.expires_at, r.created_at,
-            (r.expires_at > NOW() AND r.status = 'open') AS accepting,
+            (r.expires_at > NOW() AND r.status = 'open') AS accepting, ${ITEMS_SQL('r.id')} AS items, ${LINES_SQL('q.id')} AS lines,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.request_id = r.id) AS photos,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
             q.id AS quote_id, q.price, q.currency, q.state, q.warranty_days, q.eta_days, q.invoice, q.payment, q.carrier, q.awb, q.shipped_at,
@@ -427,7 +465,8 @@ router.get('/inbox', ah(async (req, res) => {
 
 router.post('/:id(\\d+)/quotes', requireVerified, ah(async (req, res) => {
   const d = await myDealer(req.user.id);   // firma e opțională: persoanele fizice pot oferi și ele
-  const p = parseQuote(req.body);
+  const rid0 = Number(req.params.id), itemIds = await itemIdsOf(rid0);
+  const p = parseQuote(req.body, itemIds.length ? itemIds : null);
   if (p.error) return res.status(400).json({ error: p.error });
   if (await guard.gate(req, res, [p.v.note])) return;
   if (!p.v.county && d) p.v.county = d.county;
@@ -443,6 +482,11 @@ router.post('/:id(\\d+)/quotes', requireVerified, ah(async (req, res) => {
        WHERE quotes.status IN ('sent','withdrawn') RETURNING id, (xmax = 0) AS created`,
     [r.id, req.user.id, v.price, v.currency, v.state, v.warranty_days, v.shipping, v.pickup, v.note, v.county, v.eta_days, v.invoice, v.payment]);
   if (!q.rowCount) return res.status(409).json({ error: 'CERERE_INCHISA' });
+  // prețuri pe piese: fără lines, cererea cu o singură piesă primește tot prețul pe ea
+  const lines = v.lines || (itemIds.length === 1 ? [{ item_id: itemIds[0], price: v.price, state: v.state }] : []);
+  await db.query('DELETE FROM quote_items WHERE quote_id = $1', [q.rows[0].id]);
+  if (lines.length) await db.query('INSERT INTO quote_items(quote_id, item_id, price, state) SELECT $1, t.a, t.b, t.c FROM unnest($2::int[], $3::numeric[], $4::text[]) AS t(a, b, c)',
+    [q.rows[0].id, lines.map((l) => l.item_id), lines.map((l) => l.price), lines.map((l) => l.state || v.state)]);
   if (Array.isArray((req.body || {}).image_ids)) await attachImages(q.rows[0].id, req.user.id, [...new Set(req.body.image_ids.map(toId).filter(Boolean))].slice(0, MAX_PHOTOS));
   const who = d ? d.company : req.user.nickname;
   if (q.rows[0].created || !prev) {   // ofertă nouă (sau retrimisă după retragere)
@@ -695,4 +739,4 @@ router.post('/question/:id(\\d+)/answer', ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-module.exports = { KINDS, STATES, sweep, router, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey };
+module.exports = { MAX_ITEMS, KINDS, STATES, sweep, router, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey };
