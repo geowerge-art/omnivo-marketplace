@@ -33,25 +33,19 @@
 
   <main>
     <section class="searchbar">
-      <form id="searchForm" class="search" role="search">
+<form id="searchForm" class="search" role="search">
         <svg class="search-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg>
         <input id="searchInput" type="search" placeholder="Caută" aria-label="Caută" autocomplete="off" enterkeyhint="search">
         <button type="submit" aria-label="Caută"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg></button>
       </form>
       <div id="searchPills" class="pills" aria-label="Categorii" hidden></div>
-    </section>
-
-    <section class="section for-you" id="vazute" hidden>
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">ISTORIC</span>
-          <h2>Văzute recent</h2>
-        </div>
-        <button type="button" class="link-btn" id="recentClear">Șterge istoricul</button>
+      <div class="filters" id="priceFilters" hidden>
+        <span>Preț: </span>
+        <input id="minPrice" type="number" placeholder="min" step="100" aria-label="Preț minim"/>,
+        <input id="maxPrice" type="number" placeholder="max" step="100" aria-label="Preț maxim"/>
       </div>
-      <div id="recent" class="products rail"></div>
+      <div id="detectedCategory" class="detected-category" hidden></div>
     </section>
-
     <section class="section for-you" id="pentruTine" hidden>
       <div class="section-heading">
         <div>
@@ -74,6 +68,7 @@
       <div class="cat-panel" id="catPanel" hidden><ul id="catPanelList"></ul></div>
       <div class="categories">
         <a href="#anunturi"><i class="cat-ic" data-ic="auto-moto" style="--c:#e03a3e"></i><span>Auto și moto</span></a>
+        <a href="#anunturi"><i class="cat-ic" data-ic="piese-auto" style="--c:#8b5a2b"></i><span>Piese auto</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="electronice" style="--c:#2f6fed"></i><span>Electronice</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="casa-gradina" style="--c:#1f9d6b"></i><span>Casă și grădină</span></a>
         <a href="#anunturi"><i class="cat-ic" data-ic="moda" style="--c:#d6459b"></i><span>Modă</span></a>
