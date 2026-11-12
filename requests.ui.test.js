@@ -16,7 +16,7 @@ const ctx = { document: doc, window: {}, Date, Math, Number, String, Object, Arr
   $: (id) => els[id] || (els[id] = new El('div')), api: async (u, m) => { calls.push([u, m || 'GET']); return ctx.__api(u, m); }, me: { id: 5, role: 'user' }, COUNTIES: ['Cluj', 'Bihor'], showMessage: (...a) => calls.push(['msg', ...a]), errText: (e) => String(e && e.message), ERR: {}, openAuth() {}, openLightbox() {} };
 ctx.Option = class extends El { constructor(t, v) { super('option'); this._t = String(t); this.value = v; } };
 ctx.window = ctx; vm.createContext(ctx);
-let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { howBox, partsList, quoteForm, offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
+let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { viewAward, shipCard, addressForm, howBox, partsList, quoteForm, offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
 vm.runInContext(src, ctx);
 const T = ctx.__t; let ok = 0, bad = 0; const t = (n, p) => { p ? ok++ : bad++; console.log(`${p ? 'ok  ' : 'FAIL'} ${n}`); };
 const text = (n) => n.textContent;
@@ -78,5 +78,15 @@ const R = { id: 7, county: 'Cluj', status: 'open' };
   t('oferta completă: „Acoperă toate piesele”', /Acoperă toate piesele/.test(text(full)));
   const how = T.howBox(true); t('„Cum funcționează” are 4 pași', /Cum funcționează/.test(text(how)) && how.all((n) => n.tagName === 'LI').length === 4);
   const form = T.quoteForm(RM, () => {}); t('formularul de ofertă are câte un câmp de preț pe piesă', form.all((n) => n.tagName === 'INPUT' && n.attrs.placeholder === 'Preț' ).length === 3 || /Far stânga/.test(text(form)));
+  // adresa de livrare
+  ctx.__api = async (u, m, b) => (u.endsWith('/address') ? { address: { mode: 'livrare', kind: 'sediu', name: 'Ion Pop', phone: '0722123456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. Memorandumului 5', note: '' }, defaults: { name: 'Ion', phone: '' } } : {});
+  await T.viewAward(RM, Q({ id: 31, company: 'Nord Auto', price: 300, pickup: true }));
+  const ab = text(T.body);
+  t('alegerea ofertei cere adresa, completată din cont', /Unde|Cum primești piesele/.test(ab) && /Alegi oferta Nord Auto/.test(ab) && /Alege oferta și trimite adresa/.test(ab));
+  const inputs = T.body.all((n) => n.tagName === 'INPUT');
+  t('câmpurile sunt precompletate cu adresa salvată', inputs.some((i) => i.value === 'Str. Memorandumului 5') && inputs.some((i) => i.value === 'Cluj-Napoca'));
+  const sc = T.shipCard({ mode: 'livrare', kind: 'sediu', name: 'Ion Pop', phone: '0722123456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. X 1', note: 'poartă' }, 'Unde trimiți piesele');
+  t('cardul de livrare arată nume, telefon, tip și adresă', /Ion Pop · 0722123456/.test(text(sc)) && /Livrare la sediul firmei: Str\. X 1, Cluj-Napoca, Cluj/.test(text(sc)) && /poartă/.test(text(sc)));
+  t('ridicare personală se arată clar', /Ridică personal/.test(text(T.shipCard({ mode: 'ridicare', name: 'A', phone: '1' }))));
   console.log(`\n${ok} trecute, ${bad} eșuate`); process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('EROARE', e); process.exit(1); });

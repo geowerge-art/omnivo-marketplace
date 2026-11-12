@@ -2,7 +2,7 @@
    Folosește din script.js: $, api, me, COUNTIES, showMessage, errText, ERR, openAuth. Backend: requests.js. */
 (() => {
   Object.assign(ERR, {
-    PIESA_INVALIDA: "Scrie ce piesă cauți (minimum 3 caractere).", PREA_MULTE_PIESE: "Poți cere cel mult 8 piese într-o cerere.", FARA_PIESE_IN_OFERTA: "Pune preț la cel puțin o piesă din cerere.", PIESA_NECUNOSCUTA: "Oferta conține o piesă care nu e în cerere.", MARCA_INVALIDA: "Scrie marca mașinii.", AN_INVALID: "Anul mașinii nu pare corect.",
+    PIESA_INVALIDA: "Scrie ce piesă cauți (minimum 3 caractere).", NUME_INVALID: "Scrie numele celui care primește piesele.", TELEFON_INVALID: "Scrie un număr de telefon valid.", LOCALITATE_INVALIDA: "Scrie localitatea.", STRADA_INVALIDA: "Scrie strada și numărul.", DEJA_EXPEDIAT: "Piesa a fost deja expediată, adresa nu se mai poate schimba.", PREA_MULTE_PIESE: "Poți cere cel mult 8 piese într-o cerere.", FARA_PIESE_IN_OFERTA: "Pune preț la cel puțin o piesă din cerere.", PIESA_NECUNOSCUTA: "Oferta conține o piesă care nu e în cerere.", MARCA_INVALIDA: "Scrie marca mașinii.", AN_INVALID: "Anul mașinii nu pare corect.",
     VIN_INVALID: "Seria de șasiu (VIN) are 11-17 caractere, fără I, O sau Q.", JUDET_LIPSA: "Alege județul.", DETALII_PREA_LUNGI: "Detaliile sunt prea lungi (maximum 1000 de caractere).",
     PREA_MULTE_CERERI: "Ai trimis prea multe cereri azi. Încearcă mâine.", PRET_INVALID: "Scrie un preț valid.", TRANSPORT_INVALID: "Costul transportului nu e valid.",
     GARANTIE_INVALIDA: "Garanția poate fi între 0 și 730 de zile.", NOTA_PREA_LUNGA: "Nota e prea lungă (maximum 600 de caractere).",
@@ -79,14 +79,14 @@
 
   function tabs() {
     const items = [["board", "Piese căutate"]];
-    if (me) items.push(["mine", "Cererile mele"], ["received", "Oferte primite" + (rfqSum.new_quotes + rfqSum.new_answers ? ` (${rfqSum.new_quotes + rfqSum.new_answers})` : "")], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]);
+    if (me) items.push(["mine", "Cererile mele"], ["received", "Oferte primite" + (rfqSum.new_quotes + rfqSum.new_answers ? ` (${rfqSum.new_quotes + rfqSum.new_answers})` : "")], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["address", "Adresa mea"], ["dealer", "Profil firmă"]);
     if (me && ["admin", "moderator"].includes(me.role)) items.push(["admin", "Aprobări"]);
     const on = (k) => st.view === k || (k === "mine" && (st.view === "detail" || (st.view === "chat" && st.from !== "offers"))) || (k === "offers" && st.view === "chat" && st.from === "offers");
     $("rfqTabs").replaceChildren(...items.map(([k, n]) => { const b = el("button", "rfq-tab" + (on(k) ? " on" : ""), n); b.type = "button"; b.onclick = () => go(k); return b; }));
   }
 
   /* fiecare pagină are adresa ei (se poate da mai departe, merge „Înapoi” din browser) */
-  const ROUTES = { board: "/piese-cautate", new: "/piese-cautate/noua", mine: "/cererile-mele", received: "/oferte-primite", offers: "/ofertele-mele", dealer: "/firma", admin: "/aprobari" };
+  const ROUTES = { board: "/piese-cautate", new: "/piese-cautate/noua", mine: "/cererile-mele", received: "/oferte-primite", offers: "/ofertele-mele", address: "/adresa-mea", dealer: "/firma", admin: "/aprobari" };
   const pathFor = (v, a) => (v === "detail" ? "/cererea/" + a : v === "chat" ? "/chat-oferta/" + a : ROUTES[v] || ROUTES.board);
   function parsePath(p) {
     p = String(p || "").replace(/\/+$/, "") || "/";
@@ -102,7 +102,7 @@
     try { const url = pathFor(view, view === "chat" ? arg || st.quote : st.id); if (!st.pop && typeof history !== "undefined" && location.pathname !== url) history.pushState({ rfq: 1 }, "", url); } catch { /* fără istoric */ }
     if (view !== "chat") st.from = view === "offers" ? "offers" : view === "detail" || view === "mine" ? "buyer" : st.from;
     tabs(); setTimeout(() => window.rfqSummaryRefresh && rfqSummaryRefresh(), 800);   // după ce serverul a marcat cererea ca „văzută”
-    ({ board: viewBoard, mine: viewMine, new: viewNew, detail: viewDetail, received: viewReceived, offers: viewOffers, dealer: viewDealer, admin: viewAdmin, chat: viewChat })[view](arg);
+    ({ board: viewBoard, mine: viewMine, new: viewNew, detail: viewDetail, received: viewReceived, offers: viewOffers, address: viewAddress, dealer: viewDealer, admin: viewAdmin, chat: viewChat })[view](arg);
     body.scrollTop = 0;
   }
   const loading = () => body.replaceChildren(el("p", "muted", "Se încarcă…"));
@@ -263,6 +263,52 @@
     body.replaceChildren(...out);
   }
 
+  /* ---------- adresa de livrare: salvată în cont, confirmată la alegerea ofertei ---------- */
+  const SHIP_KIND = { domiciliu: "Livrare la domiciliu", sediu: "Livrare la sediul firmei", altul: "Livrare în alt loc" };
+  const shipText = (a) => (a.mode === "ridicare" ? "Ridică personal de la ofertant" : `${SHIP_KIND[a.kind] || "Livrare"}: ${a.street}, ${a.city}, ${a.county}`);
+  function shipCard(a, who) {
+    const c = el("section", "rfq-ship-to"); c.append(el("b", "", who || "Date pentru livrare"), el("p", "", a.name + " · " + a.phone), el("p", "", shipText(a)));
+    if (a.note) c.append(el("p", "muted", "Mențiuni: " + a.note));
+    return c;
+  }
+  /* formular reutilizat la alegerea ofertei, la modificarea adresei și în „Adresa mea” */
+  function addressForm(init, defs, o) {
+    const a = init || {}, f = el("form", "rfq-qform rfq-addr");
+    const mode = el("select"); [["domiciliu", "Livrare la domiciliu"], ["sediu", "Livrare la sediul firmei"], ["altul", "Livrare în alt loc"]].concat(o.pickup ? [["ridicare", "Ridic personal de la ofertant"]] : []).forEach(([v, t]) => mode.append(new Option(t, v)));
+    mode.value = a.mode === "ridicare" && o.pickup ? "ridicare" : (a.kind || "domiciliu");
+    const name = inp("text", "Numele celui care primește", a.name || (defs && defs.name) || ""), phone = inp("tel", "Telefon pentru curier", a.phone || (defs && defs.phone) || "");
+    name.maxLength = 80; phone.maxLength = 20;
+    const county = countySel(a.county || "", "Județ"), city = inp("text", "Localitate", a.city || ""), street = inp("text", "Stradă, număr, bloc, scară, apartament", a.street || "");
+    city.maxLength = 60; street.maxLength = 150;
+    const note = el("textarea"); note.rows = 2; note.maxLength = 200; note.value = a.note || ""; note.placeholder = "Mențiuni pentru curier (ex.: program, interfon)";
+    const place = el("div", "rfq-addr-place"); place.append(field("Județ", county), field("Localitate", city), field("Stradă și număr", street));
+    const sv = el("input"); sv.type = "checkbox"; sv.checked = o.saveDefault !== false; const svL = el("label", "rfq-chk"); svL.append(sv, " Salvează ca adresa mea din cont");
+    const msg = el("p", "err"), ok = el("button", "primary", o.submit || "Salvează"); msg.hidden = true; ok.type = "submit";
+    const sync = () => { place.hidden = mode.value === "ridicare"; svL.hidden = mode.value === "ridicare" && !o.account; }; mode.onchange = sync; sync();
+    f.append(...(o.intro ? [el("p", "muted", o.intro)] : []), field("Cum primești piesele?", mode), field("Nume", name), field("Telefon", phone, "Îl vede doar ofertantul ales, ca să poată trimite piesa."), place, field("Mențiuni", note), ...(o.noSave ? [] : [svL]), msg, ok);
+    f.onsubmit = async (e) => {
+      e.preventDefault(); ok.disabled = true; msg.hidden = true;
+      const ridic = mode.value === "ridicare";
+      try { await o.send({ mode: ridic ? "ridicare" : "livrare", kind: ridic ? "" : mode.value, name: name.value, phone: phone.value, county: county.value, city: city.value, street: street.value, note: note.value, save: sv.checked && !o.noSave }); }
+      catch (err) { msg.textContent = errText(err); msg.hidden = false; ok.disabled = false; }
+    };
+    return f;
+  }
+  async function viewAddress() {
+    loading(); let d; try { d = await api("/api/requests/address"); } catch (e) { return fail(e); }
+    const f = addressForm(d.address, d.defaults, { submit: "Salvează adresa", noSave: true, account: true, intro: "Salvează o dată adresa unde primești piesele. La alegerea unei oferte o găsești completată și o poți schimba (altă adresă, sediu, ridicare personală).", send: async (b) => { await api("/api/requests/address", "PUT", { ...b, mode: "livrare" }); showMessage("Salvat", "Adresa ta de livrare a fost salvată."); } });
+    body.replaceChildren(el("h3", "", "Adresa mea de livrare"), f);
+  }
+  /* alegerea ofertei: întâi spui unde trimit piesele, apoi oferta e aleasă */
+  async function viewAward(r, q) {
+    loading(); let d; try { d = await api("/api/requests/address"); } catch (e) { return fail(e); }
+    const back = el("button", "link-btn", "‹ Înapoi la oferte"); back.type = "button"; back.onclick = () => viewDetail(r.id);
+    const txt = q.shipping == null ? money(q.price, q.currency) + " + transport de stabilit" : money(totalOf(q), q.currency) + " cu transport";
+    const f = addressForm(d.address, d.defaults, { pickup: q.pickup, submit: "Alege oferta și trimite adresa", intro: "Verifică unde vrei să primești piesele. Adresa și telefonul se trimit doar ofertantului ales; celelalte oferte se închid.",
+      send: async (b) => { await api(`/api/requests/${r.id}/award/${q.id}`, "POST", { delivery: b }); st.quote = q.id; st.from = "buyer"; go("chat", q.id); } });
+    body.replaceChildren(back, el("h3", "", `Alegi oferta ${q.company}`), el("p", "rfq-price", txt), f);
+  }
+
   /* ---------- compararea ofertelor ---------- */
   const totalOf = (q) => Number(q.price) + (q.shipping == null ? 0 : Number(q.shipping));
   const totalRon = (q) => (q.currency === "EUR" ? 5 : 1) * totalOf(q);   // aceeași curs ca la sortarea de pe server
@@ -274,12 +320,7 @@
     rating: ["Calificativ", (a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0) || totalRon(a) - totalRon(b)],
     new: ["Cele mai noi", (a, b) => new Date(b.created_at) - new Date(a.created_at)]
   };
-  async function awardQuote(r, q, btn) {
-    const txt = q.shipping == null ? money(q.price, q.currency) + " + transport de stabilit" : money(totalOf(q), q.currency) + " cu transport";
-    if (!confirm(`Alegi oferta ${q.company} de ${txt}? Celelalte oferte se închid.`)) return;
-    btn.disabled = true;
-    try { await api(`/api/requests/${r.id}/award/${q.id}`, "POST"); st.quote = q.id; go("chat", q.id); } catch (e) { showMessage("Eroare", errText(e)); btn.disabled = false; }
-  }
+  async function awardQuote(r, q, btn) { viewAward(r, q); }
   function cmpTable(r, live, tagsOf) {
     const wrap = el("div", "rfq-cmp"), t = el("table"), hr = el("tr"), best = Math.min(...live.map(totalRon));
     ["Ofertant", "Total", "Stare", "Garanție", "Livrare", "Județ", "Calificativ", ""].forEach((h) => hr.append(el("th", "", h)));
@@ -425,6 +466,14 @@
       out.push(b);
     } else { out.push(el("p", "rfq-done", "✔ Tranzacție finalizată")); out.push(reviewBox(qid, deal, reload)); }
     if (deal.awb) out.unshift(el("p", "rfq-done", `📦 Expediat cu ${deal.carrier}, AWB ${deal.awb}`));
+    if (deal.ship_to) {
+      const sc = shipCard(deal.ship_to, deal.as === "dealer" ? "Unde trimiți piesele" : "Adresa pe care ai trimis-o"); out.unshift(sc);
+      if (deal.can_edit_ship) {
+        const eb = el("button", "ghost", "Modifică adresa"); eb.type = "button";
+        eb.onclick = () => { eb.replaceWith(addressForm(deal.ship_to, null, { pickup: true, submit: "Salvează adresa", send: async (b) => { await api(`/api/requests/quote/${qid}/delivery`, "PUT", b); reload(); } })); };
+        sc.append(eb);
+      }
+    }
     if (deal.as === "dealer" && !deal.completed) {
       const sf = el("div", "rfq-ship"), cs = el("select"), ai = inp("text", "AWB (număr colet)"); ai.maxLength = 30;
       CARRIERS.forEach((c) => cs.append(new Option(c, c))); if (deal.carrier) cs.value = deal.carrier; if (deal.awb) ai.value = deal.awb;
@@ -587,6 +636,7 @@
     if (pub) card.append(" ", el("small", "muted", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}` : "nicio ofertă încă"));
     if (r.quote_id) card.append(el("p", "rfq-price", `Oferta ta: ${money(r.price, r.currency)}${r.shipping == null ? "" : r.shipping === 0 ? " · transport gratuit" : " + " + money(r.shipping, r.currency) + " transport"}${r.eta_days == null ? "" : " · " + etaText(r.eta_days)}`));
     if (r.open_questions) card.append(el("em", "rfq-chip wait", `${r.open_questions} ${r.open_questions === 1 ? "întrebare fără răspuns" : "întrebări fără răspuns"}`));
+    if (r.ship_to && r.quote_status === "won") card.append(shipCard(r.ship_to, "Unde trimiți piesele"));
     if (r.awb) card.append(el("p", "rfq-done", `📦 Expediat cu ${r.carrier}, AWB ${r.awb}`));
     { const qa = dealerQa(r, onDone); if (qa) card.append(qa); }
     if (r.mine) card.append(el("p", "muted", "Aceasta este cererea ta."));

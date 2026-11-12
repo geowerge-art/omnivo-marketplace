@@ -84,3 +84,11 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - Verificat: migrările 001–032 pe un Postgres 16 gol; 20 de scenarii pe rutele reale (cerere cu 3 piese, ofertă completă și parțială, modificare, alegere, inbox, /received); testele `requests*.test.js` trec; paginile deschise în Chromium (adresă, „Înapoi”, fără erori).
 - Neverificat: serverul întreg cu `express` și `pg` reale; formularul de ofertă pe telefon cu cont conectat.
 - După deploy, în log trebuie să apară `migrare aplicată: 032_multi_parts.sql`.
+
+## „Cere oferte”: adresa de livrare (migrarea 033)
+- Ofertantul ales vedea doar porecla cumpărătorului. Acum, la alegerea ofertei, cumpărătorul confirmă **unde primește piesele**: domiciliu, sediul firmei, alt loc sau ridicare personală, cu nume, telefon, județ, localitate, stradă și mențiuni pentru curier. Adresa nu se cere altfel; se trimite doar câștigătorului.
+- **Adresa se salvează o dată în cont** (fila nouă „Adresa mea”, `/adresa-mea`, sau bifa „Salvează ca adresa mea”) și apare completată la următoarea alegere; se poate schimba de fiecare dată.
+- Câștigătorul o vede în chatul ofertei și în „Ofertele mele”. Cumpărătorul o poate **modifica până când piesa e expediată** (`PUT /api/requests/quote/:qid/delivery`); câștigătorul e anunțat.
+- Fișiere: `033_delivery.sql` (`users.ship_addr`, `quotes.ship_to`), `requests.js`, `requests-ui.js`, `requests.test.js`, `requests.ui.test.js`.
+- **Atenție:** `POST /api/requests/:id/award/:qid` cere acum `delivery`; clientul vechi fără adresă primește eroare.
+- Verificat pe Postgres: alegere fără adresă refuzată, adresă salvată în cont, vizibilă câștigătorului, modificare, refuz după expediere (33 de scenarii). Neverificat: aspectul formularului pe telefon.

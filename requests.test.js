@@ -1,7 +1,7 @@
 /* Validările și potrivirea din „Cere oferte” (funcții pure, fără bază de date). */
 const test = require('node:test');
 const assert = require('node:assert');
-const { parseRequest, parseQuote, parseDealer, dealerMatches, brandKey } = require('./requests');
+const { parseAddress, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey } = require('./requests');
 
 const okReq = { part: 'Far stânga', brand: 'VW', model: 'Golf 7', year: 2015, county: 'Cluj' };
 
@@ -117,4 +117,20 @@ test('ofertă pe piese: total = suma, parțială permisă, piesă străină refu
   assert.strictEqual(parseQuote({ lines: [] }, ids).error, 'FARA_PIESE_IN_OFERTA');
   assert.strictEqual(parseQuote({ price: 100 }, ids).error, 'FARA_PIESE_IN_OFERTA');   // 3 piese cer preț pe piesă
   assert.strictEqual(parseQuote({ price: 100 }, [11]).v.price, 100);                      // o piesă: prețul întreg
+});
+
+test('adresa de livrare: telefon permis, județ/localitate/stradă obligatorii, ridicarea nu cere adresă', () => {
+  const a = { name: 'Ion Pop', phone: '0722 123 456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. Memorandumului 5' };
+  assert.strictEqual(parseAddress(a).v.kind, 'domiciliu');
+  assert.strictEqual(parseAddress({ ...a, kind: 'sediu' }).v.kind, 'sediu');
+  assert.strictEqual(parseAddress({ ...a, kind: 'x' }).v.kind, 'domiciliu');
+  assert.strictEqual(parseAddress({ ...a, phone: 'abc' }).error, 'TELEFON_INVALID');
+  assert.strictEqual(parseAddress({ ...a, phone: '123' }).error, 'TELEFON_INVALID');
+  assert.strictEqual(parseAddress({ ...a, name: '' }).error, 'NUME_INVALID');
+  assert.strictEqual(parseAddress({ ...a, county: '' }).error, 'JUDET_LIPSA');
+  assert.strictEqual(parseAddress({ ...a, city: 'C' }).error, 'LOCALITATE_INVALIDA');
+  assert.strictEqual(parseAddress({ ...a, street: 'ab' }).error, 'STRADA_INVALIDA');
+  assert.strictEqual(parseAddress(undefined).error, 'NUME_INVALID');
+  const p = parseAddress({ name: 'Ion', phone: '+40 722 123 456', mode: 'ridicare' });
+  assert.ok(p.v && p.v.mode === 'ridicare' && p.v.street === '');
 });
