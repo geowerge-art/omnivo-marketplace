@@ -10,7 +10,7 @@
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const fmt = (d) => new Date(d).toLocaleString("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   const fmtD = (d) => new Date(d).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" });
-  const TABS = [["over", "Panou"], ["ads", "Anunțuri"], ["users", "Utilizatori"], ["reports", "Raportări"], ["log", "Jurnal"]];
+  const TABS = [["over", "Panou"], ["ads", "Anunțuri"], ["users", "Utilizatori"], ["categories", "Categorii"], ["reports", "Raportări"], ["log", "Jurnal"]];
   const AB = { pending: "De aprobat", approved: "Active", rejected: "Respinse", blocked: "Blocate", sold: "Vândute", all: "Toate", deleted: "Șterse" };
   const UB = { "": "Toți", "status:blocked": "Blocați", "role:moderator": "Moderatori", "role:admin": "Administratori" };
   const RB = { open: "Deschise", resolved: "Rezolvate", dismissed: "Respinse" };
@@ -286,6 +286,7 @@
     b.replaceChildren(top, list); paged(list, `/api/admin/reports?status=${st.reports}`, reportRow);
   }
   async function vLog(b) { const list = el("div"); b.replaceChildren(list); paged(list, "/api/admin/activity", actRow); }
+async function vCategories(b) { const list = el("div"); b.replaceChildren(list); paged(list, "/api/admin/categories", catRow); }
 
   /* ---- cadru ---- */
   function tabs() {
@@ -295,7 +296,7 @@
       b.onclick = () => go(k); return b;
     }));
   }
-  const VIEWS = { over: vOver, ads: vAds, users: vUsers, reports: vReports, log: vLog };
+  const VIEWS = { over: vOver, ads: vAds, users: vUsers, categories: vCategories, reports: vReports, log: vLog };
   async function render() {
     const b = $("admBody"); b.replaceChildren(el("p", "muted", "Se încarcă…"));
     try { await VIEWS[st.tab](b); } catch (e) { b.replaceChildren(el("p", "err", errText(e))); }
