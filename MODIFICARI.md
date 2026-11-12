@@ -66,3 +66,11 @@ Fișiere: `031_rfq_v2.sql`, `requests.js`, `requests-ui.js`, `requests.test.js`,
 După deploy, în log trebuie să apară `migrare aplicată: 031_rfq_v2.sql`.
 Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validările au fost testate în Node cu dependențele înlocuite.
 Încă lipsește: plata online / garantarea banilor, fotografii noi la editarea cererii, notificări push.
+
+## „Cere oferte”: Oferte primite, comparare, profil ofertant
+- **Filă nouă „Oferte primite”** (`GET /api/requests/received`): toate ofertele la toate cererile tale, grupate pe cerere, cu cele mai bune 3 pe loc, „Nouă” (ultimele 24 h) și link direct în cerere.
+- **În cerere**: sortare (cel mai mic total, garanție, livrare rapidă, calificativ, cele mai noi), **tabel de comparare** cu butonul „Alege” pe fiecare rând și etichete automate: cel mai mic total, cea mai lungă garanție, livrare cea mai rapidă, cel mai bine cotat, în județul tău.
+- **Preț total** (piesă + transport) pe fiecare ofertă; fără transport precizat se arată „+ transport de stabilit”.
+- **Numele ofertantului** deschide profilul lui (calificativ ca vânzător, recenzii). `dealer_id` se trimite acum și pentru ofertele nealese; telefonul rămâne ascuns până la alegere.
+- Fișiere: `requests.js`, `requests-ui.js`, `style.css`, `requests.offers.test.js` (8 verificări), `requests.ui.test.js` (24 de verificări, rulează interfața într-un DOM simulat).
+- Neverificat: interogarea SQL din `/received` pe Postgres și aspectul pe telefon.

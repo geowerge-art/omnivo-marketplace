@@ -289,6 +289,22 @@ router.get('/mine', ah(async (req, res) => {
 }));
 
 /* cererea cu ofertele ei, doar pentru cumpărător; ofertele sunt sortate după preț + transport */
+/* toate ofertele primite la toate cererile mele (deschise, sau cu câștigător ales) */
+router.get('/received', ah(async (req, res) => {
+  await sweep();
+  const r = await db.query(
+    `SELECT q.id AS quote_id, q.request_id, q.dealer_id, q.price, q.currency, q.state, q.warranty_days, q.eta_days, q.shipping, q.status, q.created_at,
+            r.part, r.brand, r.model, r.year, r.county, r.status AS request_status, r.expires_at,
+            (SELECT i.thumb_url FROM quote_images i WHERE i.request_id = r.id ORDER BY i.position, i.id LIMIT 1) AS thumb,
+            COALESCE(d.company, uq.nickname) AS company, COALESCE(d.status = 'approved', FALSE) AS verified,
+            (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating,
+            (SELECT COUNT(*)::int FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating_count
+       FROM quotes q JOIN part_requests r ON r.id = q.request_id JOIN users uq ON uq.id = q.dealer_id LEFT JOIN dealers d ON d.user_id = q.dealer_id
+      WHERE r.user_id = $1 AND q.status IN ('sent', 'won') AND (r.status = 'open' OR q.status = 'won')
+      ORDER BY r.id DESC, q.id DESC LIMIT 200`, [req.user.id]);
+  res.set('Cache-Control', 'no-store').json({ offers: r.rows });
+}));
+
 router.get('/:id(\\d+)', ah(async (req, res) => {
   await sweep();
   const r = (await db.query('SELECT *, (expires_at > NOW()) AS accepting FROM part_requests WHERE id = $1 AND user_id = $2', [Number(req.params.id), req.user.id])).rows[0];
@@ -299,7 +315,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
             (SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating,
             (SELECT COUNT(*)::int FROM reviews WHERE seller_id = q.dealer_id AND role = 'seller') AS rating_count,
             (SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', i.url, 'thumb', i.thumb_url) ORDER BY i.position, i.id), '[]'::json) FROM quote_images i WHERE i.quote_id = q.id) AS images,
-            CASE WHEN q.status = 'won' THEN q.dealer_id END AS dealer_id,
+            q.dealer_id AS dealer_id,
             CASE WHEN q.status = 'won' AND u.show_phone THEN u.phone END AS phone,
             (q.status = 'won' AND u.whatsapp) AS whatsapp,
             CASE WHEN q.status = 'won' THEN q.carrier END AS carrier, CASE WHEN q.status = 'won' THEN q.awb END AS awb, CASE WHEN q.status = 'won' THEN q.shipped_at END AS shipped_at

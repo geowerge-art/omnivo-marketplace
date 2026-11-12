@@ -1631,3 +1631,29 @@ button.adm-stat { cursor: pointer; }
 /* Cere oferte: expediere (AWB) */
 .rfq-ship{display:grid;gap:8px;margin:10px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:#fbf5e8}
 .rfq-ship select,.rfq-ship input{width:100%;height:44px;border:1px solid var(--border);border-radius:10px;padding:0 10px;font:inherit;font-size:16px;background:#fff}
+
+/* ---- Oferte primite + compararea ofertelor ---- */
+.rfq-seller { padding: 0; border: 0; background: none; font: inherit; font-weight: 800; color: var(--navy); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; cursor: pointer; text-align: left; }
+.rfq-sortbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 10px; }
+.rfq-sort { min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: #fff; font: inherit; font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
+.rfq-sort.on { background: #14110c; border-color: #14110c; color: #e9d3a8; }
+.rfq-cmp { overflow-x: auto; margin: 6px 0; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
+.rfq-cmp table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rfq-cmp th { padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: #faf8f4; white-space: nowrap; }
+.rfq-cmp td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
+.rfq-cmp td:first-child { white-space: normal; min-width: 130px; }
+.rfq-cmp td small { display: block; }
+.rfq-cmp td.best { background: #e6f5ec; }
+.rfq-cmp td.best b { color: #1b6b3f; }
+.rfq-cmp .primary { min-height: 38px; padding: 0 14px; margin: 0; width: auto; }
+.rfq-recv { margin: 12px 0; padding: 6px 12px 12px; background: #fff; border: 1px solid var(--border); border-radius: 16px; }
+.rfq-recv-hd { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.rfq-recv-hd .rfq-rth { flex: none; width: 52px; height: 52px; border-radius: 10px; overflow: hidden; background: var(--light); }
+.rfq-recv-hd .rfq-rth img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rfq-recv-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rfq-recv-t b { color: var(--navy); overflow-wrap: anywhere; }
+.rfq-go { font-style: normal; font-size: 22px; color: var(--muted); }
+.rfq-recv-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 12px; background: #faf8f4; font: inherit; text-align: left; cursor: pointer; }
+.rfq-recv-nm { display: flex; flex-direction: column; min-width: 0; gap: 2px; align-items: flex-start; }
+.rfq-recv-nm small { white-space: normal; }
+.rfq-recv-pr { flex: none; color: var(--navy); }

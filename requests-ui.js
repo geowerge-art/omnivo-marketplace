@@ -56,7 +56,7 @@
 
   function tabs() {
     const items = [["board", "Piese căutate"]];
-    if (me) items.push(["mine", "Cererile mele"], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]);
+    if (me) items.push(["mine", "Cererile mele"], ["received", "Oferte primite"], ["new", "Cerere nouă"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]);
     if (me && ["admin", "moderator"].includes(me.role)) items.push(["admin", "Aprobări"]);
     const on = (k) => st.view === k || (k === "mine" && (st.view === "detail" || (st.view === "chat" && st.from !== "offers"))) || (k === "offers" && st.view === "chat" && st.from === "offers");
     $("rfqTabs").replaceChildren(...items.map(([k, n]) => { const b = el("button", "rfq-tab" + (on(k) ? " on" : ""), n); b.type = "button"; b.onclick = () => go(k); return b; }));
@@ -68,7 +68,7 @@
     if (view === "detail") st.id = arg;
     if (view !== "chat") st.from = view === "offers" ? "offers" : view === "detail" || view === "mine" ? "buyer" : st.from;
     tabs();
-    ({ board: viewBoard, mine: viewMine, new: viewNew, detail: viewDetail, offers: viewOffers, dealer: viewDealer, admin: viewAdmin, chat: viewChat })[view](arg);
+    ({ board: viewBoard, mine: viewMine, new: viewNew, detail: viewDetail, received: viewReceived, offers: viewOffers, dealer: viewDealer, admin: viewAdmin, chat: viewChat })[view](arg);
     body.scrollTop = 0;
   }
   const loading = () => body.replaceChildren(el("p", "muted", "Se încarcă…"));
@@ -196,7 +196,7 @@
     hd.append(sp);
     out.push(hd);
     if (!d.quotes.length) out.push(el("p", "muted rfq-empty", r.status === "open" ? "Nicio ofertă încă. Dezmembrătorii au fost anunțați; te anunțăm când sosește prima ofertă." : "Cererea nu a primit oferte."));
-    d.quotes.forEach((q, i) => out.push(quoteCard(r, q, i === 0 && q.status !== "won" && d.quotes.filter((x) => x.status === "sent").length > 1)));
+    out.push(...offersBlock(r, d.quotes));
     if (["expired", "cancelled"].includes(r.status) && !r.awarded_quote_id) {
       const re = el("button", "primary", "Redeschide cererea pentru încă 48 h"); re.type = "button";
       re.onclick = async () => { re.disabled = true; try { await api(`/api/requests/${r.id}/reactivate`, "POST"); viewDetail(r.id); } catch (e) { showMessage("Eroare", errText(e)); re.disabled = false; } };
@@ -209,6 +209,99 @@
       out.push(cn);
       st.timer = setInterval(() => { if (!dlg.open || st.view !== "detail") return clearInterval(st.timer); if (!document.activeElement || !body.contains(document.activeElement)) viewDetail(r.id); }, 20000);
     }
+    body.replaceChildren(...out);
+  }
+
+  /* ---------- compararea ofertelor ---------- */
+  const totalOf = (q) => Number(q.price) + (q.shipping == null ? 0 : Number(q.shipping));
+  const totalRon = (q) => (q.currency === "EUR" ? 5 : 1) * totalOf(q);   // aceeași curs ca la sortarea de pe server
+  const isNew = (d) => Date.now() - new Date(d) < 864e5;
+  const SORTS = {
+    total: ["Cel mai mic total", (a, b) => totalRon(a) - totalRon(b)],
+    warranty: ["Garanție", (a, b) => b.warranty_days - a.warranty_days || totalRon(a) - totalRon(b)],
+    eta: ["Livrare rapidă", (a, b) => (a.eta_days == null ? 99 : a.eta_days) - (b.eta_days == null ? 99 : b.eta_days) || totalRon(a) - totalRon(b)],
+    rating: ["Calificativ", (a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0) || totalRon(a) - totalRon(b)],
+    new: ["Cele mai noi", (a, b) => new Date(b.created_at) - new Date(a.created_at)]
+  };
+  async function awardQuote(r, q, btn) {
+    const txt = q.shipping == null ? money(q.price, q.currency) + " + transport de stabilit" : money(totalOf(q), q.currency) + " cu transport";
+    if (!confirm(`Alegi oferta ${q.company} de ${txt}? Celelalte oferte se închid.`)) return;
+    btn.disabled = true;
+    try { await api(`/api/requests/${r.id}/award/${q.id}`, "POST"); st.quote = q.id; go("chat", q.id); } catch (e) { showMessage("Eroare", errText(e)); btn.disabled = false; }
+  }
+  function cmpTable(r, live, tagsOf) {
+    const wrap = el("div", "rfq-cmp"), t = el("table"), hr = el("tr"), best = Math.min(...live.map(totalRon));
+    ["Ofertant", "Total", "Stare", "Garanție", "Livrare", "Județ", "Calificativ", ""].forEach((h) => hr.append(el("th", "", h)));
+    t.append(el("thead")); t.firstChild.append(hr); const tb = el("tbody");
+    live.forEach((q) => {
+      const tr = el("tr"), who = el("td"), nm = el(q.dealer_id && window.openProfile ? "button" : "b", "rfq-seller", q.company);
+      if (nm.tagName === "BUTTON") { nm.type = "button"; nm.onclick = () => window.openProfile(q.dealer_id); }
+      who.append(nm); const tg = tagsOf(q).map((x) => x[0]); if (isNew(q.created_at)) tg.unshift("Nouă"); if (tg.length) who.append(el("small", "muted", tg.join(" · ")));
+      const tot = el("td", totalRon(q) === best ? "best" : ""); tot.append(el("b", "", money(totalOf(q), q.currency))); if (q.shipping == null) tot.append(el("small", "muted", "+ transport"));
+      const go1 = el("td"), ch = el("button", "primary", "Alege"); ch.type = "button"; ch.onclick = () => awardQuote(r, q, ch); go1.append(ch);
+      tr.append(who, tot, el("td", "", STATE[q.state] || "—"), el("td", "", q.warranty_days ? q.warranty_days + " zile" : "fără"),
+        el("td", "", q.eta_days == null ? "—" : q.eta_days === 0 ? "în stoc" : q.eta_days + (q.eta_days === 1 ? " zi" : " zile")), el("td", "", q.dealer_county || "—"),
+        el("td", "", q.rating ? `★ ${q.rating} (${q.rating_count})` : "—"), go1);
+      tb.append(tr);
+    });
+    t.append(tb); wrap.append(t); return wrap;
+  }
+  function offersBlock(r, quotes) {
+    if (!quotes.length) return [];
+    const won = quotes.filter((q) => q.status === "won"), live = quotes.filter((q) => q.status === "sent"), rest = quotes.filter((q) => q.status === "lost");
+    const tagsOf = (q) => {
+      const t = [];
+      if (live.length > 1 && q.status === "sent") {
+        if (totalRon(q) === Math.min(...live.map(totalRon))) t.push(["Cel mai mic total", "ok"]);
+        const mw = Math.max(...live.map((x) => x.warranty_days)); if (mw > 0 && q.warranty_days === mw) t.push(["Cea mai lungă garanție", ""]);
+        const et = live.filter((x) => x.eta_days != null).map((x) => x.eta_days); if (et.length > 1 && q.eta_days === Math.min(...et)) t.push(["Livrare cea mai rapidă", ""]);
+        const mr = Math.max(...live.map((x) => Number(x.rating) || 0)); if (mr > 0 && Number(q.rating) === mr) t.push(["Cel mai bine cotat", ""]);
+      }
+      if (q.dealer_county && q.dealer_county === r.county) t.push(["În județul tău", ""]);
+      return t;
+    };
+    const list = el("div", "rfq-offers-list"), bar = el("div", "rfq-sortbar");
+    const draw = () => {
+      const sorted = [...live].sort(SORTS[st.sort || "total"][1]);
+      list.replaceChildren(...won.map((q) => quoteCard(r, q, [])), ...(st.cmp && sorted.length > 1 ? [cmpTable(r, sorted, tagsOf)] : sorted.map((q) => quoteCard(r, q, tagsOf(q)))), ...rest.map((q) => quoteCard(r, q, [])));
+      const act = st.cmp ? "cmp" : st.sort || "total"; bar.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.k === act));
+    };
+    if (live.length > 1) {
+      bar.append(el("span", "muted", `${live.length} oferte · sortează:`));
+      Object.entries(SORTS).forEach(([k, [n]]) => { const b = el("button", "rfq-sort", n); b.type = "button"; b.dataset.k = k; b.onclick = () => { st.sort = k; st.cmp = false; draw(); }; bar.append(b); });
+      const tb = el("button", "rfq-sort", "▦ Compară în tabel"); tb.type = "button"; tb.dataset.k = "cmp"; tb.onclick = () => { st.cmp = !st.cmp; draw(); }; bar.append(tb);
+    }
+    draw();
+    return live.length > 1 ? [bar, list] : [list];
+  }
+
+  /* ---------- „Oferte primite”: toate ofertele la toate cererile tale ---------- */
+  async function viewReceived() {
+    loading();
+    let d; try { d = await api("/api/requests/received"); } catch (e) { return fail(e); }
+    const out = [el("p", "muted rfq-intro", "Toate ofertele primite la cererile tale. Deschide o cerere ca să le compari, să pui întrebări și să o alegi pe cea mai bună.")];
+    if (!d.offers.length) {
+      out.push(el("p", "muted rfq-empty", "Nu ai primit nicio ofertă încă. Dezmembrătorii au fost anunțați; te anunțăm când sosește prima ofertă."));
+      const nb = el("button", "primary", "Cere oferte pentru o piesă"); nb.type = "button"; nb.onclick = () => go("new"); out.push(nb);
+      return body.replaceChildren(...out);
+    }
+    const by = new Map(); d.offers.forEach((o) => { if (!by.has(o.request_id)) by.set(o.request_id, []); by.get(o.request_id).push(o); });
+    by.forEach((list, rid) => {
+      list.sort((a, b) => (b.status === "won") - (a.status === "won") || totalRon(a) - totalRon(b));
+      const f = list[0], card = el("section", "rfq-recv"), hd = el("button", "rfq-recv-hd"); hd.type = "button"; hd.onclick = () => go("detail", rid);
+      if (f.thumb) { const th = el("span", "rfq-rth"), g = el("img"); g.src = f.thumb; g.alt = ""; g.loading = "lazy"; th.append(g); hd.append(th); }
+      const tx = el("span", "rfq-recv-t"), nNew = list.filter((o) => isNew(o.created_at)).length;
+      tx.append(el("b", "", title(f)), el("small", "muted", `${list.length} ${list.length === 1 ? "ofertă" : "oferte"}${nNew ? ` · ${nNew} ${nNew === 1 ? "nouă" : "noi"}` : ""} · ${f.request_status === "open" ? left(f.expires_at) : "câștigător ales"}`));
+      hd.append(tx, el("em", "rfq-go", "›")); card.append(hd);
+      list.slice(0, 3).forEach((o) => {
+        const row = el("button", "rfq-recv-row"); row.type = "button"; row.onclick = () => go("detail", rid);
+        const nm = el("span", "rfq-recv-nm"); nm.append(el("b", "", o.company), el("small", "muted", [o.rating ? `★ ${o.rating} (${o.rating_count})` : "fără recenzii", STATE[o.state], o.warranty_days ? `garanție ${o.warranty_days} z` : ""].filter(Boolean).join(" · ")));
+        if (o.status === "won") nm.append(el("em", "rfq-chip sold", "Câștigătoare")); else if (isNew(o.created_at)) nm.append(el("em", "rfq-chip wait", "Nouă"));
+        row.append(nm, el("b", "rfq-recv-pr", money(totalOf(o), o.currency) + (o.shipping == null ? " + transp." : ""))); card.append(row);
+      });
+      if (list.length > 3) { const more = el("button", "link-btn", `Vezi toate cele ${list.length} oferte și compară`); more.type = "button"; more.onclick = () => go("detail", rid); card.append(more); }
+      out.push(card);
+    });
     body.replaceChildren(...out);
   }
 
@@ -291,15 +384,17 @@
     out.push(prof); box.replaceChildren(...out);
   }
 
-  function quoteCard(r, q, best) {
+  function quoteCard(r, q, tags) {
     const card = el("article", "rfq-quote" + (q.status === "won" ? " won" : q.status === "lost" ? " lost" : ""));
-    const top = el("div", "rfq-qtop"); const nm = el("b", "", q.company);
+    const top = el("div", "rfq-qtop"); let nm;
+    if (q.dealer_id && window.openProfile) { nm = el("button", "rfq-seller", q.company); nm.type = "button"; nm.title = "Vezi profilul și recenziile"; nm.onclick = () => window.openProfile(q.dealer_id); } else nm = el("b", "", q.company);
     const rate = q.rating ? ` · ★ ${q.rating} (${q.rating_count})` : "";
     top.append(nm, el("small", "muted", [q.dealer_city, q.dealer_county].filter(Boolean).join(", ") + rate));
     top.append(el("em", "rfq-chip", q.verified ? "Firmă verificată" : "Persoană fizică"));
-    if (q.status === "won") { top.append(el("em", "rfq-chip sold", "Câștigătoare")); if (q.completed_at) top.append(el("em", "rfq-chip ok", "Finalizată")); } else if (best) top.append(el("em", "rfq-chip ok", "Cel mai mic total"));
-    const pr = el("div", "rfq-price"); pr.append(el("b", "", money(q.price, q.currency)));
-    pr.append(el("span", "muted", q.shipping == null ? " + transport de stabilit" : q.shipping === 0 ? " · transport gratuit" : ` + ${money(q.shipping, q.currency)} transport`));
+    if (q.status === "won") { top.append(el("em", "rfq-chip sold", "Câștigătoare")); if (q.completed_at) top.append(el("em", "rfq-chip ok", "Finalizată")); } else { (tags || []).forEach(([t, c]) => top.append(el("em", "rfq-chip " + (c || ""), t))); if (q.status === "sent" && isNew(q.created_at)) top.append(el("em", "rfq-chip wait", "Nouă")); }
+    const pr = el("div", "rfq-price");
+    if (q.shipping == null) { pr.append(el("b", "", money(q.price, q.currency)), el("span", "muted", " + transport de stabilit")); }
+    else { pr.append(el("b", "", "Total " + money(totalOf(q), q.currency)), el("span", "muted", q.shipping === 0 ? " · transport gratuit" : ` · piesa ${money(q.price, q.currency)} + transport ${money(q.shipping, q.currency)}`)); }
     const facts = el("ul", "rfq-facts"); [STATE[q.state], q.warranty_days ? `Garanție ${q.warranty_days} zile` : "Fără garanție", etaText(q.eta_days), q.invoice ? "Emite factură" : "", PAY[q.payment], q.pickup ? "Ridicare din parc" : "Doar livrare"].filter(Boolean).forEach((f) => facts.append(el("li", "", f)));
     card.append(top, pr, facts); if (q.note) card.append(el("p", "rfq-note", q.note));
     if (q.images && q.images.length) {
@@ -310,10 +405,7 @@
     { const qa = buyerQa(r, q); if (qa) card.append(qa); }
     if (q.status === "sent" && r.status === "open") {
       const b = el("button", "primary", "Alege această ofertă"); b.type = "button";
-      b.onclick = async () => {
-        if (!confirm(`Alegi oferta ${q.company} de ${money(q.price, q.currency)}? Celelalte oferte se închid.`)) return; b.disabled = true;
-        try { await api(`/api/requests/${r.id}/award/${q.id}`, "POST"); st.quote = q.id; go("chat", q.id); } catch (e) { showMessage("Eroare", errText(e)); b.disabled = false; }
-      };
+      b.onclick = () => awardQuote(r, q, b);
       const rj = el("button", "ghost", "Respinge oferta"); rj.type = "button";
       rj.onclick = async () => { if (!confirm(`Respingi oferta ${q.company}? Ofertantul e anunțat și nu o mai poate retrimite.`)) return; rj.disabled = true; try { await api(`/api/requests/${r.id}/quotes/${q.id}/reject`, "POST"); viewDetail(r.id); } catch (e) { showMessage("Eroare", errText(e)); rj.disabled = false; } };
       card.append(b, rj);
