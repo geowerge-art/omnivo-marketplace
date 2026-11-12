@@ -229,13 +229,7 @@ a {
 .pill.on .pill-ic {
   color: var(--gold-soft);
 }
-#priceFilters { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--muted); }
-#priceFilters input { width: 48px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
-#priceFilters input:focus { outline: none; border-color: var(--primary); }
-#detectedCategory { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: #fff; margin-top: 12px; font-size: 13px; color: var(--navy); }
-#detectedCategory.hidden { display: none; }
-#detectedCategory .cat-chip-ico { color: var(--gold); }
-#detectedCategory .cat-parent { color: var(--muted); font-size: 12px; margin-left: 6px; }
+
 .pill-x {
   font-size: 11px;
   opacity: .8;
@@ -894,63 +888,7 @@ a.phone-btn.wa{display:inline-flex;align-items:center;background:#1f9d55;border-
 #products .product-info h3 { font-size: 15px; font-weight: 500; line-height: 1.3; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #products .product-info strong, .products.rail .product-info strong { font-size: 18px; font-weight: 800; }
 #products .product-info p { font-size: 13px; margin: 6px 0 0; }
-#products .product-info .product-attrs { font-size: 12px; color: var(--muted); margin: 2px 0 6px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 #products .product-info .tag { margin-top: 8px; align-self: flex-start; }
-
-/* --- Search bar filters --- */
-#searchPills + .detected-category {
-  margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-}
-.detected-category .cat-chip {
-  display: inline-flex; align-items: center; gap: 4px; background: var(--light); color: var(--muted);
-  font-size: 12px; padding: 4px 8px; border-radius: 20px; white-space: nowrap;
-}
-.detected-category .cat-chip .cat-chip-ico { width: 16px; height: 16px; }
-.detected-category .cat-parent { margin-left: 6px; font-size: 11px; color: var(--muted); }
-.detected-category .cat-chip:hover { background: #e0e0e0; }
-
-/* Filtre preț ---
-.filter-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
-.filter-row label { min-width: 40px; font-size: 12px; color: var(--muted); }
-.filter-row input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
-.filter-row input:focus { outline: none; border-color: var(--gold); }
-.filter-row .apply { margin-left: 8px; padding: 6px 12px; background: var(--gold); color: var(--navy); border: none; border-radius: 6px; font-size: 12px; cursor: pointer; }
-.filter-row .apply:hover { background: #a67d42; }
-
-/* Selector județ ---
-.county-select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; min-width: 120px; }
-.county-select:focus { outline: none; border-color: var(--gold); }*/
-
-/* --- filtre rapide (style Emag/OLX) --- */
-#filters { display: flex; flex-wrap: gap: 8px; margin: 12px 0 8px; }
-#filters .filter { font-size: 12px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; color: var(--muted); background: var(--light); cursor: pointer; transition: background .2s, border-color .2s }
-#filters .filter:hover { border-color: var(--gold); color: var(--navy); background: var(--white); }
-#filters .filter.active { border-color: var(--gold); color: var(--navy); background: var(--gold); color: var(--dark); }
-#filters .filter .close { margin-left: 6px; font-size: 11px; opacity: 0; transition: opacity .2s }
-#filters .filter:hover .close { opacity: 1 }
-#filters .filter .close:hover { color: var(--dark) }
-
-/* --- card product modernizat --- */
-#products .product { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; transition: transform .15s, box-shadow .15s; }
-#products .product:hover { transform: translateY(-4px); box-shadow: var(--shadow, 0 8px 24px color-mix(in srgb, var(--muted) 20%, transparent)); }
-#products .product-image { height: 200px; background: var(--light); position: relative; overflow: hidden; }
-#products .product-image img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s }
-#products .product:hover .product-image img { transform: scale(1.05) }
-#products .product-image .promo-tag { position: absolute; top: 8px; left: 8px; background: var(--gold); color: var(--dark); font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-#products .product-image .cond { position: absolute; bottom: 8px; left: 8px; background: color-mix(in srgb, var(--muted) 90%, transparent); color: var(--muted); font-size: 10px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
-#products .product-image .tag { position: absolute; top: 8px; right: 8px; background: var(--light); color: var(--muted); font-size: 10px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
-#products .product-info { padding: 12px 14px; }
-#products .product-info h3 { font-size: 14px; font-weight: 700; margin: 0 0 4px; line-height: 1.3; min-height: 3.6em; color: var(--navy); }
-#products .product-info .price { font-size: 18px; font-weight: 800; color: var(--navy); margin: 6px 0 0; display: flex; align-items: baseline; gap: 4px }
-#products .product-info .price .currency { font-size: 14px; font-weight: 400; color: var(--muted); }
-#products .product-info .price .neg { font-size: 11px; color: var(--muted); text-decoration: line-through; margin-left: 4px; }
-#products .product-info .attrs { font-size: 12px; color: var(--muted); margin: 6px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-#products .product-info .attrs .attr { background: var(--light); padding: 3px 6px; border-radius: 6px; font-size: 11px; white-space: nowrap; }
-#products .product-info .attrs .tag { background: var(--light); padding: 3px 6px; border-radius: 6px; font-size: 11px; white-space: nowrap; color: var(--muted); }
-#products .product-info .county { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-/* --- responsive --- */
-@media (max-width:650px){#products .product-info h3{min-height:2.6em}}.product-image .ico{width:24px;height:24px}
 @media (min-width: 701px) { #products .product-image { aspect-ratio: 4 / 3; } }
 @media (max-width: 700px) {
   #products.products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -1672,14 +1610,13 @@ button.adm-stat { cursor: pointer; }
 .rfq-qa-it .rfq-qform { margin-top: 8px; }
 
 /* chat: cine e vânzător / cumpărător + poza produsului */
-.role-b{display:inline-block;vertical-align:middle;margin-left:4px;padding:4px 10px;border-radius:14px;font-style:normal;font-size:12px;font-weight:700;line-height:1.3;letter-spacing:.1px}
-.role-b.seller{background:#e9d3a8;color:#4a3410;border:1px solid #c2b088}.role-b.buyer{background:#dbe9ff;color:#1c3f77;border:1px solid #8da6ce}.role-b:hover{opacity:.9}
-.cp-who b .role-b{background:rgba(255,255,255,.18);color:#fff;padding:2px 6px;border-radius:999px;font-size:10px}
-.cp-ad-img{flex:none;width:56px;height:56px;border-radius:12px;object-fit:cover;background:#eee;border:1px solid var(--border)}
+.role-b{display:inline-block;vertical-align:middle;margin-left:4px;padding:2px 8px;border-radius:10px;font-style:normal;font-size:11px;font-weight:700;line-height:1.3;letter-spacing:.2px}
+.role-b.seller{background:#e9d3a8;color:#4a3410}.role-b.buyer{background:#dbe9ff;color:#1c3f77}
+.cp-who b .role-b{background:rgba(255,255,255,.18);color:#fff}
+.cp-ad-img{flex:none;width:44px;height:44px;border-radius:8px;object-fit:cover;background:#eee;border:1px solid var(--border)}
 .cp-ad-img[hidden]{display:none}
 .cp-ad-m{flex:1;min-width:0;display:block;line-height:1.3}
-.cp-ad-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:2px}
-.cp-ad-desc{font-size:12px;color:var(--muted);line-height:1.4}
+.cp-ad-m small{display:block;font-size:12px;color:#8f6d38;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp-prod{flex:none;width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;border:1px solid #f0e8d6}
 .cp-ad-m .cp-ad-t{display:block}
 

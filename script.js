@@ -639,26 +639,6 @@ $("hdrChat")?.addEventListener("click", () => (me ? openInbox() : openAuth("Intr
 $("hdrSearch")?.addEventListener("click", () => openSearchPage($("searchInput").value.trim()));
 
 /* ---- lista de anunțuri ---- */
-function attrLine(l) {
-  const attrs = l.attributes || {};
-  if (!attrs || Object.keys(attrs).length === 0) return null;
-  const isAuto = l.category_slug === 'autoturisme' || l.category_slug === 'auto-moto' || l.parent_category === 'Auto și moto';
-  const parts = [];
-  if (isAuto) {
-    if (attrs.marca) parts.push(String(attrs.marca));
-    if (attrs.model) parts.push(String(attrs.model));
-    if (attrs.an) parts.push(String(attrs.an));
-    if (attrs.combustibil) parts.push(String(attrs.combustibil));
-  } else {
-    if (attrs.marca) parts.push(String(attrs.marca));
-    if (attrs.model) parts.push(String(attrs.model));
-  }
-  return parts.length ? parts : null; // returnează array, nu sir
-}
-function attrLineDivide(l) {
-  const arr = attrLine(l);
-  return arr ? arr : null;
-}
 function card(l) {
   const a = document.createElement("article"); a.className = "product"; a.tabIndex = 0;
   const im = document.createElement("div"); im.className = "product-image";
@@ -671,27 +651,15 @@ function card(l) {
   if (mode === "public") im.appendChild(favBtn(l.id));
   const info = document.createElement("div"); info.className = "product-info";
   const h = document.createElement("h3"); h.textContent = l.title;
-  // Atribute (marca·model·an·combustibil) ca chip-uri
-  const attrsDiv = document.createElement("div"); attrsDiv.className = "attrs";
-  const lattrs = attrLine(l);
-  if (lattrs) {
-    const parts = attrsDivide(lattrs); // returns array of strings
-    parts.forEach(txt => {
-      const sp = document.createElement("span"); sp.className = "attr"; sp.textContent = txt; attrsDiv.appendChild(sp);
-    });
-  }
-  // Label județ+categorie sub forma simplă
-  const countyLabel = document.createElement("div"); countyLabel.className = "county"; countyLabel.textContent = [l.county, l.category].filter(Boolean).join(" · ");
-  // Preț
-  const priceStrong = document.createElement("strong"); priceStrong.className = "price"; priceStrong.innerHTML = price(l);
-  // Vecinătate la preț (dacă este cazul)
-  const priceNeg = document.createElement("span"); priceNeg.className = "neg"; if (l.negotiable) { priceNeg.textContent = "negociabil"; }
-  // Asamblare informații
-  info.append(h, attrsDiv, countyLabel);
-  info.appendChild(priceStrong); if (l.negotiable) { const n = document.createElement("span"); n.className = "neg"; n.textContent = "negociabil"; info.appendChild(n); }
+  const p = document.createElement("p"); p.textContent = [l.county, l.category].filter(Boolean).join(" · ");
+  const s = document.createElement("strong"); s.textContent = price(l);
+  info.append(h, p, s); a.append(im, info);
   if (mode !== "public" && l.status !== "approved") { const t = document.createElement("span"); t.className = "tag"; t.textContent = l.status; info.appendChild(t); }
   if (mode === "mine" && l.mod_note) { const n = document.createElement("small"); n.className = "mod-note"; n.textContent = "Motiv: " + l.mod_note; info.appendChild(n); }
-  a.append(im, info);
+  a.addEventListener("click", () => { trackInterest({ cat: l.category_slug, w: 3, id: l.id, title: l.title }); openDetail(l.id); });
+  if (mode === "public") return a;
+  const box = document.createElement("div"); box.className = "card-actions";
+  const btn = (txt, fn) => { const b = document.createElement("button"); b.textContent = txt; b.addEventListener("click", async (e) => { e.stopPropagation(); try { await fn(); loadListings(); } catch (err) { showMessage("Eroare", errText(err)); } }); box.appendChild(b); };
   if (mode === "mine") {
     if (l.status === "approved") btn("Marchează vândut", () => api(`/api/listings/${l.id}/status`, "PATCH", { status: "sold" }));
     if (l.status === "sold") btn("Repune la vânzare", () => api(`/api/listings/${l.id}/status`, "PATCH", { status: "approved" }));
@@ -920,13 +888,6 @@ let pillCat = null, pillTimer = null, pillSeq = 0;
 function applySearch(scroll) {
   const q = $("searchInput").value.trim();
   filter = {}; if (q) filter.q = q; if (pillCat) filter.category = pillCat.slug;
-  // Filtre preț
-  const minP = $("minPrice")?.value.trim(), maxP = $("maxPrice")?.value.trim();
-  if (minP) { const n = Number(minP); if (Number.isFinite(n) && n >= 0) filter.min = n; }
-  if (maxP) { const n = Number(maxP); if (Number.isFinite(n) && n >= 0) filter.max = n; }
-  // Filtre categorii pasti
-  if (pillCat) filter.category = pillCat.slug;
-  // Filtre suplimentare: dacă userul a selectat o categorie din pastile, o suprascriem cu textul dacă e cazul
   mode = "public";
   $("listTitle").textContent = q && pillCat ? `Rezultate pentru „${q}” în ${pillCat.name}` : q ? `Rezultate pentru „${q}”` : pillCat ? pillCat.name : "Anunțuri recente";
   loadListings();
@@ -967,26 +928,6 @@ async function updatePills() {
   const seen = new Set(), list = [];
   for (const c of [...remote, ...found]) if (!seen.has(c.slug)) { seen.add(c.slug); list.push(c); }
   renderPills(list.slice(0, 6));                                    // nimic potrivit → fără pastile
-
-  // --- AFIȘEȘTE CATEGORIEA DETECTATĂ ---
-  const detected = document.getElementById("detectedCategory");
-  if (!detected) return;
-  if (text.length < 3) { detected.hidden = true; return; }
-  const remote2 = await api("/api/categories/suggest?title=" + encodeURIComponent(text));
-  const suggestions = remote2.suggestions;
-  if (!suggestions.length) { detected.hidden = true; return; }
-  // Aleg cea mai bună categorie (scorul cel mai mare)
-  const best = suggestions[0];
-  detected.hidden = false;
-  // Buton "Cerere oferte piese" afișat doar pentru categoria piese-auto
-  const isPiesaAuto = best.slug === 'piese-auto';
-  detected.innerHTML = `<span class="chip cat-chip"><span class="cat-chip-ico">${icon(best.slug, 16)}</span> ${best.name}</span>${best.parent ? `<span class="cat-parent"> în ${best.parent}</span>` : ""}`;
-  detected.dataset.slug = best.slug;
-  // Afișează butonul "Cerere oferte piese" doar pentru piese-auto
-  const cereriBtn = document.getElementById("cereri-piese-btn");
-  if (cereriBtn) {
-    cereriBtn.style.display = isPiesaAuto ? "inline-block" : "none";
-  }
 }
 $("searchForm")?.addEventListener("submit", (e) => { e.preventDefault(); applySearch(true); });
 $("searchInput")?.addEventListener("input", () => {
