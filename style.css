@@ -1729,3 +1729,28 @@ button.adm-stat { cursor: pointer; }
 .set-ph{display:flex;gap:10px;align-items:center;margin-bottom:8px}.set-ph input{flex:1;min-width:0;margin:0}
 .set-ic{flex:none;width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;background:#fff;color:#b3261e;cursor:pointer}
 .set-page select,.set-page textarea{width:100%}.set-page select{margin-bottom:8px}
+
+/* Date generale pe tot ecranul, ca la chat: același antet, același fundal, scris mai strâns */
+.set-page .set-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 14px max(22px,env(safe-area-inset-bottom));font-size:15px;line-height:1.35;background-color:#fffdf8;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='150'%3E%3Ctext x='120' y='80' text-anchor='middle' transform='rotate(-22 120 75)' font-family='Georgia,serif' font-size='21' font-weight='700' letter-spacing='1' fill='%23b8935a' fill-opacity='.17'%3EDate generale%3C/text%3E%3C/svg%3E"),linear-gradient(180deg,#fffefb 0%,#f8f0de 100%)}
+.set-page .set-body label{margin-top:8px;font-size:14px}.set-page .set-body label.check{font-weight:500;margin-top:6px;font-size:14px}
+.set-page .set-body input:not([type=checkbox]):not([type=radio]){height:42px;margin:4px 0;padding:0 12px;font-size:15px;background:#fff}
+.set-page .set-body select,.set-page .set-body textarea{margin:4px 0;padding:8px 12px;font-size:15px}
+.set-page .set-body textarea{min-height:0}
+.set-page h3.set-h{margin:16px 0 8px;padding:0 2px 5px;font-size:16px}
+.set-page h3.set-h small{font-size:12px}
+.set-note{margin:-2px 0 6px;font-size:12px;line-height:1.3}
+.set-kv{margin:0 0 8px}.set-kv>small{font-size:13px;margin-bottom:0}
+.set-line{gap:8px}.set-btn{padding:5px 10px;font-size:13px}.set-st{font-size:13px}
+.set-mini{margin-top:6px;padding:9px;gap:6px}
+.set-card{margin:0 0 8px;padding:8px 10px;background:rgba(255,255,255,.8)}
+.set-card>label:first-child{margin:0 0 2px;font-size:14px}
+.set-ph{gap:8px;margin-bottom:4px}.set-ic{width:38px;height:38px}
+.set-page .set-body .primary{width:100%;margin-top:14px}
+.set-page .set-body .set-acts .primary{width:auto;margin-top:0}
+@media (min-width:700px){.set-page .set-body{padding-left:20px;padding-right:20px}}
+.set-page .set-body label{display:block;font-weight:700;color:var(--navy)}
+.set-page .set-body label.check{display:flex;align-items:flex-start;gap:8px;font-weight:500;color:var(--text)}
+.set-page .set-body label.check input{flex:none;margin-top:3px}
+.set-page .set-body input:not([type=checkbox]):not([type=radio]){width:100%;border:1px solid var(--border);border-radius:10px}
+.set-page .set-body .set-ph input{width:auto}
+.set-page .set-body label.check{min-height:0!important;align-items:flex-start!important;padding:2px 0}

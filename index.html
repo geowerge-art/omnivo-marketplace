@@ -220,10 +220,12 @@
     </form>
   </dialog>
 
-  <dialog id="settingsDialog" class="sheet set-page">
-    <button class="dialog-close" id="setClose" aria-label="Închide">✕</button>
-    <h2>Date generale</h2>
-    <form id="setForm" novalidate>
+  <dialog id="settingsDialog" class="chatpage set-page" aria-label="Date generale">
+    <header class="cp-head">
+      <button type="button" class="cp-back" id="setClose" aria-label="Înapoi"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Date generale</h2>
+    </header>
+    <form id="setForm" class="set-body" novalidate>
       <h3 class="set-h">1. Date personale</h3>
       <div class="set-kv"><small>Utilizator:</small><b id="setUser"></b></div>
       <div class="set-kv"><small>Tip cont:</small><span><b id="setPlan"></b> <button type="button" class="linklike" id="setPlanLink">Vezi planurile »</button></span></div>
