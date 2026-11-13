@@ -72,7 +72,8 @@ $("sideMenu")?.addEventListener("click", (e) => {
   e.preventDefault();
   const k = a.dataset.sm;
   closeSideMenu(() => {
-    if (k === "ads") $("anunturi")?.scrollIntoView({ behavior: "smooth" });
+    if (k === "cats") { setDrawer(true); if (!cats.length) loadCats(); }   // același sertar cu categorii ca până acum
+    else if (k === "ads") $("anunturi")?.scrollIntoView({ behavior: "smooth" });
     else if (k === "rfq") window.openRequests && window.openRequests();
     else if (k === "favs") { if (!me) return openAuth("Intră în cont ca să vezi favoritele."); openAccount(); accGo("favs"); }
   });
