@@ -768,6 +768,8 @@
     else { try { Object.assign(rfqSum, await api("/api/requests/summary")); } catch { return; } }
     const n = rfqSum.new_quotes + rfqSum.new_answers, c = document.getElementById("accRfqN");   // contorul din meniul contului
     if (c) { const t = n ? `${n} ${n === 1 ? "nouă" : "noi"}` : (rfqSum.waiting ? String(rfqSum.waiting) : ""); c.textContent = t; c.hidden = !t; c.classList.toggle("hot", n > 0); }
+    const tl = document.getElementById("accTileRfq"); if (tl) tl.textContent = n || rfqSum.waiting || 0;
+    const bb = document.getElementById("accBarBuy"); if (bb) bb.classList.toggle("hot", n > 0);
     if (dlg && dlg.open) tabs();
   };
   window.rfqRefresh = () => { window.rfqSummaryRefresh(); if (dlg && dlg.open && ["mine", "received", "offers", "detail"].includes(st.view) && !body.contains(document.activeElement)) go(st.view, st.id); };

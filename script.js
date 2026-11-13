@@ -419,6 +419,14 @@ function accTile(txt, n, fn, id) {
   const b = document.createElement("button"); b.type = "button"; b.className = "acc-tile";
   const c = document.createElement("b"); c.textContent = n; if (id) c.id = id; const t = document.createElement("span"); t.textContent = txt; b.append(c, t); b.addEventListener("click", fn); return b;
 }
+function accBar(title, items, id, sub) {
+  const d = document.createElement("details"); d.className = "acc-bar"; if (id) d.id = id;
+  const h = document.createElement("summary"); const t = document.createElement("b"); t.textContent = title; h.append(t);
+  if (sub !== undefined) { const u = document.createElement("small"); u.className = "acc-bar-sub"; u.textContent = sub; if (id) u.id = id + "Sub"; h.append(u); }
+  const l = document.createElement("div"); l.className = "acc-list"; l.append(...items); d.append(h, l);
+  d.addEventListener("toggle", () => { if (d.open) document.querySelectorAll(".acc-bar[open]").forEach((o) => { if (o !== d) o.open = false; }); });
+  return d;
+}
 function accGroup(title, items) {
   const d = document.createElement("section"); d.className = "acc-group"; const h = document.createElement("h3"); h.textContent = title;
   const l = document.createElement("div"); l.className = "acc-list"; l.append(...items); d.append(h, l); return d;
@@ -458,20 +466,20 @@ function ensureBell() {
 function accMenu() {
   const isAdmin = me.role === "admin", isMod = me.role === "moderator";
   const tiles = document.createElement("nav"); tiles.className = "acc-tiles"; tiles.setAttribute("aria-label", "Scurtături cont");
-  tiles.append(accTile("Anunțuri", accMine.length ? accCounts().approved : "–", () => { accFilter = "approved"; accGo("mine"); }, "accTileMine"), accTile("Mesaje", unread || 0, openInbox, "accTileMsgs"), accTile("Favorite", favIds.size, () => accGo("favs")), accTile("Căutări", "–", () => accGo("saved"), "accTileSaved"));
+  tiles.append(accTile("Anunțuri", accMine.length ? accCounts().approved : "–", () => { accFilter = "approved"; accGo("mine"); }, "accTileMine"), accTile("Mesaje", unread || 0, openInbox, "accTileMsgs"), accTile("Favorite", favIds.size, () => accGo("favs")), accTile("Oferte piese", (() => { const x = window.rfqSummary || {}; return (x.new_quotes || 0) + (x.new_answers || 0) || x.waiting || 0; })(), () => window.openRequests && window.openRequests(), "accTileRfq"));
   const status = [["approved", "Active"], ["pending", "În moderare"], ["expired", "Expirate"], ["sold", "Vândute"], ["promo", "Promovate"], ["rejected", "Respinse"], ["deleted", "Șterse"]].map(([k, t]) => {
     const it = accItem(t, () => { accFilter = k; accGo("mine"); }, "", "accC_" + k); it.dataset.k = k; if (k !== "approved" && k !== "pending" && k !== "sold") it.hidden = true; return it;
   });
   const secs = document.createElement("div"); secs.className = "acc-sections";
   secs.append(
-    accGroup("Anunțurile tale", [...status, accItem("Studio · statistici", () => accGo("studio"))]),
-    accGroup("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests(), (() => { const x = window.rfqSummary || {}, n = (x.new_quotes || 0) + (x.new_answers || 0); return n ? n + (n === 1 ? " nouă" : " noi") : (x.waiting || ""); })(), "accRfqN"), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))]),
-    accGroup("Conversații", [accItem("Mesaje", openInbox, unread || "", "accMsgsN"), accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN")]),
-    accGroup("Cont", [accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag"), accItem("Datele mele și ștergerea contului", () => window.openData && window.openData()), accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings)])
+    accBar("Anunțurile mele", [...status, accItem("Studio · statistici", () => accGo("studio"))], "accBarMine", ""),
+    accBar("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests(), (() => { const x = window.rfqSummary || {}, n = (x.new_quotes || 0) + (x.new_answers || 0); return n ? n + (n === 1 ? " nouă" : " noi") : (x.waiting || ""); })(), "accRfqN"), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))], "accBarBuy"),
+    accBar("Profil și setări", [accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings), accItem("Datele mele și ștergerea contului", () => window.openData && window.openData())], "accBarProf"),
+    accBar("Plan și plăți", [accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag")], "accBarPlan")
   );
   if (me.menu_pref === "buyer" && secs.children.length > 1) secs.insertBefore(secs.children[1], secs.children[0]);   // „Optimizat pentru cumpărător”: „Cumpăr” trece primul
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
-  if (isMod || isAdmin) secs.appendChild(accGroup("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])]));
+  if (isMod || isAdmin) secs.appendChild(accBar("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])], "accBarMod"));
   const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
   const last = [accHero(), tiles, secs, out];
   if (isAdmin || isMod) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", () => openAdmin()); last.push(ad); }
@@ -480,6 +488,7 @@ function accMenu() {
     accMine = r.listings; const c = accCounts();
     for (const k of Object.keys(c)) { const em = $("accC_" + k); if (!em) continue; const it = em.closest(".acc-item"); it.hidden = !c[k] && !["approved", "pending", "sold"].includes(k); em.textContent = c[k] || ""; em.hidden = !c[k]; }
     const t = $("accTileMine"); if (t) t.textContent = c.approved;
+    const bs = $("accBarMineSub"); if (bs) bs.textContent = [c.approved && c.approved + " active", c.pending && c.pending + " în moderare", c.expired && c.expired + " expirate"].filter(Boolean).join(" · ");
   }).catch(() => {});
   if (window.loadBilling) loadBilling().then((b) => { const c = $("accCredTag"); if (c && b.enabled) { c.textContent = b.balance + " cr."; c.hidden = false; } }).catch(() => {});
   loadPlan().then((p) => { const c = $("accPlanTag"); if (c && p) { c.textContent = p.name; c.hidden = false; } });
@@ -1621,3 +1630,5 @@ new MutationObserver(() => { if ($("sellDialog").open) { restoreDraft(); syncSel
     host.insertBefore(b, host === dlg && dlg.firstChild ? dlg.firstChild : host.firstChild);
   });
 })();
+/* pe laptop, apăsarea pe fundalul întunecat închide panoul contului */
+$("accountPage")?.addEventListener("click", (e) => { if (e.target === $("accountPage") && $("accBack")) $("accBack").click(); });

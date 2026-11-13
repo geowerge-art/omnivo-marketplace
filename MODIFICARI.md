@@ -164,3 +164,11 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - Tabul „Cererile mele” arată numărul ofertelor noi, iar dacă nu sunt noi, al celor în așteptare.
 - Pe telefon, rândul se așază pe două linii: titlul pe toată lățimea, dedesubt starea și oferta (înainte titlul se rupea în 4-5 rânduri).
 - Fișiere: `requests-ui.js`, `style.css`. Neverificat pe telefon.
+
+## Contul meu: meniu cu bare care se deschid
+- `accMenu()` (`script.js`): sub cardul „Adaugă anunț” și cele 4 scurtături (**Anunțuri, Mesaje, Favorite, Oferte piese**) sunt 4 bare închise, una singură deschisă odată: **Anunțurile mele** (stări + Studio, cu rezumat „1 active · 1 în moderare”), **Cumpăr** (Oferte piese, Favorite, Căutări salvate; punct verde la oferte noi), **Profil și setări** (Notificări, Profil public, Date generale, Datele mele), **Plan și plăți**. Moderare apare doar pentru staff.
+- Mesajele nu mai sunt repetate într-un grup separat; Căutări salvate a trecut în „Cumpăr”.
+- Laptop: contul se deschide ca panou în dreapta (460 px), cu fundal întunecat; click pe fundal îl închide. Telefon: ecran întreg, tot meniul încape fără derulare.
+- `requests-ui.js` actualizează scurtătura „Oferte piese” și punctul de pe „Cumpăr”.
+- Verificat în Chromium (laptop și telefon) cu API simulat: fără erori, o singură bară deschisă odată. Teste UI: 34 și 19 trec.
+- Încă nefăcut: bara de sus de pe laptop (casă, Caută) și bara de jos de pe telefon (Caută → Oferte).
