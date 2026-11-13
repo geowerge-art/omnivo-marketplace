@@ -321,6 +321,13 @@
   }
 
   /* ---------- cardul de anunț (poză mare) ---------- */
+  /* reducere recentă de preț (ultimele 14 zile), în procente */
+  function dropPct(l) {
+    const was = Number(l.price_was), now = Number(l.price);
+    if (!l.price_was || !Number.isFinite(was) || !Number.isFinite(now) || was <= now || !l.price_dropped_at) return 0;
+    if (Date.now() - new Date(l.price_dropped_at).getTime() > 14 * 864e5) return 0;
+    return Math.max(1, Math.round((1 - now / was) * 100));
+  }
   function card(l, v) {
     v = v || view;
     const photo = h("div", { class: "rs-photo" });
@@ -330,16 +337,16 @@
     if (l.promoted) photo.append(h("span", { class: "rs-tag rs-promo" }, ico(P.star, 14), "Promovat"));
     if (l.condition) photo.append(h("span", { class: "rs-tag rs-cond " + l.condition, text: l.condition === "nou" ? "Nou" : condLabel(l.category_slug) }));
     if (l.photo_count > 1) photo.append(h("span", { class: "rs-tag rs-pics" }, ico(P.camera, 15), String(l.photo_count)));
-    photo.append(favBtn(l.id));
+    photo.append(favBtn(l.id, false, l));
     const place = [l.city, l.county].filter(Boolean).join(", "), when = dateText(l), specs = specText(l);
     const info = h("div", { class: "rs-info" },
       h("h3", { class: "rs-ttl", text: l.title }),
-      h("div", { class: "rs-price" }, h("strong", { text: price(l) }), l.negotiable ? h("small", { text: "Negociabil" }) : null),
+      h("div", { class: "rs-price" }, h("strong", { text: price(l) }), dropPct(l) ? h("small", { class: "rs-drop", text: "−" + dropPct(l) + "%" }) : null, l.deal_pct ? h("small", { class: "rs-drop", text: "−" + l.deal_pct + "% sub piață" }) : null, l.negotiable ? h("small", { text: "Negociabil" }) : null),
       specs.length ? h("p", { class: "rs-specs" }, specs.map((s) => h("span", { text: s }))) : null,
       h("p", { class: "rs-where" }, place ? ico(P.pin, 15) : null, h("span", { text: [place, when].filter(Boolean).join(" · ") })),
       l.seller_type === "firma" ? h("span", { class: "rs-firm", text: "Firmă" }) : null);
     const a = h("article", { class: "rs-card rs-m-" + v, tabindex: "0", role: "link", "aria-label": l.title }, photo, info);
-    const go = () => { trackInterest({ cat: l.category_slug, w: 3, id: l.id, title: l.title }); openDetail(l.id); };
+    const go = () => { trackInterest({ cat: l.category_slug, w: 3, id: l.id, title: l.title, price: l.price, cur: l.currency }); openDetail(l.id); };
     a.addEventListener("click", go);
     a.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === a) { e.preventDefault(); go(); } });
     return a;

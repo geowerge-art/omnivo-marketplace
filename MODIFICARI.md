@@ -115,3 +115,15 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - Pastilele de categorie din pagina de rezultate sunt înguste, ca pe prima pagină.
 - Prima pagină: primele 1-2 anunțuri promovate sunt late (poză mare), restul în două coloane.
 - Prima pagină (anunțuri recente, „Văzute recent”, „Recomandate pentru tine”, favorite) folosește același card nou: `Results.card(l, 'gallery'|'grid')`.
+
+## Prima pagină: categorii chips, „Văzute recent" îngust, rafturi noi
+- **Categorii:** grila de cercuri colorate e acum un rând de chips derulabil, sub bara de căutare (`.cat-chips` în `results.css`). Au dispărut și stilurile inline `style="--c:..."`, oricum blocate de CSP.
+- **„Văzute recent":** carduri înguste (118 px, 104 px pe telefon), fără specificații, doar poză, titlu, preț și localitate (`.rail-sm`).
+- **Rafturi noi** (`loadRails()` în `script.js`, în `#rails`): *Noutăți azi*, *Scăzut de preț*, *Din județul tău* (doar pentru cont cu județ setat), *De la vânzători de încredere*. Un raft cu prea puține anunțuri nu apare deloc.
+- **Preț redus:** migrarea `037_price_drop.sql` adaugă `price_was` și `price_dropped_at`. `PATCH /api/listings/:id` le completează când prețul scade (aceeași monedă) și le șterge când crește. Cardul arată „−X%" 14 zile. Filtre noi: `GET /api/listings?drop=1` și `?trusted=1` (vânzători cu cel puțin 3 recenzii și media ≥ 4,5).
+
+## Recomandări după interes + oferte bune
+- **Interes în timp:** `trackInterest()` adună puncte (deschis anunț 3, favorit 5, categorie aleasă 2), care se înjumătățesc la 7 zile. Reține și prețurile anunțurilor deschise (`prices`, max. 15). Categoria afișată = cea cu scorul cel mai mare între cele pe care chiar le-ai deschis.
+- **Buget:** intervalul prețurilor deschise în categoria aceea, cu marjă (−30% / +30%), în moneda cea mai folosită. „Mai multe în …" încearcă întâi în buget, apoi fără.
+- **Stare:** dacă jumătate din ce ai văzut e „avariat", „accidentat" etc., rămâne filtrul de stare (ca înainte).
+- **Oferte bune:** `GET /api/listings/deals?category=&q=&min=&max=&currency=`. Mediana prețurilor comparabile (aceeași categorie, aceeași stare din `q`, aceeași monedă, fără buget) se calculează în SQL. Ofertă = preț între 40% și 80% din mediană (sub 40% = suspect). Dacă sunt sub 8 anunțuri comparabile, raftul nu apare. Cardul arată „−X% sub piață". Constantele sunt `DEAL_MIN_N`, `DEAL_HI`, `DEAL_LO` în `listings.js`.

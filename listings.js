@@ -18,7 +18,7 @@ const createAllow = createThrottle(30, 60 * 60 * 1000); // max 30 anunțuri/oră
 const editAllow = createThrottle(60, 60 * 60 * 1000); // max 60 editări/oră per utilizator
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.mod_note, l.created_at, l.bumped_at, l.seller_type, l.attributes,
+const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.mod_note, l.created_at, l.bumped_at, l.seller_type, l.attributes, l.price_was, l.price_dropped_at,
                        (COALESCE(l.promoted_until, 'epoch'::timestamptz) > NOW()) AS promoted, l.promoted_until,
                        c.slug AS category_slug, c.name AS category, p.name AS parent_category,
                        (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb,
@@ -94,6 +94,8 @@ async function buildWhere(req, skipAttr) {
   if (req.query.county) add('LOWER(l.county) = LOWER($#)', String(req.query.county).slice(0, 40));
   if (req.query.city) add('LOWER(l.city) = LOWER($#)', String(req.query.city).slice(0, 60));
   if (['nou', 'folosit'].includes(req.query.condition)) add('l.condition = $#', req.query.condition);
+  if (req.query.drop === '1') where.push("l.price_was IS NOT NULL AND l.price_was > l.price AND l.price_dropped_at > NOW() - INTERVAL '14 days'");
+  if (req.query.trusted === '1') where.push("l.user_id IN (SELECT seller_id FROM reviews WHERE role = 'seller' GROUP BY seller_id HAVING COUNT(*) >= 3 AND AVG(rating) >= 4.5)");
   if (['persoana', 'firma'].includes(req.query.seller)) add('l.seller_type = $#', req.query.seller);
   const num = (v) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
   const min = num(req.query.min), max = num(req.query.max);
@@ -133,6 +135,28 @@ router.get('/', ah(async (req, res) => {
     db.query(`SELECT COUNT(*)::int n ${FROM} WHERE ${w}`, vals)
   ]);
   res.json({ listings: rows.rows, total: cnt.rows[0].n, limit, offset });
+}));
+
+/* „Oferte bune": anunțuri cu prețul sub piață. Piața = mediana prețurilor comparabile (aceeași categorie, stare, monedă; fără bugetul ales),
+   iar oferta = între 40% și 80% din mediană (sub 40% e de obicei greșeală sau înșelătorie). Fără cel puțin 8 anunțuri comparabile nu răspundem. */
+const DEAL_MIN_N = 8, DEAL_HI = 0.8, DEAL_LO = 0.4;
+router.get('/deals', ah(async (req, res) => {
+  const cur = req.query.currency === 'EUR' ? 'EUR' : 'RON';
+  const limit = Math.min(24, Math.max(1, Math.floor(Number(req.query.limit)) || 10));
+  const base = { query: { ...req.query } }; delete base.query.min; delete base.query.max; delete base.query.ids; delete base.query.sold;
+  const { where: bw, vals: bv } = await buildWhere(base);
+  bv.push(cur);
+  const m = (await db.query(
+    `SELECT COUNT(*)::int AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY l.price)::float AS median
+       ${FROM} WHERE ${bw} AND l.price > 0 AND l.currency = $${bv.length}`, bv)).rows[0];
+  if (!m || m.n < DEAL_MIN_N || !m.median) return res.json({ listings: [], n: m ? m.n : 0, median: null, currency: cur });
+  const { where: w, vals } = await buildWhere({ query: { ...req.query, currency: cur } });
+  vals.push(cur, m.median * DEAL_LO, m.median * DEAL_HI);
+  const k = vals.length;
+  const rows = (await db.query(
+    `${SELECT} WHERE ${w} AND l.price > 0 AND l.currency = $${k - 2} AND l.price >= $${k - 1} AND l.price <= $${k}
+      ORDER BY l.price ASC, l.id DESC LIMIT ${limit}`, vals)).rows;
+  res.json({ listings: rows.map((l) => ({ ...l, deal_pct: Math.round((1 - Number(l.price) / m.median) * 100) })), n: m.n, median: Math.round(m.median), currency: cur });
 }));
 
 /* Valorile disponibile pentru filtrele de tip text (marcă, model...), cu numărul de anunțuri, după filtrele deja alese.
@@ -280,6 +304,10 @@ router.patch('/:id(\\d+)', requireAuth, requireVerified, ah(async (req, res) => 
       WHERE id=$14 AND user_id=$15 RETURNING id, status`,
     [v.category_id, v.title, v.description, v.price, v.currency, v.negotiable, v.condition, v.seller_type, v.county, v.city,
      JSON.stringify(v.attributes), status, fold(v.title + ' ' + v.description).replace(/[^a-z0-9 ]+/g, ' '), cur.id, cur.user_id, v.address, v.contact_name, v.contact_phone, v.contact_wa, v.contact_show]);
+  if (r.rowCount && cur.price != null && v.price != null && cur.currency === v.currency && Number(cur.price) !== Number(v.price)) {
+    if (Number(v.price) < Number(cur.price)) db.query('UPDATE listings SET price_was = $2, price_dropped_at = NOW() WHERE id = $1', [cur.id, cur.price]).catch(() => {});
+    else db.query('UPDATE listings SET price_was = NULL, price_dropped_at = NULL WHERE id = $1', [cur.id]).catch(() => {});   // preț crescut: nu mai e „redus"
+  } else if (r.rowCount && cur.currency !== v.currency) db.query('UPDATE listings SET price_was = NULL, price_dropped_at = NULL WHERE id = $1', [cur.id]).catch(() => {});
   if (dec && r.rowCount) db.query('UPDATE listings SET auto_approved = $2, trust_score = $3, trust_note = $4 WHERE id = $1', [cur.id, status !== 'pending' && dec.auto, dec.score, dec.note]).catch(() => {});
   if (asStaff) {
     const ch = [];

@@ -262,6 +262,7 @@ async function refreshUnread() { if (!me) return; try { unread = (await api("/ap
 function setMe(u) {
   me = u; unread = 0; renderUnread(); clearInterval(unreadTimer); stopLive();
   loadFavIds(); loadNotifCount();
+  if (window.loadRails) loadRails();   // „Din județul tău" depinde de contul conectat
   if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); startLive(); }
   if (window.rfqSummaryRefresh) rfqSummaryRefresh();
 }
@@ -279,15 +280,15 @@ async function loadFavIds() {
 }
 function paintFav(b) { const on = favIds.has(Number(b.dataset.id)); b.classList.toggle("on", on); b.textContent = on ? "♥" : "♡"; b.setAttribute("aria-pressed", on ? "true" : "false"); b.setAttribute("aria-label", on ? "Scoate din favorite" : "Salvează la favorite"); }
 function syncFavs() { document.querySelectorAll(".fav-btn").forEach(paintFav); }
-function favBtn(id, big) {
+function favBtn(id, big, l) {
   const b = document.createElement("button"); b.type = "button"; b.className = "fav-btn" + (big ? " big" : ""); b.dataset.id = id; paintFav(b);
-  b.addEventListener("click", (e) => { e.stopPropagation(); toggleFav(id); });
+  b.addEventListener("click", (e) => { e.stopPropagation(); toggleFav(id, l); });
   return b;
 }
-async function toggleFav(id) {
+async function toggleFav(id, l) {
   if (!me) return openAuth("Intră în cont ca să salvezi anunțuri la favorite.");
   const on = favIds.has(id);
-  try { await api("/api/favorites/" + id, on ? "DELETE" : "POST"); on ? favIds.delete(id) : favIds.add(id); syncFavs(); if (accCur === "favs" && accIsOpen()) renderAcc(); }
+  try { await api("/api/favorites/" + id, on ? "DELETE" : "POST"); on ? favIds.delete(id) : favIds.add(id); if (!on && l) trackInterest({ cat: l.category_slug, w: 5, id, title: l.title, price: l.price, cur: l.currency }); syncFavs(); if (accCur === "favs" && accIsOpen()) renderAcc(); }
   catch (err) { showMessage("Eroare", err.code === "PREA_MULTE_FAVORITE" ? "Ai atins limita de 200 de anunțuri salvate." : errText(err)); }
 }
 
@@ -1405,11 +1406,21 @@ $("chatDialog")?.addEventListener("close", () => { clearInterval(chatTimer); cha
 /* ---- recomandări din ce ai văzut (rămân doar în browserul tău) ---- */
 const INT_KEY = "omnivo_interest";
 function readInterest() { try { return JSON.parse(localStorage.getItem(INT_KEY)) || { cats: {} }; } catch { return { cats: {} }; } }
-function trackInterest({ cat, w, id, title }) {
+function trackInterest({ cat, w, id, title, price, cur }) {
   try {
     const d = readInterest(); d.cats = d.cats || {};
+    const now = Date.now();
+    if (d.at) {   // ce ai făcut ieri contează mai mult decât acum o lună: scorurile se înjumătățesc la 7 zile
+      const f = Math.pow(0.5, (now - d.at) / (7 * 864e5));
+      for (const k of Object.keys(d.cats)) { d.cats[k] *= f; if (d.cats[k] < 0.05) delete d.cats[k]; }
+    }
+    d.at = now;
     if (cat) d.cats[cat] = (d.cats[cat] || 0) + w;
-    if (id) { d.last = { id, cat, title: String(title || "").slice(0, 120) }; d.seen = [id, ...(d.seen || []).filter((x) => x !== id)].slice(0, 30); }
+    if (id) {
+      d.last = { id, cat, title: String(title || "").slice(0, 120) };
+      d.seen = [id, ...(d.seen || []).filter((x) => x !== id)].slice(0, 30);
+      if (price != null && Number(price) > 0) d.prices = [{ id, cat, p: Number(price), c: cur === "EUR" ? "EUR" : "RON" }, ...(d.prices || []).filter((x) => x.id !== id)].slice(0, 15);   // bugetul se deduce din ce ai deschis
+    }
     localStorage.setItem(INT_KEY, JSON.stringify(d));
   } catch { /* fără stocare */ }
 }
@@ -1430,36 +1441,90 @@ async function loadForYou() {
   }
   if (viewed.length) { $("recent").replaceChildren(...viewed.map(newCard("grid"))); rec.hidden = false; } else rec.hidden = true;
   /* 2. „Recomandate": categoria dominantă din ultimele vizionări, cu aceeași stare și marcă */
-  const recent = viewed.slice(0, 5), score = {};
-  recent.forEach((l, i) => { score[l.category_slug] = (score[l.category_slug] || 0) + (5 - i); });
-  const top = Object.entries(score).sort((x, y) => y[1] - x[1])[0] || Object.entries(d.cats || {}).sort((x, y) => y[1] - x[1])[0];
-  if (!top) { sec.hidden = true; return; }
-  const cat = top[0], inCat = recent.filter((l) => l.category_slug === cat);
+  /* 2. Categoria care te interesează cel mai mult: scorul adunat în timp (cu scădere), doar între categoriile pe care chiar le-ai deschis */
+  const recent = viewed.slice(0, 5), leaves = new Set(viewed.map((l) => l.category_slug));
+  const ranked = Object.entries(d.cats || {}).sort((x, y) => y[1] - x[1]);
+  let top = ranked.find(([k]) => leaves.has(k)) || ranked[0];
+  if (!top) { const score = {}; recent.forEach((l, i) => { score[l.category_slug] = (score[l.category_slug] || 0) + (5 - i); }); top = Object.entries(score).sort((x, y) => y[1] - x[1])[0]; }
+  if (!top) { sec.hidden = true; $("oferte").hidden = true; return; }
+  const cat = top[0], inCat = viewed.filter((l) => l.category_slug === cat).slice(0, 6);
   const counts = {};
   for (const l of inCat) { const t = fold(l.title); for (const k of Object.keys(STATES)) if (t.includes(k)) counts[k] = (counts[k] || 0) + 1; }
   const best = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
   const state = best && best[1] * 2 >= inCat.length ? best[0] : "";           // în cel puțin jumătate din ce ai văzut
   const brand = inCat.length ? fold(inCat[0].title).split(/[^a-z0-9]+/).find((x) => x.length >= 3 && !/^\d+$/.test(x) && !STOP.has(x) && !(x in STATES) && !Object.keys(STATES).some((k) => x.startsWith(k))) || "" : "";
-  const get = (q, limit) => api("/api/listings?" + new URLSearchParams({ category: cat, ...(q ? { q } : {}), limit })).then((r) => r.listings).catch(() => []);
+  /* bugetul tău: intervalul prețurilor din anunțurile deschise în categoria asta, cu o marjă (în moneda cea mai folosită) */
+  const pr = (d.prices || []).filter((x) => x.cat === cat).slice(0, 8);
+  const eur = pr.filter((x) => x.c === "EUR").length, curr = eur * 2 > pr.length ? "EUR" : "RON", pp = pr.filter((x) => x.c === curr).map((x) => x.p);
+  const budget = pp.length ? { min: Math.floor(Math.min(...pp) * 0.7), max: Math.ceil(Math.max(...pp) * 1.3), currency: curr } : null;
+  const get = (q, limit, extra) => api("/api/listings?" + new URLSearchParams({ category: cat, ...(q ? { q } : {}), ...(extra || {}), limit })).then((r) => r.listings).catch(() => []);
   const calls = [];
-  if (state && brand) calls.push(get(brand + " " + state, 8));
-  if (state) calls.push(get(state, 8));
-  if (brand) calls.push(get(brand, 8));
-  calls.push(get("", 12));                                                    // „de toate", ca să nu rămână gol
+  if (state && brand) calls.push(get(brand + " " + state, 8, budget));
+  if (state) calls.push(get(state, 8, budget));
+  if (brand) calls.push(get(brand, 8, budget));
+  if (budget) calls.push(get("", 8, budget));
+  calls.push(get(state || "", 12));                                           // fără buget, ca să nu rămână gol
+  const name = (inCat[0] && inCat[0].category) || (viewed[0] && viewed[0].category) || "";
+  const dealsP = api("/api/listings/deals?" + new URLSearchParams({ category: cat, ...(state ? { q: state } : {}), ...(budget || {}), limit: 10 })).catch(() => null);
   try {
     const res = await Promise.all(calls), have = new Set(viewed.map((l) => l.id)), out = [];
     for (const r of res) for (const l of r) if (!have.has(l.id)) { have.add(l.id); out.push(l); }
     const list = out.slice(0, 8);
-    if (!list.length) { sec.hidden = true; return; }
-    const name = (inCat[0] && inCat[0].category) || list[0].category || "";
-    $("forYouTitle").textContent = `Anunțuri noi în ${name}${state ? " " + STATES[state] : ""}`;
-    $("forYou").replaceChildren(...list.map(newCard("grid"))); sec.hidden = false;
-  } catch { sec.hidden = true; }
+    if (!list.length) sec.hidden = true;
+    else {
+      const nm = name || list[0].category || "";
+      $("forYouTitle").textContent = `Mai multe în ${nm}${state ? " " + STATES[state] : ""}`;
+      $("forYou").replaceChildren(...list.map(newCard("grid"))); sec.hidden = false;
+    }
+    /* 3. Oferte bune: sub prețul pieței pentru același tip de anunț, în bugetul tău (doar dacă sunt destule anunțuri de comparat) */
+    const dl = await dealsP, ds = dl && dl.listings ? dl.listings.filter((l) => !viewed.some((v) => v.id === l.id)).slice(0, 8) : [], box = $("oferte");
+    if (ds.length) {
+      $("dealsTitle").textContent = `Oferte bune în ${name || ds[0].category}${state ? " " + STATES[state] : ""}`;
+      $("dealsNote").textContent = `Sub prețul obișnuit (aprox. ${dl.median.toLocaleString("ro-RO")} ${dl.currency === "EUR" ? "€" : "lei"}) pentru anunțuri asemănătoare.`;
+      $("deals").replaceChildren(...ds.map(newCard("grid"))); box.hidden = false;
+    } else box.hidden = true;
+  } catch { sec.hidden = true; $("oferte").hidden = true; }
 }
-const clearInterest = () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; $("vazute").hidden = true; };
+const clearInterest = () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; $("vazute").hidden = true; $("oferte").hidden = true; };
 $("forYouClear")?.addEventListener("click", clearInterest);
 $("recentClear")?.addEventListener("click", clearInterest);
 loadForYou();
+
+/* ---- rafturi curatoriate pe prima pagină: Noutăți azi, Scăzut de preț, Din județul tău, Vânzători de încredere ---- */
+const RAILS = [
+  { id: "new", eyebrow: "PROASPĂT", title: "Noutăți azi", q: { sort: "new", limit: 12 }, keep: (l) => Date.now() - new Date(l.created_at).getTime() < 36 * 36e5, min: 3 },
+  { id: "drop", eyebrow: "OFERTE", title: "Scăzut de preț", q: { drop: 1, sort: "new", limit: 12 }, min: 2 },
+  { id: "county", eyebrow: "APROAPE DE TINE", title: () => `Din județul ${me.county}`, q: () => ({ county: me.county, limit: 12 }), need: () => me && me.county, min: 3 },
+  { id: "trusted", eyebrow: "ÎNCREDERE", title: "De la vânzători de încredere", q: { trusted: 1, limit: 12 }, min: 3 }
+];
+async function loadRails() {
+  const box = $("rails"); if (!box) return;
+  const out = await Promise.all(RAILS.map(async (r) => {
+    if (r.need && !r.need()) return null;
+    try {
+      const p = typeof r.q === "function" ? r.q() : r.q;
+      let list = (await api("/api/listings?" + new URLSearchParams(p))).listings;
+      if (r.keep) list = list.filter(r.keep);
+      return list.length >= r.min ? { r, list: list.slice(0, 10) } : null;
+    } catch { return null; }
+  }));
+  const seen = new Set(), secs = [];
+  for (const x of out) {
+    if (!x) continue;
+    const fresh = x.list.filter((l) => x.r.id === "drop" || !seen.has(l.id));   // același anunț nu apare în două rafturi
+    if (fresh.length < x.r.min) continue;
+    fresh.forEach((l) => seen.add(l.id));
+    const sec = document.createElement("section"); sec.className = "section for-you"; sec.id = "rail-" + x.r.id;
+    const head = document.createElement("div"); head.className = "section-heading";
+    const ttl = document.createElement("div"), eb = document.createElement("span"), h2 = document.createElement("h2");
+    eb.className = "eyebrow"; eb.textContent = x.r.eyebrow; h2.textContent = typeof x.r.title === "function" ? x.r.title() : x.r.title; ttl.append(eb, h2); head.append(ttl);
+    const row = document.createElement("div"); row.className = "products rail"; row.replaceChildren(...fresh.map(newCard("grid")));
+    sec.append(head, row); secs.push(sec);
+  }
+  box.replaceChildren(...secs);
+}
+window.loadRails = loadRails;
+loadRails();
 
 
 /* ---- contact: telefon + WhatsApp (ca în autoparts) ---- */
