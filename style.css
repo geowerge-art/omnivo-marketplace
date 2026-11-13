@@ -1831,3 +1831,14 @@ button.adm-stat { cursor: pointer; }
 .sm-out { width: 100%; min-height: 48px; border: 1px solid #f0b8b4; border-radius: 12px; background: #fff; color: #b3261e; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 body.menu-open .bottom-nav { display: none; }
 @media (prefers-reduced-motion: reduce) { .side-menu, .side-scrim { transition: none; } }
+
+/* telefon: logo-ul urcă odată cu pagina; clopoțelul și ☰ rămân fixe în dreapta sus, și pe paginile noi */
+@media (max-width: 760px) {
+  .header { position: relative; z-index: auto; }   /* fără strat propriu, ca ☰ să rămână deasupra paginilor noi */
+  .header .hdr-bell, .header .menu-button { position: fixed; top: 10px; margin: 0; z-index: 58; }
+  .header .menu-button { right: 5vw; }
+  .header .hdr-bell:not([hidden]) { right: calc(5vw + 50px); margin: 0; background: #fff; box-shadow: 0 2px 8px rgba(20, 17, 12, .18); }
+  .header .hdr-bell:not([hidden]) + .menu-button { margin: 0; }
+  body:has(.rs-page:not([hidden])) .hdr-bell { display: none; }   /* pe paginile noi: doar ☰ */
+  .rs-page .rs-hero-in { padding-right: 56px; }
+}

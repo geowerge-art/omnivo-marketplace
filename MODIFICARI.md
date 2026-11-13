@@ -176,3 +176,4 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 ## Meniu lateral (☰)
 - Header: Categorii/Anunțuri/Oferte piese scoase; ☰ (cu textul „Meniu” pe laptop) deschide panou lateral din dreapta: Anunțuri, Oferte piese, Favorite, Ajutor / Contact, apoi Ieșire din cont (doar logat). Se închide la click în afară, ✕, Esc, „Înapoi”. Bara de jos se ascunde cât e deschis.
 - Cont: „Anunțurile mele” deschis implicit (una odată); pe laptop rămâne panou peste pagină, cu fundal întunecat; „Ieșire din cont” mutat în meniu.
+- Telefon: logo-ul urcă odată cu pagina; clopoțelul (cerc alb) și ☰ rămân fixe în dreapta sus. Pe paginile noi (rezultate anunțuri) apare doar ☰.
