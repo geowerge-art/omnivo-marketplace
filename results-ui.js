@@ -298,7 +298,7 @@
       const d = await api("/api/listings?" + p);
       if (my !== seq) return;
       if (reset) list.replaceChildren();
-      items.push(...d.listings); list.append(...d.listings.map(card));
+      items.push(...d.listings); list.append(...d.listings.map((l) => card(l)));
       total = d.total; offset += d.listings.length;
       elCount.textContent = total ? `Am găsit ${total >= 1000 ? "peste 1.000 de rezultate" : nRez(total)} pentru tine` : "";
       more.hidden = offset >= total || !d.listings.length;
@@ -321,9 +321,10 @@
   }
 
   /* ---------- cardul de anunț (poză mare) ---------- */
-  function card(l) {
+  function card(l, v) {
+    v = v || view;
     const photo = h("div", { class: "rs-photo" });
-    const src = view === "gallery" ? (l.photo || l.thumb) : (l.thumb || l.photo);
+    const src = v === "gallery" ? (l.photo || l.thumb) : (l.thumb || l.photo);
     if (src) photo.append(h("img", { src, alt: l.title, loading: "lazy", decoding: "async" }));
     else photo.append(h("span", { class: "rs-noph", html: typeof icon === "function" ? icon(iconOf[l.category_slug] || "alt", 56) : "" }));
     if (l.promoted) photo.append(h("span", { class: "rs-tag rs-promo" }, ico(P.star, 14), "Promovat"));
@@ -337,7 +338,7 @@
       specs.length ? h("p", { class: "rs-specs" }, specs.map((s) => h("span", { text: s }))) : null,
       h("p", { class: "rs-where" }, place ? ico(P.pin, 15) : null, h("span", { text: [place, when].filter(Boolean).join(" · ") })),
       l.seller_type === "firma" ? h("span", { class: "rs-firm", text: "Firmă" }) : null);
-    const a = h("article", { class: "rs-card", tabindex: "0", role: "link", "aria-label": l.title }, photo, info);
+    const a = h("article", { class: "rs-card rs-m-" + v, tabindex: "0", role: "link", "aria-label": l.title }, photo, info);
     const go = () => { trackInterest({ cat: l.category_slug, w: 3, id: l.id, title: l.title }); openDetail(l.id); };
     a.addEventListener("click", go);
     a.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === a) { e.preventDefault(); go(); } });
@@ -353,7 +354,7 @@
   function cycleView() {
     const i = VIEWS.findIndex(([k]) => k === view); view = VIEWS[(i + 1) % VIEWS.length][0]; lsSet(VIEW_KEY, view);
     paintView();
-    if (items.length) list.replaceChildren(...items.map(card));   // alt format de poză, fără să reîncarce lista de pe server
+    if (items.length) list.replaceChildren(...items.map((l) => card(l)));   // alt format de poză, fără să reîncarce lista de pe server
   }
   function paintSortBtn() { sortBtn.classList.toggle("on", !!S.sort); }
   function closePops() {
@@ -565,6 +566,7 @@
     open: (opts) => open(opts, "push"),
     close: () => close(false),
     isOpen: () => isOpen,
+    card: (l, v) => card(l, v),   // același card și pe prima pagină
     fromParams(q, category, params) { const st = fromQuery(params || ""); st.q = clean(q); st.category = clean(category); return st; }
   };
   if (location.pathname === "/cauta") open(fromQuery(location.search), "replace");

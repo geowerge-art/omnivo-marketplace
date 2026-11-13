@@ -1,5 +1,5 @@
 /* Pagina de rezultate Omnivo (results-ui.js). Totul pornește de la .rs-page / .rs-dlg ca să nu atingă restul site-ului. */
-.rs-page, .rs-dlg {
+.rs-page, .rs-dlg, .rs-card {
   --ink: #14110c; --gold: #b8935a; --gold-soft: #e9d3a8; --paper: #f7f5f0; --line: #e6e0d4; --mute: #56524a; --ok: #1b6b3f; --ok-bg: #e6f5ec;
   --shadow: 0 1px 2px rgba(20, 17, 12, .05), 0 14px 30px -18px rgba(20, 17, 12, .35);
 }
@@ -90,27 +90,27 @@
 }
 
 /* Listă: poza în stânga */
-.rs-v-list .rs-card { display: grid; grid-template-columns: 40% 1fr; }
-.rs-v-list .rs-photo { aspect-ratio: auto; min-height: 168px; height: 100%; }
-.rs-v-list .rs-info { padding: 12px 14px; justify-content: center; }
-.rs-v-list .rs-ttl { font-size: 16px; }
-.rs-v-list .rs-price strong { font-size: 21px; }
-.rs-v-list .rs-tag { padding: 4px 10px; font-size: 12px; }
-.rs-v-list .rs-pics { display: none; }
-.rs-v-list .rs-promo { font-size: 0; gap: 0; padding: 7px; }
-.rs-v-list .rs-photo .fav-btn { width: 36px; height: 36px; font-size: 19px; }
-.rs-v-list .rs-specs span:nth-child(n + 3) { display: none; }
+.rs-card.rs-m-list { display: grid; grid-template-columns: 40% 1fr; }
+.rs-m-list .rs-photo { aspect-ratio: auto; min-height: 168px; height: 100%; }
+.rs-m-list .rs-info { padding: 12px 14px; justify-content: center; }
+.rs-m-list .rs-ttl { font-size: 16px; }
+.rs-m-list .rs-price strong { font-size: 21px; }
+.rs-m-list .rs-tag { padding: 4px 10px; font-size: 12px; }
+.rs-m-list .rs-pics { display: none; }
+.rs-m-list .rs-promo { font-size: 0; gap: 0; padding: 7px; }
+.rs-m-list .rs-photo .fav-btn { width: 36px; height: 36px; font-size: 19px; }
+.rs-m-list .rs-specs span:nth-child(n + 3) { display: none; }
 /* Tabel: două coloane */
 .rs-v-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.rs-v-grid .rs-card { border-radius: 18px; }
-.rs-v-grid .rs-photo { aspect-ratio: 1 / 1; }
-.rs-v-grid .rs-info { padding: 10px 12px 14px; gap: 4px; }
-.rs-v-grid .rs-ttl { font-size: 15px; }
-.rs-v-grid .rs-price strong { font-size: 18px; }
-.rs-v-grid .rs-price small, .rs-v-grid .rs-specs, .rs-v-grid .rs-firm, .rs-v-grid .rs-pics { display: none; }
-.rs-v-grid .rs-where { font-size: 13px; }
-.rs-v-grid .rs-tag { padding: 3px 9px; font-size: 12px; }
-.rs-v-grid .rs-photo .fav-btn { width: 36px; height: 36px; font-size: 19px; }
+.rs-card.rs-m-grid { border-radius: 18px; }
+.rs-m-grid .rs-photo { aspect-ratio: 1 / 1; }
+.rs-m-grid .rs-info { padding: 10px 12px 14px; gap: 4px; }
+.rs-m-grid .rs-ttl { font-size: 15px; }
+.rs-m-grid .rs-price strong { font-size: 18px; }
+.rs-m-grid .rs-price small, .rs-m-grid .rs-specs, .rs-m-grid .rs-firm, .rs-m-grid .rs-pics { display: none; }
+.rs-m-grid .rs-where { font-size: 13px; }
+.rs-m-grid .rs-tag { padding: 3px 9px; font-size: 12px; }
+.rs-m-grid .rs-photo .fav-btn { width: 36px; height: 36px; font-size: 19px; }
 
 /* schelet de încărcare */
 .rs-skel { pointer-events: none; }
@@ -179,10 +179,18 @@
 @media (min-width: 900px) {
   .rs-list.rs-v-gallery { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 22px; }
   .rs-v-list { grid-template-columns: 1fr; }
-  .rs-v-list .rs-card { grid-template-columns: 300px 1fr; }
+  .rs-card.rs-m-list { grid-template-columns: 300px 1fr; }
   .rs-v-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rs-skel .rs-photo { animation: none; }
   .rs-photo img { transition: none !important; }
 }
+
+/* ---- același card pe prima pagină ---- */
+.rs-card { color: var(--ink); }
+#products.products { grid-template-columns: 1fr; gap: 18px; }
+@media (min-width: 700px) { #products.products { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; } }
+.products.rail > .rs-card { flex: 0 0 172px; }
+.products.rail .rs-card .rs-ttl { font-size: 15px; }
+.acc-grid .rs-card { min-width: 0; }

@@ -623,7 +623,7 @@ async function renderFavs(box) {
     const r = await api("/api/listings?" + new URLSearchParams({ ids: ids.join(","), limit: 48 }));
     const by = new Map(r.listings.map((l) => [l.id, l])), list = ids.map((i) => by.get(i)).filter(Boolean);
     if (!list.length) { box.replaceChildren(note("Anunțurile salvate nu mai sunt disponibile.")); return; }
-    const g = document.createElement("div"); g.className = "acc-grid"; g.replaceChildren(...list.map(card)); box.replaceChildren(g);
+    const g = document.createElement("div"); g.className = "acc-grid"; g.replaceChildren(...list.map(newCard("grid"))); box.replaceChildren(g);
   } catch (err) { box.replaceChildren(note(errText(err))); }
 }
 /* ---- Date generale (setări cont) ---- */
@@ -708,6 +708,7 @@ $("hdrChat")?.addEventListener("click", () => (me ? openInbox() : openAuth("Intr
 $("hdrSearch")?.addEventListener("click", () => openSearchPage($("searchInput").value.trim()));
 
 /* ---- lista de anunțuri ---- */
+const newCard = (v) => (l) => (window.Results ? Results.card(l, v) : card(l));   // cardul nou, cu poză mare
 function card(l) {
   const a = document.createElement("article"); a.className = "product"; a.tabIndex = 0;
   const im = document.createElement("div"); im.className = "product-image";
@@ -743,7 +744,7 @@ async function loadListings() {
   try {
     const url = mode === "mine" ? "/api/listings/mine" : mode === "admin" ? "/api/admin/listings?status=pending" : "/api/listings?" + new URLSearchParams(filter);
     let { listings } = await api(url); if (mode === "mine") listings = listings.filter((l) => l.status !== "deleted");
-    box.replaceChildren(...listings.map(card));
+    box.replaceChildren(...listings.map(mode === "public" ? newCard("gallery") : card));
     $("emptyMessage").hidden = listings.length > 0;
     $("emptyMessage").textContent = mode === "public" ? "Nu am găsit anunțuri. Fii primul care adaugă unul!" : "Nimic de afișat aici.";
   } catch (err) {
@@ -1424,7 +1425,7 @@ async function loadForYou() {
       viewed = seenIds.map((id) => byId.get(id)).filter(Boolean);
     } catch { /* fără server */ }
   }
-  if (viewed.length) { $("recent").replaceChildren(...viewed.map(card)); rec.hidden = false; } else rec.hidden = true;
+  if (viewed.length) { $("recent").replaceChildren(...viewed.map(newCard("grid"))); rec.hidden = false; } else rec.hidden = true;
   /* 2. „Recomandate": categoria dominantă din ultimele vizionări, cu aceeași stare și marcă */
   const recent = viewed.slice(0, 5), score = {};
   recent.forEach((l, i) => { score[l.category_slug] = (score[l.category_slug] || 0) + (5 - i); });
@@ -1449,7 +1450,7 @@ async function loadForYou() {
     if (!list.length) { sec.hidden = true; return; }
     const name = (inCat[0] && inCat[0].category) || list[0].category || "";
     $("forYouTitle").textContent = `Anunțuri noi în ${name}${state ? " " + STATES[state] : ""}`;
-    $("forYou").replaceChildren(...list.map(card)); sec.hidden = false;
+    $("forYou").replaceChildren(...list.map(newCard("grid"))); sec.hidden = false;
   } catch { sec.hidden = true; }
 }
 const clearInterest = () => { try { localStorage.removeItem(INT_KEY); } catch {} $("pentruTine").hidden = true; $("vazute").hidden = true; };
