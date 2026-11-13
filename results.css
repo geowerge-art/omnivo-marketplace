@@ -254,3 +254,6 @@
 /* „Salvează căutarea": apare după ce derulezi */
 .rs-save { transition: opacity .2s, transform .2s; }
 .rs-save:not(.show) { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(12px); }
+
+/* ---- anunțuri promovate: aceeași mărime ca restul, cu chenar auriu fin ---- */
+.rs-card.rs-promoted { box-shadow: 0 0 0 2px var(--gold-soft), 0 6px 18px rgba(23, 24, 27, .06); }

@@ -140,3 +140,6 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Formular completat din căutare:** `openRequests("new", { part, details })` (în `requests-ui.js`) pune textul căutat la prima piesă și, dacă s-a ales un tip, „Tip piesă: …" la detalii. Fără cont nu se păstrează nimic.
 - **Chips de tip piesă:** în Piese auto, în loc de categoriile surori, apar „Toate piesele" și valorile atributului `categorie_piesa` (din migrarea 036: Motor, Caroserie, Faruri și lumini, Frâne etc.), plus „Auto și moto" ca drum înapoi. Se filtrează cu `a_categorie_piesa`.
 - **„Salvează căutarea" plutitor** apare abia după 400 px de derulare, ca să nu mai acopere cardurile.
+
+## Anunțuri promovate
+- Nu mai sunt două carduri late pe tot ecranul. Au aceeași mărime ca restul (două pe rând pe telefon), cu chenar auriu (`.rs-promoted`) și eticheta „Promovat" de pe poză. Se aplică tuturor anunțurilor promovate din listă, care apar oricum primele (`loadListings()` în `script.js`).
