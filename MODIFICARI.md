@@ -112,4 +112,5 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Card**: poză mare, insigne „Promovat”/„Folosit”, număr de poze, preț, locație, dată și specificații (an, km, combustibil...).
 - **Căutări salvate** rețin și filtrele (`saved_searches.params`).
 - Țara anunțurilor: coloana `listings.country` (implicit „România”). Formularul „Adaugă anunț” nu are încă alegerea țării.
+- Pastilele de categorie din pagina de rezultate sunt înguste, ca pe prima pagină.
 - Prima pagină (anunțuri recente, „Văzute recent”, „Recomandate pentru tine”, favorite) folosește același card nou: `Results.card(l, 'gallery'|'grid')`.

@@ -194,3 +194,9 @@
 .products.rail > .rs-card { flex: 0 0 172px; }
 .products.rail .rs-card .rs-ttl { font-size: 15px; }
 .acc-grid .rs-card { min-width: 0; }
+
+/* pastilele de categorie: la fel de înguste ca cele de pe prima pagină */
+.rs-cats { gap: 8px; padding: 2px 0 12px; align-items: flex-start; }
+.rs-cats .rs-pill { min-height: 0; padding: 7px 14px; gap: 7px; font-size: 14px; font-weight: 500; line-height: 1.2; }
+.rs-cats .rs-pill.on { font-weight: 600; }
+.rs-cats .rs-pill .rs-i svg { width: 14px; height: 14px; }
