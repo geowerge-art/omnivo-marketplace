@@ -744,7 +744,10 @@ async function loadListings() {
   try {
     const url = mode === "mine" ? "/api/listings/mine" : mode === "admin" ? "/api/admin/listings?status=pending" : "/api/listings?" + new URLSearchParams(filter);
     let { listings } = await api(url); if (mode === "mine") listings = listings.filter((l) => l.status !== "deleted");
-    box.replaceChildren(...listings.map(mode === "public" ? newCard("gallery") : card));
+    if (mode === "public" && window.Results) {   // primele 1-2 promovate: late, cu poză mare; restul în două coloane
+      let wide = 0;
+      box.replaceChildren(...listings.map((l) => { const big = l.promoted && wide < 2; if (big) wide++; const c = Results.card(l, big ? "gallery" : "grid"); if (big) c.classList.add("rs-wide"); return c; }));
+    } else box.replaceChildren(...listings.map(card));
     $("emptyMessage").hidden = listings.length > 0;
     $("emptyMessage").textContent = mode === "public" ? "Nu am găsit anunțuri. Fii primul care adaugă unul!" : "Nimic de afișat aici.";
   } catch (err) {

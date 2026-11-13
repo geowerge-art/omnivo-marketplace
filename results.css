@@ -189,8 +189,9 @@
 
 /* ---- același card pe prima pagină ---- */
 .rs-card { color: var(--ink); }
-#products.products { grid-template-columns: 1fr; gap: 18px; }
-@media (min-width: 700px) { #products.products { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; } }
+#products.products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+#products .rs-wide { grid-column: 1 / -1; }
+@media (min-width: 700px) { #products.products { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; } #products .rs-wide { grid-column: span 2; } #products .rs-wide .rs-photo { aspect-ratio: 16 / 10; } }
 .products.rail > .rs-card { flex: 0 0 172px; }
 .products.rail .rs-card .rs-ttl { font-size: 15px; }
 .acc-grid .rs-card { min-width: 0; }
@@ -200,3 +201,4 @@
 .rs-cats .rs-pill { min-height: 0; padding: 7px 14px; gap: 7px; font-size: 14px; font-weight: 500; line-height: 1.2; }
 .rs-cats .rs-pill.on { font-weight: 600; }
 .rs-cats .rs-pill .rs-i svg { width: 14px; height: 14px; }
+#products .rs-card.rs-m-grid { align-self: start; }

@@ -113,4 +113,5 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Căutări salvate** rețin și filtrele (`saved_searches.params`).
 - Țara anunțurilor: coloana `listings.country` (implicit „România”). Formularul „Adaugă anunț” nu are încă alegerea țării.
 - Pastilele de categorie din pagina de rezultate sunt înguste, ca pe prima pagină.
+- Prima pagină: primele 1-2 anunțuri promovate sunt late (poză mare), restul în două coloane.
 - Prima pagină (anunțuri recente, „Văzute recent”, „Recomandate pentru tine”, favorite) folosește același card nou: `Results.card(l, 'gallery'|'grid')`.
