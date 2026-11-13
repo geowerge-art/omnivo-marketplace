@@ -1779,3 +1779,13 @@ button.adm-stat { cursor: pointer; }
 .rfq-banner { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; margin: 8px 0; padding: 12px 14px; border: 0; border-radius: 12px; background: #1f7a3d; color: #fff; font: inherit; cursor: pointer; text-align: left; }
 .rfq-banner span { font-weight: 700; white-space: nowrap; }
 .rfq-row.new { border-color: #1f7a3d; box-shadow: 0 0 0 2px rgba(31, 122, 61, .25); background: #f3fbf5; }
+
+/* „Cererile mele”: numărul de oferte se vede de departe */
+.rfq-row { position: relative; }
+.rfq-badge { position: absolute; top: -9px; right: -6px; min-width: 28px; height: 28px; padding: 0 7px; border-radius: 999px; background: #1f7a3d; color: #fff; font-weight: 800; font-size: 15px; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+.rfq-offers { font-style: normal; font-weight: 800; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: #1f7a3d; color: #fff; white-space: nowrap; }
+@media (max-width: 560px) {
+  .rfq-row { flex-wrap: wrap; }
+  .rfq-row .rfq-mid { flex: 1 1 calc(100% - 80px); }
+  .rfq-row .rfq-right { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; text-align: left; }
+}

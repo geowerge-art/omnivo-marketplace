@@ -158,3 +158,9 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Ofertant mai ușor:** formularul de ofertă arată doar prețul, moneda și starea; garanția, termenul, transportul, plata, factura, județul, nota și pozele sunt în „Garanție, transport, plată, poze (opțional)” (deschis la modificarea unei oferte).
 - Fișiere: `requests-ui.js`, `style.css`, `requests.ui.test.js` (34), `requests.summary.ui.test.js` (19). Serverul nu e atins.
 - Neverificat: aspectul pe telefon.
+
+## „Cererile mele”: numărul de oferte se vede
+- Fiecare cerere cu oferte are o **insignă verde rotundă** cu numărul (colțul din dreapta sus) și un chip verde „N oferte · de la X lei”, nu doar text mic.
+- Tabul „Cererile mele” arată numărul ofertelor noi, iar dacă nu sunt noi, al celor în așteptare.
+- Pe telefon, rândul se așază pe două linii: titlul pe toată lățimea, dedesubt starea și oferta (înainte titlul se rupea în 4-5 rânduri).
+- Fișiere: `requests-ui.js`, `style.css`. Neverificat pe telefon.

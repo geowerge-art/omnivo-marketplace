@@ -77,10 +77,10 @@
   }
 
   function tabs() {
-    const n = rfqSum.new_quotes + rfqSum.new_answers;
+    const n = rfqSum.new_quotes + rfqSum.new_answers, nTab = n || rfqSum.waiting || 0;
     let items = [];
     if (st.view === "hub" || !st.role) items = [];
-    else if (st.role === "buy") items = [["mine", "Cererile mele" + (n ? ` (${n})` : "")], ["new", "Cerere nouă"], ["received", "Toate ofertele"], ["address", "Adresa mea"]];
+    else if (st.role === "buy") items = [["mine", "Cererile mele" + (nTab ? ` (${nTab})` : "")], ["new", "Cerere nouă"], ["received", "Toate ofertele"], ["address", "Adresa mea"]];
     else items = [["board", "Cereri de piese"], ["offers", "Ofertele mele"], ["dealer", "Profil firmă"]];
     if (me && ["admin", "moderator"].includes(me.role)) items.push(["admin", "Aprobări"]);
     const on = (k) => st.view === k || (k === "mine" && (st.view === "detail" || (st.view === "chat" && st.from !== "offers"))) || (k === "offers" && st.view === "chat" && st.from === "offers");
@@ -190,7 +190,8 @@
       const m = el("span", "rfq-mid"); m.append(el("b", "", title(r)), el("small", "muted", `${r.county} · ${r.status === "open" ? (r.accepting ? left(r.expires_at) : "se așteaptă alegerea ta") : when(r.created_at)}`));
       const right = el("span", "rfq-right"); const [t, c] = RS[r.status] || [r.status, ""]; right.append(el("em", "rfq-chip " + c, t));
       if (r.new_quotes || r.new_answers) right.append(el("em", "rfq-chip ok", [r.new_quotes && `${r.new_quotes} ${r.new_quotes === 1 ? "ofertă nouă" : "oferte noi"}`, r.new_answers && `${r.new_answers} ${r.new_answers === 1 ? "răspuns" : "răspunsuri"}`].filter(Boolean).join(" · ")));
-      right.append(el("small", "", r.quotes ? `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}${r.best_ron ? " · de la " + money(r.best_ron, "RON") : ""}` : "nicio ofertă încă"));
+      if (r.quotes) { const o = el("em", "rfq-offers", `${r.quotes} ${r.quotes === 1 ? "ofertă" : "oferte"}${r.best_ron ? " · de la " + money(r.best_ron, "RON") : ""}`); right.append(o); b.append(el("span", "rfq-badge", String(r.quotes))); }
+      else right.append(el("small", "", "nicio ofertă încă"));
       if (r.thumb) { const th = el("span", "rfq-rth"), g = el("img"); g.src = r.thumb; g.alt = ""; g.loading = "lazy"; th.append(g); b.append(th); }
       b.append(m, right); b.onclick = () => go("detail", r.id); out.push(b);
       if (r.status === "open") {   // anularea fără să intri în cerere
