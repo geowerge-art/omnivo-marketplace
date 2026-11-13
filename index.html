@@ -43,24 +43,18 @@
     </section>
 
     <section class="section" id="categorii">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">DESCOPERĂ</span>
-          <h2>Ce cauți azi?</h2>
-        </div>
-        <button type="button" class="cat-toggle" id="catToggle" aria-expanded="false" aria-controls="catPanel" aria-label="Toate categoriile"><span data-ic="meniu"></span>Toate<i aria-hidden="true">▾</i></button>
+      <div class="cat-tiles" id="catChips">
+        <button type="button" class="cat-tile cat-all" id="catToggle" aria-expanded="false" aria-controls="catPanel" aria-label="Toate categoriile"><i class="cat-ph" data-ic="meniu"></i><span>Toate</span></button>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="auto-moto"></i><span>Auto și moto</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="electronice"></i><span>Electronice</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="casa-gradina"></i><span>Casă și grădină</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="moda"></i><span>Modă</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="servicii"></i><span>Servicii</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="sport-timp-liber"></i><span>Sport și timp liber</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="mobila"></i><span>Mobilă</span></a>
+        <a class="cat-tile" href="#anunturi"><i class="cat-ph" data-ic="copii-jucarii"></i><span>Copii și jucării</span></a>
       </div>
       <div class="cat-panel" id="catPanel" hidden><ul id="catPanelList"></ul></div>
-      <div class="categories cat-chips" id="catChips">
-        <a href="#anunturi"><i class="cat-ic" data-ic="auto-moto"></i><span>Auto și moto</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="electronice"></i><span>Electronice</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="casa-gradina"></i><span>Casă și grădină</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="moda"></i><span>Modă</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="servicii"></i><span>Servicii</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="sport-timp-liber"></i><span>Sport și timp liber</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="mobila"></i><span>Mobilă</span></a>
-        <a href="#anunturi"><i class="cat-ic" data-ic="copii-jucarii"></i><span>Copii și jucării</span></a>
-      </div>
     </section>
 
     <section class="section for-you" id="vazute" hidden>

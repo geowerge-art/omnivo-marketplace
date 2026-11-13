@@ -21,6 +21,25 @@ router.get('/suggest', ah(async (req, res) => {
   res.json(detect(title, leafCache.rows));
 }));
 
+/* Poza fiecărei categorii principale: cel mai nou anunț public cu poză (din ea sau din subcategoriile ei), plus numărul de anunțuri. Ținut 5 minute. */
+let coverCache = null;
+router.get('/covers', ah(async (req, res) => {
+  if (coverCache && Date.now() - coverCache.at < 5 * 60 * 1000) return res.json(coverCache.body);
+  const r = await db.query(
+    `SELECT r.slug,
+            (SELECT COALESCE(i.thumb_url, i.url) FROM listings l
+               JOIN categories c ON c.id = l.category_id
+               JOIN listing_images i ON i.listing_id = l.id
+              WHERE (c.id = r.id OR c.parent_id = r.id) AND l.status = 'approved' AND l.expires_at > NOW()
+              ORDER BY l.created_at DESC, i.position, i.id LIMIT 1) AS thumb,
+            (SELECT COUNT(*)::int FROM listings l JOIN categories c ON c.id = l.category_id
+              WHERE (c.id = r.id OR c.parent_id = r.id) AND l.status = 'approved' AND l.expires_at > NOW()) AS n
+       FROM categories r WHERE r.parent_id IS NULL ORDER BY r.position, r.id`);
+  const body = { covers: r.rows };
+  coverCache = { at: Date.now(), body };
+  res.json(body);
+}));
+
 /* Arborele de categorii, cu atributele fiecăreia. Se schimbă rar, deci îl ținem 5 minute în memorie. */
 let cache = null;
 router.get('/', ah(async (req, res) => {

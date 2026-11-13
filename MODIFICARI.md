@@ -127,3 +127,9 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Buget:** intervalul prețurilor deschise în categoria aceea, cu marjă (−30% / +30%), în moneda cea mai folosită. „Mai multe în …" încearcă întâi în buget, apoi fără.
 - **Stare:** dacă jumătate din ce ai văzut e „avariat", „accidentat" etc., rămâne filtrul de stare (ca înainte).
 - **Oferte bune:** `GET /api/listings/deals?category=&q=&min=&max=&currency=`. Mediana prețurilor comparabile (aceeași categorie, aceeași stare din `q`, aceeași monedă, fără buget) se calculează în SQL. Ofertă = preț între 40% și 80% din mediană (sub 40% = suspect). Dacă sunt sub 8 anunțuri comparabile, raftul nu apare. Cardul arată „−X% sub piață". Constantele sunt `DEAL_MIN_N`, `DEAL_HI`, `DEAL_LO` în `listings.js`.
+
+## Categorii ca tile-uri mici cu poze
+- Chips-urile au fost înlocuite cu tile-uri rotunjite de 64 px (clasele `.cat-tiles`, `.cat-tile`, `.cat-ph`), cu poza celui mai nou anunț din categorie și numele dedesubt. Clasele sunt noi, fiindcă regulile vechi din `style.css` (`#categorii .categories a`, `.cat-ic`, `.cat-toggle`) le bătuseră pe cele din `results.css`.
+- Titlul „Ce cauți azi?" și butonul mare „Toate" au dispărut. „Toate" e primul tile din rând: pe telefon deschide lista pe loc, pe calculator deschide sertarul.
+- `GET /api/categories/covers` (în `categories.js`): poza și numărul de anunțuri pentru fiecare categorie principală, ținute 5 minute. Dacă o categorie n-are poză, rămâne iconița.
+- La „Văzute recent", eticheta „Promovat" e doar o steluță, ca să nu acopere inima de la favorite.

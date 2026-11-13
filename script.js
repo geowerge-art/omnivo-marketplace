@@ -70,13 +70,27 @@ async function loadCats() {
     }
     sel.appendChild(og); list.appendChild(li);
   }
-  document.querySelectorAll("#categorii .categories a").forEach((a) => a.addEventListener("click", (e) => {
+  document.querySelectorAll("#categorii .cat-tiles a").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault(); const n = a.querySelector("span").textContent.trim(); const c = cats.find((x) => fold(x.name) === fold(n)); if (c) pickCategory(c.slug, c.name);
   }));
-  buildCatPanel(); updatePills();
+  buildCatPanel(); updatePills(); loadCovers();
 }
 $("bnCats")?.addEventListener("click", () => { setDrawer(true); if (!cats.length) loadCats(); });
 $("bnChat")?.addEventListener("click", () => (me ? openInbox() : openAuth("Intră în cont ca să vezi mesajele.")));
+
+/* poza fiecărei categorii = cel mai nou anunț cu poză din ea */
+async function loadCovers() {
+  try {
+    const by = new Map((await api("/api/categories/covers")).covers.map((c) => [c.slug, c]));
+    document.querySelectorAll("#categorii .cat-tiles a").forEach((a) => {
+      const n = a.querySelector("span").textContent.trim(), c = cats.find((x) => fold(x.name) === fold(n)), cv = c && by.get(c.slug);
+      if (!cv || !cv.thumb) return;
+      const img = document.createElement("img"); img.src = cv.thumb; img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+      img.addEventListener("error", () => img.remove());   // poză lipsă: rămâne iconița
+      a.querySelector(".cat-ph").prepend(img);
+    });
+  } catch { /* rămân iconițele */ }
+}
 
 /* telefon: lista completă de categorii se deschide pe loc, în secțiunea „Categorii populare", și se închide când apeși în altă parte */
 function closeCatPanel() { const p = $("catPanel"); if (!p || p.hidden) return; p.hidden = true; $("catToggle").setAttribute("aria-expanded", "false"); }
@@ -93,7 +107,7 @@ function buildCatPanel() {
     ul.appendChild(li);
   }
 }
-$("catToggle")?.addEventListener("click", () => { const p = $("catPanel"), open = p.hidden; if (open && !cats.length) loadCats(); p.hidden = !open; $("catToggle").setAttribute("aria-expanded", String(open)); });
+$("catToggle")?.addEventListener("click", () => { const p = $("catPanel"), open = p.hidden; if (open && !matchMedia("(max-width: 760px)").matches) { setDrawer(true); if (!cats.length) loadCats(); return; }   /* calculator: lista completă se deschide în sertar */ if (open && !cats.length) loadCats(); p.hidden = !open; $("catToggle").setAttribute("aria-expanded", String(open)); });
 document.addEventListener("click", (e) => { if (!e.target.closest("#catPanel, #catToggle")) closeCatPanel(); });
 $("drawerClose")?.addEventListener("click", () => setDrawer(false));
 $("scrim")?.addEventListener("click", () => setDrawer(false));

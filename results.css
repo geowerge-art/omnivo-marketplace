@@ -203,17 +203,19 @@
 .rs-cats .rs-pill .rs-i svg { width: 14px; height: 14px; }
 #products .rs-card.rs-m-grid { align-self: start; }
 
-/* ---- categorii: chips pe un singur rând, derulabil (nu mai e grila de cercuri colorate) ---- */
-#categorii.section { padding: 18px 7% 4px; }
-#categorii .section-heading { margin-bottom: 10px; }
-#categorii .section-heading h2 { font-size: 20px; margin-top: 2px; }
-.categories.cat-chips { display: flex; flex-wrap: nowrap; grid-template-columns: none; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 8px; -webkit-overflow-scrolling: touch; }
-.categories.cat-chips::-webkit-scrollbar { display: none; }
-.categories.cat-chips a { flex: none; flex-direction: row; justify-content: flex-start; align-items: center; text-align: left; gap: 7px; min-height: 0; padding: 8px 16px 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--navy); text-decoration: none; box-shadow: none; }
-.categories.cat-chips a:hover { border-color: var(--gold); background: var(--light); transform: none; box-shadow: none; }
-.categories.cat-chips a span { font-size: 14px; font-weight: 500; line-height: 1.2; white-space: nowrap; }
-.categories.cat-chips .cat-ic, .categories.cat-chips a:hover .cat-ic { width: 20px; height: 20px; border-radius: 0; background: none; color: var(--gold); }
-.categories.cat-chips .cat-ic .ico { width: 20px; height: 20px; }
+/* ---- categorii: tile-uri mici rotunjite, cu poza celui mai nou anunț și numele dedesubt (clase noi, ca să nu le atingă regulile vechi din style.css) ---- */
+#categorii.section { padding: 14px 7% 2px; }
+.cat-tiles { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.cat-tiles::-webkit-scrollbar { display: none; }
+.cat-tile { flex: 0 0 68px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--navy); font: inherit; text-decoration: none; text-align: center; cursor: pointer; scroll-snap-align: start; }
+.cat-ph { width: 64px; height: 64px; border-radius: 18px; overflow: hidden; display: grid; place-items: center; font-style: normal; background: #f1ebdd; color: var(--gold); border: 1px solid var(--border); transition: border-color .18s; }
+.cat-ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cat-ph .ico { width: 28px; height: 28px; }
+.cat-tile span { max-width: 68px; font-size: 12px; font-weight: 500; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cat-tile:hover .cat-ph { border-color: var(--gold); }
+.cat-all .cat-ph { background: #14110c; border-color: #14110c; color: var(--gold-soft); }
+.cat-all[aria-expanded="true"] .cat-ph { border-color: var(--gold); }
+@media (max-width: 760px) { #categorii.section { padding: 12px 5% 0; } .cat-tiles { margin: 0 -5%; padding: 2px 5% 8px; scroll-padding-inline: 5%; } }
 
 /* ---- „Văzute recent": carduri înguste, doar poză, titlu, preț ---- */
 .products.rail.rail-sm { gap: 10px; }
@@ -234,3 +236,5 @@
 .rail-sm .rs-photo .fav-btn { top: 6px; right: 6px; width: 28px; height: 28px; font-size: 15px; }
 
 .deals-note { margin: 4px 0 0; font-size: 13px; color: var(--mute); }
+
+.rail-sm .rs-promo { font-size: 0; gap: 0; padding: 5px; left: 6px; top: 6px; }
