@@ -1009,6 +1009,7 @@ async function openDetail(id) {
       if (l.seller_id) btn("✉️ Trimite mesaj", () => { $("detailDialog").close(); me ? openChat(l.id, l.seller_id, l.title) : openAuth(); }, l.has_phone && l.status !== "sold" ? "alt" : "call");
       if (!l.has_phone && l.status !== "sold") { const n = document.createElement("small"); n.className = "ad-nophone"; n.textContent = "Vânzătorul nu a afișat telefonul. Scrie-i un mesaj."; act.prepend(n); }
     }
+    { const pd = $("profileDialog"); if (pd && pd.open) pd.close(); }   // anunț deschis din profilul vânzătorului: profilul se închide, altfel anunțul rămâne dedesubt
     open("detailDialog"); $("detailDialog").scrollTop = 0; detUrlSync(l);
   } catch (err) { showMessage("Eroare", errText(err)); }
 }
