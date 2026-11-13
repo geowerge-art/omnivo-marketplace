@@ -1799,8 +1799,11 @@ button.adm-stat { cursor: pointer; }
 .acc-bar-sub { color: var(--muted); font-size: 13px; font-weight: 600; }
 .acc-bar.hot > summary b::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 8px; border-radius: 50%; background: #1f7a3d; }
 .acc-bar > .acc-list { border: 0; border-radius: 0; box-shadow: none; border-top: 1px solid #f1ede4; }
-/* pe laptop: pagina Contului arată ca pe telefon (pagină întreagă, coloană centrată) */
-@media (min-width: 900px) { .acc-page .acc-wrap { width: 560px; } }
+/* pe laptop: panou în dreapta, cu fundal întunecat în spate */
+@media (min-width: 900px) {
+  .acc-page { background: rgba(20, 17, 12, .45); }
+  .acc-page .acc-wrap { width: 460px; margin: 0 0 0 auto; min-height: 100%; padding-left: 18px; padding-right: 18px; background: var(--light); box-shadow: -10px 0 40px rgba(0, 0, 0, .2); box-sizing: border-box; }
+}
 
 
 /* ---- meniu lateral (☰) ---- */
