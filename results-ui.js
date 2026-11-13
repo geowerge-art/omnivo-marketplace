@@ -139,6 +139,7 @@
   }
 
   /* ---------- structura paginii ---------- */
+  let rfqBand, rfqBlock, rfqBlockT, rfqBlockP;
   let page, elTitle, elCrumbs, qInput, fBtn, fBadge, locBtn, locLabel, locPop, sortBtn, sortPop, viewBtn, catRow, elCount, list, more, empty, saveBtn, io;
   let dlgF, fMain, fCat, fApply, dlgL, lCountry, lCounty, lCity, lCityList;
   let Dr = blank(), Dview = view;       // ciorna din fereastra de filtre
@@ -163,6 +164,10 @@
     more = h("button", { type: "button", class: "rs-more", hidden: true, onclick: () => load(false) }, "Arată mai multe");
     empty = h("div", { class: "rs-empty", hidden: true });
     saveBtn = h("button", { type: "button", class: "rs-save", onclick: saveSearch, hidden: true }, ico(P.heart, 20), "Salvează căutarea");
+    /* Piese auto: „Cere oferte" (modulul din requests-ui.js), o bandă subțire sus și un bloc când sunt puține rezultate */
+    rfqBand = h("button", { type: "button", class: "rs-rfq", hidden: true, onclick: askOffers }, h("span", { class: "rs-rfq-t" }, "Nu găsești piesa? ", h("b", { text: "Cere oferte" })), ico(P.chevR, 18));
+    rfqBlockT = h("strong"); rfqBlockP = h("p", { text: "Spune ce piesă cauți și primești oferte de la vânzători, fără să mai suni pe rând." });
+    rfqBlock = h("div", { class: "rs-rfqblock", hidden: true }, rfqBlockT, rfqBlockP, h("button", { type: "button", class: "rs-pill on", onclick: askOffers }, "Cere oferte"));
 
     const form = h("form", { class: "rs-search", role: "search", onsubmit: (e) => { e.preventDefault(); submitQ(); } },
       h("span", { class: "rs-search-ic", html: svg(P.search, 22) }), qInput, heart);
@@ -180,10 +185,12 @@
           h("div", { class: "rs-anchor" }, sortBtn, sortPop),
           viewBtn),
         catRow,
+        rfqBand,
         elCount,
-        list, empty, more),
+        list, empty, rfqBlock, more),
       saveBtn);
     document.body.append(page);
+    page.addEventListener("scroll", () => saveBtn.classList.toggle("show", page.scrollTop > 400), { passive: true });   // „Salvează căutarea" apare abia după ce derulezi, ca să nu acopere cardurile
 
     io = "IntersectionObserver" in window ? new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting) && !more.hidden) load(false); }, { root: page, rootMargin: "700px" }) : null;
     if (io) io.observe(more);
@@ -250,6 +257,7 @@
     locBtn.classList.toggle("on", !!placeLabel(S));
     paintView(); paintSortBtn();
     saveBtn.hidden = !hasFilters(S);
+    rfqBand.hidden = S.category !== "piese-auto"; if (rfqBand.hidden) rfqBlock.hidden = true;
     renderCatChips();
   }
   function filterCount(st) {
@@ -268,7 +276,12 @@
   let chipSeq = 0;
   async function renderCatChips() {
     const mine = ++chipSeq, f = S.category ? node(S.category) : null, kids = [];
-    if (f) {
+    if (f && f.n.slug === "piese-auto") {   // în Piese auto: tipurile de piese (atributul „Tip piesă"), nu categoriile surori
+      const def = (f.n.attributes || []).find((a) => a.key === "categorie_piesa"), cur = S.attrs.a_categorie_piesa || "";
+      kids.push(chip("Toate piesele", !cur, () => { const a = { ...S.attrs }; delete a.a_categorie_piesa; S.attrs = a; apply(); }));
+      for (const t of (def && def.options) || []) kids.push(chip(t, cur === t, () => { const a = { ...S.attrs }; if (cur === t) delete a.a_categorie_piesa; else a.a_categorie_piesa = t; S.attrs = a; apply(); }));
+      if (f.parent) kids.push(h("button", { type: "button", class: "rs-pill ghost", onclick: () => setCategory(f.parent.slug) }, ico(P.back, 16, 2.4), f.parent.name));
+    } else if (f) {
       const parent = f.parent || f.n;
       kids.push(chip(`Toate din ${parent.name}`, !f.parent, () => setCategory(parent.slug)));
       for (const k of parent.children) kids.push(chip(k.name, f.n.slug === k.slug, () => setCategory(k.slug)));
@@ -281,6 +294,20 @@
       for (const c of list2.slice(0, 8)) kids.push(chip(c.name, false, () => setCategory(c.slug)));
     }
     if (mine === chipSeq) { catRow.replaceChildren(...kids); catRow.hidden = !kids.length; }
+  }
+  function askOffers() {
+    if (!window.openRequests) return;
+    const t = (S.attrs && S.attrs.a_categorie_piesa) || "";
+    window.openRequests("new", { part: S.q || "", details: t && !S.q ? "Tip piesă: " + t : "" });   // formularul se deschide deja completat
+  }
+  /* banda „Cere oferte": pulsează o dată (de mai multe ori dacă sunt puține rezultate), apoi stă liniștită */
+  function paintRfq(reset) {
+    const on = S.category === "piese-auto";
+    rfqBand.hidden = !on;
+    if (!on) { rfqBlock.hidden = true; return; }
+    if (reset) { rfqBand.classList.remove("pulse", "few"); void rfqBand.offsetWidth; rfqBand.classList.add("pulse"); if (total < 3) rfqBand.classList.add("few"); }
+    rfqBlock.hidden = total >= 3;
+    rfqBlockT.textContent = total === 0 ? "Nu ai găsit piesa?" : "Mai puține rezultate decât te așteptai?";
   }
   function setCategory(slug) { S.category = slug; S.attrs = {}; apply(); }
   function submitQ() { S.q = clean(qInput.value); if (S.q) spSave(S.q); qInput.blur(); apply(); }
@@ -303,6 +330,7 @@
       elCount.textContent = total ? `Am găsit ${total >= 1000 ? "peste 1.000 de rezultate" : nRez(total)} pentru tine` : "";
       more.hidden = offset >= total || !d.listings.length;
       if (!total) showEmpty();
+      paintRfq(reset);
       busy = false;
     } catch (err) {
       if (my !== seq) return;

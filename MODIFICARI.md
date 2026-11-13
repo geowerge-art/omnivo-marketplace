@@ -133,3 +133,10 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - Titlul „Ce cauți azi?" și butonul mare „Toate" au dispărut. „Toate" e primul tile din rând: pe telefon deschide lista pe loc, pe calculator deschide sertarul.
 - `GET /api/categories/covers` (în `categories.js`): poza și numărul de anunțuri pentru fiecare categorie principală, ținute 5 minute. Dacă o categorie n-are poză, rămâne iconița.
 - La „Văzute recent", eticheta „Promovat" e doar o steluță, ca să nu acopere inima de la favorite.
+
+## Piese auto: „Cere oferte", tipuri de piese, buton de salvare
+- **Bandă „Nu găsești piesa? Cere oferte →"** între chips-uri și numărătoare, doar în categoria `piese-auto` (`.rs-rfq` în `results.css`, `rfqBand` în `results-ui.js`). Verde, pulsează de 2 ori, iar la sub 3 rezultate de 4 ori. Respectă „reducerea animațiilor" a telefonului.
+- **Bloc sub rezultate** (`rfqBlock`) când sunt sub 3 rezultate; la 0 rezultate titlul e „Nu ai găsit piesa?".
+- **Formular completat din căutare:** `openRequests("new", { part, details })` (în `requests-ui.js`) pune textul căutat la prima piesă și, dacă s-a ales un tip, „Tip piesă: …" la detalii. Fără cont nu se păstrează nimic.
+- **Chips de tip piesă:** în Piese auto, în loc de categoriile surori, apar „Toate piesele" și valorile atributului `categorie_piesa` (din migrarea 036: Motor, Caroserie, Faruri și lumini, Frâne etc.), plus „Auto și moto" ca drum înapoi. Se filtrează cu `a_categorie_piesa`.
+- **„Salvează căutarea" plutitor** apare abia după 400 px de derulare, ca să nu mai acopere cardurile.

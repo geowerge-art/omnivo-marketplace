@@ -189,6 +189,7 @@
     };
     const sync = () => { addP.hidden = rows.length >= 8; partsBox.classList.toggle("one", rows.length === 1); };
     addP.onclick = () => addRow(); addRow();
+    if (!ed && window.rfqPre) { rows[0].a.value = String(window.rfqPre.part || "").slice(0, 200); rows[0].b.value = String(window.rfqPre.details || "").slice(0, 300); window.rfqPre = null; }   // venit din căutare: piesa deja scrisă
     const brand = inp("text", "Ex.: Volkswagen"); brand.setAttribute("list", "rfqBrands"); brand.maxLength = 40;
     const dl = el("datalist"); dl.id = "rfqBrands"; BRANDS.forEach((b) => dl.append(new Option(b)));
     const model = inp("text", "Ex.: Golf 7"), year = inp("number", "2015"); year.min = 1950; year.max = new Date().getFullYear() + 1;
@@ -725,7 +726,8 @@
     }));
   }
 
-  window.openRequests = (view) => {
+  window.openRequests = (view, pre) => {
+    window.rfqPre = me && pre && typeof pre === "object" ? pre : null;   // fără cont nu păstrăm nimic: după autentificare omul apasă din nou
     build(); if (typeof accClosePage === "function" && typeof accIsOpen === "function" && accIsOpen()) accClosePage();
     if (!dlg.open) dlg.showModal(); go(view || "board");
   };
