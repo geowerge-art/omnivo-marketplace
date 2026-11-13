@@ -143,3 +143,18 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 
 ## Anunțuri promovate
 - Nu mai sunt două carduri late pe tot ecranul. Au aceeași mărime ca restul (două pe rând pe telefon), cu chenar auriu (`.rs-promoted`) și eticheta „Promovat" de pe poză. Se aplică tuturor anunțurilor promovate din listă, care apar oricum primele (`loadListings()` în `script.js`).
+
+## „Cere oferte”: formular scurt
+- Formularul de cerere are acum doar piesa, marca, modelul, anul, județul și „Trimite”. Restul (motorizare, combustibil, cutie, caroserie, OEM, VIN, tip piese, localitate, detalii, poze, livrare, ore) e în „Mai multe detalii pentru oferte mai bune (opțional)”, închis la cerere nouă, deschis la modificare.
+- Județul se completează din cont. Livrarea și 48 de ore rămân bifate implicit.
+- „Cum funcționează?”: trei pași scurți pe un rând (`howBox()`), în loc de patru paragrafe.
+- Fișiere: `requests-ui.js`, `style.css`, `requests.ui.test.js` (33 de verificări trec). Serverul nu e atins.
+- Neverificat: aspectul pe telefon.
+
+## „Cere oferte”: pagini pe roluri și ordine
+- **Pagină de start nouă** `/cere-oferte` (`viewHub`): „Caut o piesă” și „Am piese de vândut”. Alegerea se ține minte (`rfqRole` în browser); „Oferte piese” din meniu duce direct în pagina rolului, iar un buton la capătul taburilor schimbă rolul.
+- **Taburi separate:** cumpărător = Cererile mele, Cerere nouă, Toate ofertele, Adresa mea; ofertant = Cereri de piese, Ofertele mele, Profil firmă. Rolul se deduce și din adresa deschisă (`/ofertele-mele` → ofertant).
+- **Cumpărătorul vede ofertele în „Cererile mele”, nu doar în notificări:** bandă verde „N oferte noi la M cereri” (duce în prima cerere), cererile cu oferte noi urcă primele și au chenar verde, iar numărul apare pe tabul „Cererile mele (N)”.
+- **Ofertant mai ușor:** formularul de ofertă arată doar prețul, moneda și starea; garanția, termenul, transportul, plata, factura, județul, nota și pozele sunt în „Garanție, transport, plată, poze (opțional)” (deschis la modificarea unei oferte).
+- Fișiere: `requests-ui.js`, `style.css`, `requests.ui.test.js` (34), `requests.summary.ui.test.js` (19). Serverul nu e atins.
+- Neverificat: aspectul pe telefon.

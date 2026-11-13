@@ -1754,3 +1754,28 @@ button.adm-stat { cursor: pointer; }
 .set-page .set-body input:not([type=checkbox]):not([type=radio]){width:100%;border:1px solid var(--border);border-radius:10px}
 .set-page .set-body .set-ph input{width:auto}
 .set-page .set-body label.check{min-height:0!important;align-items:flex-start!important;padding:2px 0}
+
+/* „Cere oferte”: formular scurt și „Cum funcționează” pe un rând */
+.rfq-how3 { display: flex; gap: 8px; margin: 8px 0 12px; }
+.rfq-how3-i { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 12px; background: #fffdf8; font-weight: 700; font-size: .88rem; color: var(--navy); }
+.rfq-how3-i b { flex: none; width: 24px; height: 24px; border-radius: 50%; background: #14110c; color: #e9d3a8; display: grid; place-items: center; font-size: .82rem; }
+@media (max-width: 480px) { .rfq-how3 { gap: 6px; } .rfq-how3-i { flex-direction: column; text-align: center; gap: 4px; padding: 8px 4px; font-size: .78rem; } }
+.rfq-more { margin: 12px 0; border: 1px dashed var(--border); border-radius: 12px; padding: 8px 12px; }
+.rfq-more > summary { cursor: pointer; font-weight: 800; color: var(--navy); }
+.rfq-more[open] > summary { margin-bottom: 8px; }
+
+/* „Cere oferte”: pagina de start pe roluri, bandă de oferte noi */
+.rfq-hubh { margin: 4px 0 10px; font-size: 1.2rem; color: var(--navy); }
+.rfq-roles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.rfq-role { display: grid; gap: 6px; text-align: left; padding: 16px; border: 2px solid var(--border); border-radius: 16px; background: #fff; cursor: pointer; font: inherit; color: var(--navy); }
+.rfq-role b { font-size: 1.1rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rfq-role span { font-size: .9rem; color: #5b5f66; }
+.rfq-role strong { color: #1f7a3d; }
+.rfq-role.buy { border-color: #1f7a3d; background: #f3fbf5; }
+.rfq-role.sell { border-color: #c9a45c; background: #fffaf0; }
+.rfq-role:hover { transform: translateY(-1px); }
+@media (max-width: 560px) { .rfq-roles { grid-template-columns: 1fr; } }
+.rfq-switch { margin-left: auto; opacity: .75; }
+.rfq-banner { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; margin: 8px 0; padding: 12px 14px; border: 0; border-radius: 12px; background: #1f7a3d; color: #fff; font: inherit; cursor: pointer; text-align: left; }
+.rfq-banner span { font-weight: 700; white-space: nowrap; }
+.rfq-row.new { border-color: #1f7a3d; box-shadow: 0 0 0 2px rgba(31, 122, 61, .25); background: #f3fbf5; }

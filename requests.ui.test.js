@@ -16,7 +16,7 @@ const ctx = { document: doc, window: {}, Date, Math, Number, String, Object, Arr
   $: (id) => els[id] || (els[id] = new El('div')), api: async (u, m) => { calls.push([u, m || 'GET']); return ctx.__api(u, m); }, me: { id: 5, role: 'user' }, COUNTIES: ['Cluj', 'Bihor'], showMessage: (...a) => calls.push(['msg', ...a]), errText: (e) => String(e && e.message), ERR: {}, openAuth() {}, openLightbox() {} };
 ctx.Option = class extends El { constructor(t, v) { super('option'); this._t = String(t); this.value = v; } };
 ctx.window = ctx; vm.createContext(ctx);
-let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { viewAward, shipCard, addressForm, howBox, partsList, quoteForm, offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
+let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { viewHub, viewAward, shipCard, addressForm, howBox, partsList, quoteForm, offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
 vm.runInContext(src, ctx);
 const T = ctx.__t; let ok = 0, bad = 0; const t = (n, p) => { p ? ok++ : bad++; console.log(`${p ? 'ok  ' : 'FAIL'} ${n}`); };
 const text = (n) => n.textContent;
@@ -76,7 +76,8 @@ const R = { id: 7, county: 'Cluj', status: 'open' };
   t('oferta parțială: preț pe piesă și „Acoperă 2 din 3 piese”', /Far stânga/.test(text(part)) && /100 lei/.test(text(part)) && /Acoperă 2 din 3 piese/.test(text(part)) && /lipsesc: Bară față/.test(text(part)));
   const full = T.quoteCard(RM, Q({ id: 22, company: 'Complet', price: 300, lines: RM.items.map((i) => ({ item_id: i.id, name: i.name, price: 100 })) }), []);
   t('oferta completă: „Acoperă toate piesele”', /Acoperă toate piesele/.test(text(full)));
-  const how = T.howBox(true); t('„Cum funcționează” are 4 pași', /Cum funcționează/.test(text(how)) && how.all((n) => n.tagName === 'LI').length === 4);
+  const how = T.howBox(); t('„Cum funcționează” are 3 pași scurți', how.all((n) => n.className === 'rfq-how3-i').length === 3 && /Ceri piesa/.test(text(how)));
+  T.build(); T.viewHub(); const hubTxt = text(T.body); t('pagina de start: două alegeri clare, cumpărător și ofertant', /Caut o piesă/.test(hubTxt) && /Am piese de vândut/.test(hubTxt) && /Ceri piesa/.test(hubTxt));
   const form = T.quoteForm(RM, () => {}); t('formularul de ofertă are câte un câmp de preț pe piesă', form.all((n) => n.tagName === 'INPUT' && n.attrs.placeholder === 'Preț' ).length === 3 || /Far stânga/.test(text(form)));
   // adresa de livrare
   ctx.__api = async (u, m, b) => (u.endsWith('/address') ? { address: { mode: 'livrare', kind: 'sediu', name: 'Ion Pop', phone: '0722123456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. Memorandumului 5', note: '' }, defaults: { name: 'Ion', phone: '' } } : {});

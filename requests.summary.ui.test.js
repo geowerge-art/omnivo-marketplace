@@ -39,12 +39,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   t('meniu: nicio ofertă → contorul dispare', els.accRfqN.hidden === true && els.accRfqN.textContent === '');
   await sum({ open: 2, waiting: 5, new_quotes: 3, new_answers: 1 });
   // --- eticheta filei: se redesenează singură cât timp dialogul e deschis ---
-  T.dlg.open = true; await sum({ open: 2, waiting: 5, new_quotes: 3, new_answers: 1 });
+  T.st.role = 'buy'; T.dlg.open = true; await sum({ open: 2, waiting: 5, new_quotes: 3, new_answers: 1 });
   const labels = () => els.rfqTabs.children.map(text);
-  t('fila „Oferte primite” arată câte sunt noi: „Oferte primite (4)”', labels().includes('Oferte primite (4)'));
-  t('fila „Cererile mele” rămâne neschimbată', labels().includes('Cererile mele'));
+  t('fila „Cererile mele” arată câte oferte sunt noi: „Cererile mele (4)”', labels().includes('Cererile mele (4)'));
+  t('fila „Toate ofertele” rămâne fără număr', labels().includes('Toate ofertele'));
   await sum({ open: 0, waiting: 0, new_quotes: 0, new_answers: 0 });
-  t('fără nimic nou, fila nu are număr', labels().includes('Oferte primite') && !labels().some((l) => /\(\d+\)/.test(l)));
+  t('fără nimic nou, fila nu are număr', labels().includes('Cererile mele') && !labels().some((l) => /\(\d+\)/.test(l)));
   // --- deconectat: contoarele se golesc ---
   await sum({ open: 2, waiting: 5, new_quotes: 3, new_answers: 1 });
   ctx.me = null; const calls0 = calls.length; await ctx.window.rfqSummaryRefresh();
