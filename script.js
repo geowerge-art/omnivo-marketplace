@@ -44,7 +44,40 @@ function showMessage(title, message) {
 }
 $("closeDialog")?.addEventListener("click", () => $("messageDialog").close());
 [["sellClose", "sellDialog"], ["authClose", "authDialog"], ["detClose", "detailDialog"], ["inboxClose", "inboxDialog"], ["chatClose", "chatDialog"]].forEach(([b, d]) => $(b)?.addEventListener("click", () => $(d).close()));
-$("menuButton")?.addEventListener("click", () => $("mainMenu").classList.toggle("open"));
+/* ---- meniu lateral (☰): se deschide din dreapta peste pagină, pe telefon și pe laptop ---- */
+const sideOpen = () => !!$("sideMenu")?.classList.contains("open");
+function setSideMenu(on) {
+  const m = $("sideMenu"); if (!m) return;
+  m.classList.toggle("open", on); $("sideScrim").classList.toggle("open", on);
+  m.inert = !on; m.setAttribute("aria-hidden", String(!on));
+  $("menuButton").setAttribute("aria-expanded", String(on));
+  document.body.classList.toggle("menu-open", on);   // ascunde bara de jos cât e deschis
+  document.body.style.overflow = on ? "hidden" : "";
+  if (on) $("sideClose").focus({ preventScroll: true });
+}
+function openSideMenu() { if (sideOpen()) return; history.pushState({ menu: 1 }, "", location.href); setSideMenu(true); }
+function closeSideMenu(then) {   // „Înapoi” de pe telefon îl închide; acțiunea (then) rulează după închidere
+  if (!sideOpen()) { if (then) then(); return; }
+  setSideMenu(false);
+  if (history.state && history.state.menu) { if (then) window.addEventListener("popstate", () => then(), { once: true }); history.back(); }
+  else if (then) then();
+}
+$("menuButton")?.addEventListener("click", () => (sideOpen() ? closeSideMenu() : openSideMenu()));
+$("sideClose")?.addEventListener("click", () => closeSideMenu());
+$("sideScrim")?.addEventListener("click", () => closeSideMenu());   // click oriunde în afara panoului
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sideOpen()) closeSideMenu(); });
+window.addEventListener("popstate", () => { if (sideOpen()) setSideMenu(false); });
+$("sideMenu")?.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-sm]"); if (!a || a.dataset.sm === "help") return;
+  e.preventDefault();
+  const k = a.dataset.sm;
+  closeSideMenu(() => {
+    if (k === "ads") $("anunturi")?.scrollIntoView({ behavior: "smooth" });
+    else if (k === "rfq") window.openRequests && window.openRequests();
+    else if (k === "favs") { if (!me) return openAuth("Intră în cont ca să vezi favoritele."); openAccount(); accGo("favs"); }
+  });
+});
+$("smLogout")?.addEventListener("click", () => closeSideMenu(() => accLogout()));
 
 /* ---- pictograme ---- */
 document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.dataset.ic, el.classList.contains("cat-ic") ? 44 : 24); });
@@ -274,7 +307,7 @@ $("tabLogin").addEventListener("click", () => tab(false)); $("tabReg").addEventL
 function renderUnread() { if ($("accTileMsgs")) $("accTileMsgs").textContent = unread || 0; if ($("accMsgsN")) { $("accMsgsN").textContent = unread ? String(unread) : ""; $("accMsgsN").hidden = !unread; } ["bnBadge", "hdrBadge"].forEach((k) => { const bd = $(k); if (bd) { bd.hidden = !unread; bd.textContent = unread > 9 ? "9+" : unread; } }); }
 async function refreshUnread() { if (!me) return; try { unread = (await api("/api/messages/unread")).unread; renderUnread(); } catch { /* insigna rămâne cum era */ } }
 function setMe(u) {
-  me = u; unread = 0; renderUnread(); clearInterval(unreadTimer); stopLive();
+  me = u; unread = 0; renderUnread(); { const lo = $("smLogout"); if (lo) lo.hidden = !u; } clearInterval(unreadTimer); stopLive();
   loadFavIds(); loadNotifCount();
   if (window.loadRails) loadRails();   // „Din județul tău" depinde de contul conectat
   if (u) { refreshUnread(); unreadTimer = setInterval(() => { if (!document.hidden) refreshUnread(); }, 30000); startLive(); }
@@ -480,8 +513,8 @@ function accMenu() {
   if (me.menu_pref === "buyer" && secs.children.length > 1) secs.insertBefore(secs.children[1], secs.children[0]);   // „Optimizat pentru cumpărător”: „Cumpăr” trece primul
   const goModeration = () => { mode = "admin"; $("listTitle").textContent = "De aprobat"; accLeave(); loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); };
   if (isMod || isAdmin) secs.appendChild(accBar("Moderare", [accItem("Studio moderare", () => accGo("modstudio")), ...(isMod ? [accItem("Moderare anunțuri", goModeration)] : [])], "accBarMod"));
-  const out = document.createElement("button"); out.type = "button"; out.className = "ghost acc-out"; out.textContent = "Ieșire din cont"; out.addEventListener("click", accLogout);
-  const last = [accHero(), tiles, secs, out];
+  if (secs.firstElementChild) secs.firstElementChild.open = true;   // o singură bară deschisă (prima), restul închise
+  const last = [accHero(), tiles, secs];
   if (isAdmin || isMod) { const ad = document.createElement("button"); ad.type = "button"; ad.className = "acc-admin"; ad.textContent = "🛡 Administrare"; ad.addEventListener("click", () => openAdmin()); last.push(ad); }
   $("accMain").replaceChildren(...last);
   api("/api/listings/mine").then((r) => {

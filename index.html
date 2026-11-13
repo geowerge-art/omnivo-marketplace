@@ -18,11 +18,6 @@
   <header class="header">
     <a class="logo" href="/">omnivo<span>.ro</span></a>
     <a class="hdr-home" href="/" aria-label="Acasă" title="Acasă"><span data-ic="acasa"></span></a>
-    <button class="menu-button" id="menuButton" aria-label="Meniu">☰</button>
-    <nav id="mainMenu">
-      <a href="#categorii">Categorii</a>
-      <a href="#anunturi">Anunțuri</a>
-    </nav>
     <div class="hdr-actions" role="navigation" aria-label="Contul meu">
       <button type="button" class="hdr-btn" id="hdrChat"><span data-ic="chat"></span>Chat<i class="bn-badge" id="hdrBadge" hidden></i></button>
       <button type="button" class="hdr-btn hdr-add" id="sellButton" aria-label="Adaugă anunț"><b>+</b>Adaugă</button>
@@ -30,6 +25,7 @@
       <button type="button" class="hdr-btn" id="hdrAccount"><span data-ic="cont"></span>Cont</button>
     </div>
     <button type="button" class="hdr-bell" id="hdrBell" aria-label="Notificări" hidden><span data-ic="clopot"></span><i class="bn-badge" id="hdrBellN" hidden></i></button>
+    <button type="button" class="menu-button" id="menuButton" aria-label="Meniu" aria-expanded="false" aria-controls="sideMenu"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="mb-txt">Meniu</span></button>
   </header>
 
   <main>
@@ -126,6 +122,18 @@
     <button type="button" class="bn-item" id="bnSearch"><span data-ic="lupa"></span>Caută</button>
     <button type="button" class="bn-item" id="bnAccount"><span data-ic="cont"></span>Cont</button>
   </nav>
+
+  <div class="side-scrim" id="sideScrim"></div>
+  <aside class="side-menu" id="sideMenu" aria-label="Meniu" aria-hidden="true" inert>
+    <div class="sm-head"><a class="logo" href="/">omnivo<span>.ro</span></a><button type="button" id="sideClose" aria-label="Închide meniul">✕</button></div>
+    <nav class="sm-list" aria-label="Meniu principal">
+      <a href="#anunturi" data-sm="ads">Anunțuri<i>›</i></a>
+      <a href="/cereri" data-sm="rfq">Oferte piese<i>›</i></a>
+      <a href="#favorite" data-sm="favs">Favorite<i>›</i></a>
+      <a href="/ajutor" data-sm="help">Ajutor / Contact<i>›</i></a>
+    </nav>
+    <div class="sm-foot"><button type="button" class="sm-out" id="smLogout" hidden>Ieșire din cont</button></div>
+  </aside>
 
   <div class="scrim" id="scrim" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Categorii" hidden>

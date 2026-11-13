@@ -172,3 +172,7 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - `requests-ui.js` actualizează scurtătura „Oferte piese” și punctul de pe „Cumpăr”.
 - Verificat în Chromium (laptop și telefon) cu API simulat: fără erori, o singură bară deschisă odată. Teste UI: 34 și 19 trec.
 - Încă nefăcut: bara de sus de pe laptop (casă, Caută) și bara de jos de pe telefon (Caută → Oferte).
+
+## Meniu lateral (☰)
+- Header: Categorii/Anunțuri/Oferte piese scoase; ☰ (cu textul „Meniu” pe laptop) deschide panou lateral din dreapta: Anunțuri, Oferte piese, Favorite, Ajutor / Contact, apoi Ieșire din cont (doar logat). Se închide la click în afară, ✕, Esc, „Înapoi”. Bara de jos se ascunde cât e deschis.
+- Cont: „Anunțurile mele” deschis implicit (una odată); pe laptop pagina e coloană centrată ca pe telefon; „Ieșire din cont” mutat în meniu.
