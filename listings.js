@@ -18,10 +18,12 @@ const createAllow = createThrottle(30, 60 * 60 * 1000); // max 30 anunțuri/oră
 const editAllow = createThrottle(60, 60 * 60 * 1000); // max 60 editări/oră per utilizator
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.mod_note, l.created_at, l.bumped_at,
+const SELECT = `SELECT l.id, l.title, l.price, l.currency, l.negotiable, l.condition, l.county, l.city, l.status, l.mod_note, l.created_at, l.bumped_at, l.seller_type, l.attributes,
                        (COALESCE(l.promoted_until, 'epoch'::timestamptz) > NOW()) AS promoted, l.promoted_until,
                        c.slug AS category_slug, c.name AS category, p.name AS parent_category,
-                       (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb
+                       (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS thumb,
+                       (SELECT i.url FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1) AS photo,
+                       (SELECT COUNT(*)::int FROM listing_images i WHERE i.listing_id = l.id) AS photo_count
                   FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id`;
 
 /* Validează corpul cererii după categorie și atributele ei. Întoarce { error } sau { v }. */
@@ -58,10 +60,27 @@ async function parse(b) {
 }
 
 /* ---- public: listare cu filtre ---- */
-router.get('/', ah(async (req, res) => {
+const likeEsc = (t) => String(t).replace(/[\\%_]/g, '\\$&');
+const ATTR_KEY = /^[a-z0-9_]{1,40}$/;
+
+/* Atributele filtrabile ale unei categorii (ale ei + ale părintelui), după slug. */
+async function attrDefs(slug) {
+  if (!slug) return [];
+  const r = await db.query(
+    `SELECT DISTINCT ON (a.key) a.key, a.type, a.options
+       FROM category_attributes a
+      WHERE a.category_id IN (SELECT id FROM categories WHERE slug = $1
+                              UNION SELECT parent_id FROM categories WHERE slug = $1 AND parent_id IS NOT NULL)
+      ORDER BY a.key`, [slug]);
+  return r.rows;
+}
+
+/* Construiește condițiile WHERE din cerere. `skipAttr` = atributul ignorat (pentru valorile disponibile ale unui filtru). */
+async function buildWhere(req, skipAttr) {
   const sold = req.query.sold === '1' && Number(req.query.user) > 0;   // profil public: și anunțurile vândute ale vânzătorului
   const where = sold ? ["l.status = 'sold'"] : ["l.status = 'approved'", 'l.expires_at > NOW()'], vals = [];
   const add = (sql, val) => { vals.push(val); where.push(sql.split('$#').join('$' + vals.length)); };
+  const addv = (sql, ...vs) => { let t = sql; for (const v of vs) { vals.push(v); t = t.replace('$#', '$' + vals.length); } where.push(t); };
   const q = fold(req.query.q).replace(/[^a-z0-9 ]+/g, ' ').trim();
   for (const w of q.split(/\s+/).filter(Boolean).slice(0, 6)) add("l.search_text LIKE '%' || $# || '%'", w);
   if (req.query.ids) {   /* „Văzute recent": anunțurile cu id-urile date (doar cele încă publice) */
@@ -69,19 +88,70 @@ router.get('/', ah(async (req, res) => {
     if (ids.length) add('l.id = ANY($#::int[])', ids);
   }
   if (Number(req.query.user) > 0) add('l.user_id = $#', Math.floor(Number(req.query.user)));
-  if (req.query.category) add('(c.slug = $# OR p.slug = $#)', String(req.query.category).slice(0, 60));
+  const slug = String(req.query.category || '').slice(0, 60);
+  if (slug) add('(c.slug = $# OR p.slug = $#)', slug);
+  if (req.query.country) add('LOWER(l.country) = LOWER($#)', String(req.query.country).slice(0, 40));
   if (req.query.county) add('LOWER(l.county) = LOWER($#)', String(req.query.county).slice(0, 40));
-  if (Number.isFinite(Number(req.query.min)) && req.query.min !== undefined && req.query.min !== '') add('l.price >= $#', Number(req.query.min));
-  if (Number.isFinite(Number(req.query.max)) && req.query.max !== undefined && req.query.max !== '') add('l.price <= $#', Number(req.query.max));
-  const order = { price_asc: 'l.price ASC NULLS LAST, l.id DESC', price_desc: 'l.price DESC NULLS LAST, l.id DESC' }[req.query.sort] || "(COALESCE(l.promoted_until, 'epoch'::timestamptz) > NOW()) DESC, COALESCE(l.bumped_at, l.created_at) DESC, l.id DESC";
+  if (req.query.city) add('LOWER(l.city) = LOWER($#)', String(req.query.city).slice(0, 60));
+  if (['nou', 'folosit'].includes(req.query.condition)) add('l.condition = $#', req.query.condition);
+  if (['persoana', 'firma'].includes(req.query.seller)) add('l.seller_type = $#', req.query.seller);
+  const num = (v) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+  const min = num(req.query.min), max = num(req.query.max);
+  if (min !== null) add('l.price >= $#', min);
+  if (max !== null) add('l.price <= $#', max);
+  if ((min !== null || max !== null) && ['RON', 'EUR'].includes(req.query.currency)) add('l.currency = $#', req.query.currency);   // prețul se compară doar în aceeași monedă
+  /* filtre pe atribute: a_<cheie> (text/select), a_<cheie>_min / a_<cheie>_max (numere) */
+  for (const d of await attrDefs(slug)) {
+    if (d.key === skipAttr || !ATTR_KEY.test(d.key)) continue;
+    if (d.type === 'number') {
+      const lo = num(req.query['a_' + d.key + '_min']), hi = num(req.query['a_' + d.key + '_max']);
+      const cell = "(CASE WHEN jsonb_typeof(l.attributes -> $#::text) = 'number' THEN (l.attributes ->> $#::text)::numeric END)";
+      if (lo !== null) addv(cell + ' >= $#::numeric', d.key, d.key, lo);
+      if (hi !== null) addv(cell + ' <= $#::numeric', d.key, d.key, hi);
+    } else {
+      const v = String(req.query['a_' + d.key] || '').trim().slice(0, 80);
+      if (!v) continue;
+      if (d.type === 'select') addv('(l.attributes ->> $#::text) = $#::text', d.key, v);
+      else addv("LOWER(l.attributes ->> $#::text) LIKE '%' || LOWER($#::text) || '%'", d.key, likeEsc(v));
+    }
+  }
+  return { where: where.join(' AND '), vals };
+}
+const FROM = 'FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id';
+
+router.get('/', ah(async (req, res) => {
+  const { where: w, vals } = await buildWhere(req);
+  const order = {
+    price_asc: 'l.price ASC NULLS LAST, l.id DESC',
+    price_desc: 'l.price DESC NULLS LAST, l.id DESC',
+    new: 'l.created_at DESC, l.id DESC'
+  }[req.query.sort] || "(COALESCE(l.promoted_until, 'epoch'::timestamptz) > NOW()) DESC, COALESCE(l.bumped_at, l.created_at) DESC, l.id DESC";
   const limit = Math.min(48, Math.max(1, Math.floor(Number(req.query.limit)) || 24));
   const offset = Math.min(100000, Math.max(0, Math.floor(Number(req.query.offset)) || 0));
-  const w = where.join(' AND ');
   const [rows, cnt] = await Promise.all([
     db.query(`${SELECT} WHERE ${w} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`, vals),
-    db.query(`SELECT COUNT(*)::int n FROM listings l JOIN categories c ON c.id = l.category_id LEFT JOIN categories p ON p.id = c.parent_id WHERE ${w}`, vals)
+    db.query(`SELECT COUNT(*)::int n ${FROM} WHERE ${w}`, vals)
   ]);
   res.json({ listings: rows.rows, total: cnt.rows[0].n, limit, offset });
+}));
+
+/* Valorile disponibile pentru filtrele de tip text (marcă, model...), cu numărul de anunțuri, după filtrele deja alese.
+   Ex.: după ce alegi marca Audi, la model apar doar modelele Audi care există. */
+router.get('/facets', ah(async (req, res) => {
+  const slug = String(req.query.category || '').slice(0, 60);
+  const texts = (await attrDefs(slug)).filter((d) => d.type === 'text' && ATTR_KEY.test(d.key)).slice(0, 8);
+  const facets = {};
+  await Promise.all(texts.map(async (d) => {
+    const { where: w, vals } = await buildWhere(req, d.key);
+    vals.push(d.key);
+    const k = '$' + vals.length;
+    const r = await db.query(
+      `SELECT INITCAP(TRIM(l.attributes ->> ${k}::text)) AS v, COUNT(*)::int n ${FROM}
+        WHERE ${w} AND COALESCE(TRIM(l.attributes ->> ${k}::text), '') <> ''
+        GROUP BY 1 ORDER BY n DESC, v LIMIT 60`, vals);
+    facets[d.key] = r.rows;
+  }));
+  res.set('Cache-Control', 'no-store').json({ facets });
 }));
 
 /* Numărul de telefon se dezvăluie la cerere, doar dacă vânzătorul a ales să-l arate; limitat ca să nu se poată strânge în masă. */

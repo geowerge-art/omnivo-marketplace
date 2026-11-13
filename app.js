@@ -87,7 +87,7 @@ function createApp() {
   app.use('/api', (req, res) => res.status(404).json({ error: 'NEGASIT' })); // niciodată index.html pentru /api/*
 
   // Servim doar fișierele publice, pe listă; restul (server.js etc.) nu poate fi descărcat
-  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js', 'admin-ui.js', 'profile-ui.js', 'billing-ui.js', 'studio-ui.js', 'doc-ui.js', 'privacy-ui.js', 'requests-ui.js'];
+  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js', 'admin-ui.js', 'profile-ui.js', 'billing-ui.js', 'studio-ui.js', 'doc-ui.js', 'privacy-ui.js', 'requests-ui.js', 'results-ui.js', 'results.css'];
   for (const f of PUBLIC_FILES) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
   app.use(seo.router);     // /anunt/ID-titlu, sitemap.xml, robots.txt
   app.use(pages.router);   // /termeni, /confidentialitate, /cookies, /siguranta, /ajutor, /contact

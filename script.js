@@ -51,7 +51,7 @@ document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = icon(el.
 
 /* ---- categorii, sertar, formular ---- */
 function setDrawer(on) { $("drawer").hidden = !on; $("scrim").hidden = !on; document.body.style.overflow = on ? "hidden" : ""; }
-function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); pillCat = null; if ($("searchInput")) $("searchInput").value = ""; updatePills(); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
+function pickCategory(slug, name) { trackInterest({ cat: slug, w: 2 }); if (window.Results) return Results.open({ category: slug }); pillCat = null; if ($("searchInput")) $("searchInput").value = ""; updatePills(); filter = { category: slug }; mode = "public"; $("listTitle").textContent = name || "Anunțuri recente"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); }
 
 async function loadCats() {
   try { cats = (await api("/api/categories")).categories; } catch { return; }
@@ -510,7 +510,7 @@ async function renderSaved(box) {
       const t = document.createElement("b"); t.textContent = x.label || x.q || x.category_slug;
       const acts = document.createElement("div"); acts.className = "acc-acts";
       const go = document.createElement("button"); go.type = "button"; go.textContent = "Arată anunțurile";
-      go.addEventListener("click", () => { accLeave(); pillCat = null; $("searchInput").value = x.q || ""; updatePills(); filter = {}; if (x.q) filter.q = x.q; if (x.category_slug) filter.category = x.category_slug; mode = "public"; $("listTitle").textContent = x.label || "Rezultate"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); });
+      go.addEventListener("click", () => { if (window.Results) { accLeave(); return Results.open(Results.fromParams(x.q, x.category_slug, x.params)); } accLeave(); pillCat = null; $("searchInput").value = x.q || ""; updatePills(); filter = {}; if (x.q) filter.q = x.q; if (x.category_slug) filter.category = x.category_slug; mode = "public"; $("listTitle").textContent = x.label || "Rezultate"; loadListings(); $("anunturi").scrollIntoView({ behavior: "smooth" }); });
       const del = document.createElement("button"); del.type = "button"; del.className = "danger"; del.textContent = "🗑 Șterge";
       del.addEventListener("click", async () => { try { await api("/api/saved-searches/" + x.id, "DELETE"); renderSaved(box); } catch (err) { showMessage("Eroare", errText(err)); } });
       acts.append(go, del); const w = document.createElement("div"); w.className = "acc-mid"; w.append(t, acts); r.appendChild(w); return r;
@@ -957,6 +957,7 @@ async function openDetail(id) {
 let pillCat = null, pillTimer = null, pillSeq = 0;
 function applySearch(scroll) {
   const q = $("searchInput").value.trim();
+  if (scroll && window.Results) return Results.open({ q, category: pillCat ? pillCat.slug : "" });   // pagină nouă de rezultate, cu filtre
   filter = {}; if (q) filter.q = q; if (pillCat) filter.category = pillCat.slug;
   mode = "public";
   $("listTitle").textContent = q && pillCat ? `Rezultate pentru „${q}” în ${pillCat.name}` : q ? `Rezultate pentru „${q}”` : pillCat ? pillCat.name : "Anunțuri recente";

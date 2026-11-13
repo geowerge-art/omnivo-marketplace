@@ -103,3 +103,12 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - Rute noi/extinse: `PATCH /api/auth/me` (câmpurile noi), `POST /api/auth/change-email`. Migrarea `035_profile_data.sql` adaugă coloanele în `users` și `contact_*` în `listings`.
 - **Anunț nou:** județul, localitatea și adresa se completează din profil, iar secțiunea „Contact în anunț” (nume, telefon, afișare, WhatsApp) la fel. Orice se schimbă acolo rămâne doar pe acel anunț (`contact_name`, `contact_phone`, `contact_wa`, `contact_show`); profilul nu se modifică. Anunțurile vechi (`contact_show` NULL) folosesc în continuare telefonul din cont.
 - Notificările din browser merg cât timp site-ul e deschis într-o filă (fără Web Push).
+
+
+## Pagina de rezultate cu filtre (migrarea 036)
+- **Căutarea și categoriile** deschid acum o pagină nouă, `/cauta?q=...&category=...` (`results-ui.js` + `results.css`), nu mai filtrează lista din prima pagină. Link-urile se pot trimite/salva; Înapoi din telefon închide pagina.
+- **Filtre** (buton „Filtre” sub banner): categoria, țara, județ, localitate, preț (lei/€), stare, firmă/privat, sortare, afișare Galerie/Listă/Tabel. **Câmpurile se adaptează la categorie** din `category_attributes` (Autoturisme: marcă, model, caroserie, an, rulaj, combustibil, cutie, capacitate, putere, normă, culoare, volan; Telefoane: marcă, model, memorie, RAM, culoare etc.). Marca/modelul sugerează valorile existente (`GET /api/listings/facets`), iar modelul se restrânge după marcă. Butonul arată live „Arată N rezultate”.
+- **Backend**: `GET /api/listings` acceptă `country, city, condition, seller, currency` și `a_<cheie>`, `a_<cheie>_min/_max`, `sort=new`. Răspunsul are acum `attributes`, `seller_type`, `photo` (poza mare) și `photo_count`.
+- **Card**: poză mare, insigne „Promovat”/„Folosit”, număr de poze, preț, locație, dată și specificații (an, km, combustibil...).
+- **Căutări salvate** rețin și filtrele (`saved_searches.params`).
+- Țara anunțurilor: coloana `listings.country` (implicit „România”). Formularul „Adaugă anunț” nu are încă alegerea țării.
