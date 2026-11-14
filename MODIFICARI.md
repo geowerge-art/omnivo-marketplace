@@ -205,3 +205,11 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Legare:** `smart()` în `results-ui.js`, apelată la `open()` (căutarea de pe prima pagină) și la `submitQ()` (căutarea din pagina de rezultate). Filtrele alese deja manual (preț, locație) nu se suprascriu. Categoria nu se alege automat: rămâne pagina de rezultate din toate categoriile.
 - **Teste:** `omni.test.js` (15 verificări, trec). `app.js`: `omni.js` adăugat în lista fișierelor publice; `index.html`: tag nou înainte de `results-ui.js`.
 - **Neverificat:** aspectul pe telefon și căutarea reală pe site (aici nu există bază de date).
+
+## Bară de jos cu Omni + meniu care urcă de jos
+- **Telefon (sub 760 px):** bara de jos e acum o pastilă plutitoare închisă la culoare: Acasă · Chat · **Omni** (buton rotund în centru) · Adaugă · Cont. Butonul Omni are id-ul `bnSearch` și deschide pagina de căutare ca înainte; căutarea înțelege acum prețul și locul din text (vezi „Omni” mai sus).
+- **Meniul ☰** (`#sideMenu`): pe telefon urcă de jos ca o fereastră, pe laptop rămâne panou în dreapta (acum închis la culoare). Conține butonul mare „Adaugă anunț”, 6 plăci (Anunțurile mele, Mesaje, Favorite, Oferte piese, Căutări salvate, Plan și plăți), 3 exemple de căutare liberă care se apasă și deschid rezultatele, apoi Categorii / Anunțuri / Ajutor și „Ieșire din cont”.
+- **Legături:** plăcile folosesc `data-sm="..."` și sunt tratate în `script.js`, în același loc cu cele vechi (`mine`, `msgs`, `saved`, `plan`, `sell` sunt noi). Exemplele de căutare folosesc `data-sm-q`. Cine nu e conectat primește fereastra de autentificare.
+- **Culori:** toate sunt variabile `--om-*` la începutul blocului nou din `style.css` (menta = `--om-mint`). Schimbi o linie și se schimbă tot.
+- **Câmpul de căutare** de pe prima pagină are acum textul-exemplu „Ex: Audi sub 8000 € Timiș”.
+- **Verificat** într-un browser de test, pe ecran de telefon: bara și meniul se văd bine, se deschid, cele 6 plăci există. **Nefăcut:** numărul de lucruri noi pe plăci (mesaje, oferte), „Favorite” scos din lista de jos, aspectul pe un telefon real.

@@ -1870,3 +1870,47 @@ body.menu-open .bottom-nav { display: none; }
 .rqx-reportbtn { font-size: 13px; min-height: 36px; opacity: .85; }
 .rqx-report { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid #e8c4c0; border-radius: 12px; background: #fbf3f2; }
 .rqx-report select, .rqx-report textarea { width: 100%; box-sizing: border-box; }
+
+/* ===== Omni: bară de jos plutitoare + meniu care urcă de jos (culorile se schimbă din variabilele de aici) ===== */
+:root { --om-ink: #0b0f1a; --om-sheet: #0f1524; --om-card: #131a2b; --om-line: #243049; --om-line2: #2e3b5c; --om-text: #eaf0ff; --om-muted: #9aa7c4; --om-mint: #5cf2c8; --om-violet: #8b7cff; }
+.bn-orb { display: grid; place-items: center; }
+@media (max-width: 760px) {
+  body { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .bottom-nav { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); padding: 6px 4px; align-items: center; background: var(--om-card); border: 1px solid var(--om-line); border-radius: 34px; box-shadow: 0 10px 30px rgba(5, 8, 15, .45); }
+  .bottom-nav .bn-item { color: var(--om-muted); min-height: 52px; }
+  .bottom-nav .bn-item:active { color: var(--om-mint); }
+  .bottom-nav .bn-sell { color: var(--om-muted); }
+  .bottom-nav .bn-badge { background: var(--om-mint); color: #04130f; }
+  .bn-omni { color: var(--om-mint) !important; }
+  .bn-omni .bn-orb { width: 56px; height: 56px; margin-top: -30px; border-radius: 50%; color: #04130f; background: radial-gradient(circle at 35% 30%, #b8ffea, #5cf2c8 48%, #8b7cff); box-shadow: 0 0 28px rgba(92, 242, 200, .5); font-size: 0 !important; }
+}
+/* meniul (☰): panou închis la culoare; pe telefon urcă de jos ca o fereastră */
+.side-menu { background: var(--om-sheet); color: var(--om-text); }
+.side-menu .logo { color: var(--om-text); }
+.side-menu .logo span { color: var(--om-mint); }
+.sm-grab { display: none; }
+.sm-head { border-bottom: 0; }
+.sm-head button { color: var(--om-text); }
+.sm-add { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 6px 16px 14px; min-height: 56px; border: 0; border-radius: 28px; background: var(--om-mint); color: #04130f; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.sm-add b { font-size: 24px; line-height: 1; }
+.sm-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; }
+.sm-tiles button { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 10px; min-height: 84px; padding: 12px 14px; background: var(--om-card); border: 1px solid var(--om-line); border-radius: 18px; color: var(--om-text); font: inherit; font-size: 15px; font-weight: 700; text-align: left; cursor: pointer; }
+.sm-tiles button svg { color: var(--om-mint); }
+.sm-tiles button:nth-child(3n) svg { color: var(--om-violet); }
+.sm-tiles button:active { border-color: var(--om-mint); }
+.sm-try-t { margin: 16px 16px 8px; color: var(--om-muted); font-size: 13px; }
+.sm-try { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
+.sm-try button { min-height: 40px; padding: 0 14px; background: var(--om-card); border: 1px solid var(--om-line2); border-radius: 20px; color: var(--om-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.sm-list { margin-top: 10px; }
+.sm-list a { min-height: 52px; font-size: 16px; color: var(--om-text); border-bottom: 1px solid #1c2640; }
+.sm-list a:hover, .sm-list a:active { background: var(--om-card); }
+.sm-list a i { color: var(--om-mint); }
+.sm-foot { margin-top: 18px; border-top: 1px solid var(--om-line); }
+.sm-out { background: transparent; border-color: #5a2b2b; color: #ff9d94; }
+.side-menu :focus-visible { outline: 2px solid var(--om-mint); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .side-menu { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 88vh; border-radius: 28px 28px 0 0; border-top: 1px solid var(--om-line); box-shadow: 0 -20px 60px rgba(92, 242, 200, .1); transform: translateY(100%); }
+  .side-menu.open { transform: none; }
+  .sm-grab { display: block; width: 44px; height: 5px; margin: 10px auto 0; border-radius: 3px; background: var(--om-line2); }
+  .sm-head { padding-top: 6px; }
+}

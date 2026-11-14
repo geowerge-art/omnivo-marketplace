@@ -32,7 +32,7 @@
     <section class="searchbar">
       <form id="searchForm" class="search" role="search">
         <svg class="search-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg>
-        <input id="searchInput" type="search" placeholder="Caută" aria-label="Caută" autocomplete="off" enterkeyhint="search">
+        <input id="searchInput" type="search" placeholder="Ex: Audi sub 8000 € Timiș" aria-label="Caută" autocomplete="off" enterkeyhint="search">
         <button type="submit" aria-label="Caută"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/></svg></button>
       </form>
       <div id="searchPills" class="pills" aria-label="Categorii" hidden></div>
@@ -124,19 +124,33 @@
   <nav class="bottom-nav" aria-label="Navigare principală">
     <a href="/" class="bn-item"><span data-ic="acasa"></span>Acasă</a>
     <button type="button" class="bn-item" id="bnChat"><span data-ic="chat"></span>Chat<i class="bn-badge" id="bnBadge" hidden></i></button>
-    <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span class="bn-plus">+</span>Adaugă</button>
-    <button type="button" class="bn-item" id="bnSearch"><span data-ic="lupa"></span>Caută</button>
+    <button type="button" class="bn-item bn-omni" id="bnSearch" aria-label="Omni: caută spunând ce vrei"><span class="bn-orb"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>Omni</button>
+    <button type="button" class="bn-item bn-sell" id="bnSell" aria-label="Adaugă anunț"><span data-ic="plus"></span>Adaugă</button>
     <button type="button" class="bn-item" id="bnAccount"><span data-ic="cont"></span>Cont</button>
   </nav>
 
   <div class="side-scrim" id="sideScrim"></div>
   <aside class="side-menu" id="sideMenu" aria-label="Meniu" aria-hidden="true" inert>
+    <div class="sm-grab" aria-hidden="true"></div>
     <div class="sm-head"><a class="logo" href="/">omnivo<span>.ro</span></a><button type="button" id="sideClose" aria-label="Închide meniul">✕</button></div>
+    <button type="button" class="sm-add" data-sm="sell"><b aria-hidden="true">+</b> Adaugă anunț</button>
+    <div class="sm-tiles">
+      <button type="button" data-sm="mine"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V3h9l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.4"/></svg><span>Anunțurile mele</span></button>
+      <button type="button" data-sm="msgs"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Mesaje</span></button>
+      <button type="button" data-sm="favs"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 017-2.5A4 4 0 0119 10c0 5.5-7 10-7 10z"/></svg><span>Favorite</span></button>
+      <button type="button" data-sm="rfq"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7"/></svg><span>Oferte piese</span></button>
+      <button type="button" data-sm="saved"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Căutări salvate</span></button>
+      <button type="button" data-sm="plan"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 10h18"/></svg><span>Plan și plăți</span></button>
+    </div>
+    <p class="sm-try-t">Încearcă să scrii în căutare:</p>
+    <div class="sm-try">
+      <button type="button" data-sm-q="Audi A4 sub 8000 € în Timiș">Audi A4 sub 8000 € în Timiș</button>
+      <button type="button" data-sm-q="iPhone 13 sub 1.500 lei">iPhone 13 sub 1.500 lei</button>
+      <button type="button" data-sm-q="apartament 2 camere sub 90000 euro Oradea">apartament 2 camere sub 90000 euro Oradea</button>
+    </div>
     <nav class="sm-list" aria-label="Meniu principal">
       <a href="#categorii" data-sm="cats">Categorii<i>›</i></a>
       <a href="#anunturi" data-sm="ads">Anunțuri<i>›</i></a>
-      <a href="/cereri" data-sm="rfq">Oferte piese<i>›</i></a>
-      <a href="#favorite" data-sm="favs">Favorite<i>›</i></a>
       <a href="/ajutor" data-sm="help">Ajutor / Contact<i>›</i></a>
     </nav>
     <div class="sm-foot"><button type="button" class="sm-out" id="smLogout" hidden>Ieșire din cont</button></div>

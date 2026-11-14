@@ -68,6 +68,8 @@ $("sideScrim")?.addEventListener("click", () => closeSideMenu());   // click ori
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sideOpen()) closeSideMenu(); });
 window.addEventListener("popstate", () => { if (sideOpen()) setSideMenu(false); });
 $("sideMenu")?.addEventListener("click", (e) => {
+  const qa = e.target.closest("[data-sm-q]");   // exemple de căutare liberă (Omni): deschid pagina de rezultate cu textul respectiv
+  if (qa) { closeSideMenu(() => { if (window.Results) window.Results.open({ q: qa.dataset.smQ }); }); return; }
   const a = e.target.closest("[data-sm]"); if (!a || a.dataset.sm === "help") return;
   e.preventDefault();
   const k = a.dataset.sm;
@@ -76,6 +78,11 @@ $("sideMenu")?.addEventListener("click", (e) => {
     else if (k === "ads") $("anunturi")?.scrollIntoView({ behavior: "smooth" });
     else if (k === "rfq") window.openRequests && window.openRequests();
     else if (k === "favs") { if (!me) return openAuth("Intră în cont ca să vezi favoritele."); openAccount(); accGo("favs"); }
+    else if (k === "sell") openSell();
+    else if (k === "mine") { if (!me) return openAuth("Intră în cont ca să vezi anunțurile tale."); openAccount(); accGo("mine"); }
+    else if (k === "msgs") { if (!me) return openAuth("Intră în cont ca să vezi mesajele."); openInbox(); }
+    else if (k === "saved") { if (!me) return openAuth("Intră în cont ca să vezi căutările salvate."); openAccount(); accGo("saved"); }
+    else if (k === "plan") { if (!me) return openAuth("Intră în cont ca să vezi planul și plățile."); openAccount(); accGo("plan"); }
   });
 });
 $("smLogout")?.addEventListener("click", () => closeSideMenu(() => accLogout()));

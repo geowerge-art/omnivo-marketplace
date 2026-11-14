@@ -1,13 +1,15 @@
 Copiaza fisierele din acest zip peste proiectul Omnivo (aceleasi locuri, in radacina). Nu e nevoie de migrare.
 
-NOU:
+NOI:
   omni.js          cautare libera: scoate pretul si locul din text
   omni.test.js     teste (15)
 
 MODIFICATE:
-  results-ui.js    functia smart() apelata la open() si submitQ()
-  app.js           omni.js adaugat in lista fisierelor publice
-  index.html       tag nou <script src="/omni.js"> inainte de results-ui.js
-  MODIFICARI.md    nota
+  index.html       bara de jos noua (Omni in centru), meniul nou, text exemplu in cautare, tag <script src="/omni.js">
+  script.js        placile din meniu (mine, msgs, saved, plan, sell) si exemplele de cautare
+  style.css        bloc nou "Omni" la final (culorile se schimba din variabilele --om-*)
+  results-ui.js    smart(): foloseste omni.js la cautare
+  app.js           omni.js in lista fisierelor publice
+  MODIFICARI.md    note
 
-Dupa deploy, incearca pe site: "audi a4 sub 8000 euro in Timis"
+Dupa deploy, pe telefon: apasa Omni (centru jos), apoi bara de meniu din dreapta sus, apoi un exemplu din meniu.
