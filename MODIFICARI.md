@@ -197,3 +197,11 @@ Neverificat: serverul, migrarea și interogările SQL noi pe Postgres. Validări
 - **Interfață:** iconițe și pastile pentru categoriile noi pe prima pagină, filtre și carduri cu câmpurile noi, preț implicit în € la Imobiliare, „Stare” ascunsă la Imobiliare/Joburi/Servicii/Cazare.
 - **Teste:** `detect.test.js` (75, titluri reale), `migration038.test.js` (verifică migrarea fără bază de date), `derive.test.js`; ajutoare `sqlparse.js`, `testleaves.js`. `app.test.js` și `requests.test.js` cer `npm install` (express) și nu au putut rula aici.
 - **Neverificat:** migrarea nu a rulat pe un Postgres real (aici nu există), doar verificată static; aspectul pe telefon; casetele „Stare”/atribute noi în formularul de adăugare.
+
+## Omni (varianta fără AI plătit): căutare scrisă liber
+- **`omni.js`** (fișier nou, public): `OmniParse.parse(text, opts)` scoate din căutare prețul și locul. „audi a4 sub 8000 € în Timiș” -> text „audi a4”, preț maxim 8000 €, județ Timiș. Fără cost și fără API.
+- **Preț:** „sub / până la / max / buget” (maxim), „peste / minim / cel puțin” (minim), „între A și B”, „8k”, „1.500 lei”. Moneda (€, euro, lei, ron) se ia din text; dacă lipsește, rămâne implicita categoriei. Un număr urmat de km, cp, cmc, inch, mp etc. nu e preț, iar „peste 2010” (fără monedă) e anul, nu prețul.
+- **Loc:** județ sau oraș din `COUNTIES` și `cities.js`. Cu „în / din / la / jud.” în față se ia oriunde; fără ele, doar la începutul sau la sfârșitul căutării, dacă are 5+ litere și mai rămâne text de căutat. „Alba”, „Roman”, „Victoria”, „Vulcan” cer „în” (sunt și cuvinte obișnuite).
+- **Legare:** `smart()` în `results-ui.js`, apelată la `open()` (căutarea de pe prima pagină) și la `submitQ()` (căutarea din pagina de rezultate). Filtrele alese deja manual (preț, locație) nu se suprascriu. Categoria nu se alege automat: rămâne pagina de rezultate din toate categoriile.
+- **Teste:** `omni.test.js` (15 verificări, trec). `app.js`: `omni.js` adăugat în lista fișierelor publice; `index.html`: tag nou înainte de `results-ui.js`.
+- **Neverificat:** aspectul pe telefon și căutarea reală pe site (aici nu există bază de date).

@@ -204,12 +204,29 @@
     buildFilters(); buildLocation();
   }
 
+  /* „Omni”: din „audi a4 sub 8000 € în Timiș” scoate prețul și locul în filtre; ce rămâne e textul căutat.
+     Ce ai ales deja la filtre nu se schimbă (omni.js). */
+  function smart(st) {
+    if (!st.q || !window.OmniParse) return;
+    const p = window.OmniParse.parse(st.q, {
+      counties: typeof COUNTIES !== "undefined" ? COUNTIES : [], cities: window.CITIES,
+      skipPrice: !!(st.min || st.max), skipLocation: !!(st.county || st.city || st.country)
+    });
+    if (!p.changed) return;
+    st.q = p.q;
+    if (p.min) st.min = p.min;
+    if (p.max) st.max = p.max;
+    if (p.currency) st.currency = p.currency;
+    if (p.county) { st.county = p.county; st.city = p.city || ""; }
+  }
+
   /* ---------- deschidere / închidere / istoric ---------- */
   async function open(opts, how) {
     await ensureCats();
     build();
     const st = Object.assign(blank(), opts || {});
     st.attrs = { ...((opts && opts.attrs) || {}) };
+    smart(st);
     S = st;
     const wasOpen = isOpen;
     isOpen = true; page.hidden = false; document.body.style.overflow = "hidden";
@@ -315,7 +332,7 @@
     rfqBlockT.textContent = total === 0 ? "Nu ai găsit piesa?" : "Mai puține rezultate decât te așteptai?";
   }
   function setCategory(slug) { S.category = slug; S.attrs = {}; apply(); }
-  function submitQ() { S.q = clean(qInput.value); if (S.q) spSave(S.q); qInput.blur(); apply(); }
+  function submitQ() { S.q = clean(qInput.value); smart(S); if (S.q) spSave(S.q); qInput.blur(); apply(); }
 
   /* ---------- încărcarea rezultatelor ---------- */
   function skeletons() {
