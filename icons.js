@@ -12,6 +12,12 @@
     "alt": '<path d="M24 6l16 8v20l-16 8-16-8V14z"/><path d="M8 14l16 8 16-8M24 22v20"/>',
     /* bara de jos */
     "acasa": '<path d="M4 12l8-7 8 7"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-6h4v6"/>',
+    "imobiliare": '<path d="M8 42V10l14-4v36"/><path d="M22 18h18v24"/><path d="M4 42h40"/><path d="M13 16h4M13 23h4M13 30h4M28 26h4M28 33h4"/>',
+    "locuri-de-munca": '<rect x="6" y="14" width="36" height="26" rx="3"/><path d="M17 14v-4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M6 25h36M21 25v4h6v-4"/>',
+    "animale": '<ellipse cx="24" cy="31" rx="9" ry="7"/><circle cx="12" cy="22" r="3.5"/><circle cx="20" cy="13.5" r="3.5"/><circle cx="28" cy="13.5" r="3.5"/><circle cx="36" cy="22" r="3.5"/>',
+    "agro-industrie": '<circle cx="14" cy="33" r="7"/><circle cx="37" cy="36" r="4"/><path d="M14 26V14h12l3 8h7a4 4 0 0 1 4 4v6"/><path d="M26 14l-2 8H14"/>',
+    "cazare-turism": '<path d="M5 38V12M5 28h38v10M43 28v-4a5 5 0 0 0-5-5H22v9"/><circle cx="13" cy="22" r="4"/>',
+    "hobby-cultura": '<path d="M24 14c-4-3-10-4-17-3v26c7-1 13 0 17 3 4-3 10-4 17-3V11c-7-1-13 0-17 3z"/><path d="M24 14v26"/>',
     "meniu": '<path d="M4 7h16M4 12h16M4 17h10"/>',
     "plus": '<path d="M12 5v14M5 12h14"/>',
     "lupa": '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.6 15.6L21 21"/>',

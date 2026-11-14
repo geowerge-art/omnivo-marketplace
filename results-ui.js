@@ -13,15 +13,20 @@
   const SELLERS = [["", "Vezi toate"], ["firma", "Firmă"], ["persoana", "Privat"]];
   /* ordinea filtrelor pe atribute (ce nu e aici vine după, în ordinea din baza de date) */
   const ATTR_ORDER = ["marca", "model", "caroserie", "tip", "categorie_piesa", "cod_piesa", "an", "km", "combustibil", "cutie", "capacitate", "putere", "norma",
-    "culoare", "volan", "memorie", "ram", "procesor", "stocare", "placa_video", "diagonala", "rezolutie", "smart", "platforma", "gen", "marime", "roata", "varsta", "material", "alimentare", "clasa_energetica", "tarif"];
+    "culoare", "volan", "memorie", "ram", "procesor", "stocare", "placa_video", "diagonala", "rezolutie", "smart", "platforma", "gen", "marime", "roata", "varsta", "material", "alimentare", "clasa_energetica", "tarif",
+    "tip_anunt", "tranzactie", "camere", "suprafata", "suprafata_teren", "etaj", "compartimentare", "mobilat", "an_constructie", "tip_casa", "tip_teren", "contract", "experienta", "mod_lucru",
+    "sistem_operare", "tip_sim", "retea_5g", "sanatate_baterie", "liber_retea", "garantie", "aspect", "conectivitate", "compatibil", "diagonala_cm", "tip_display", "os_tv", "an_lansare",
+    "tonaj", "lungime", "ore_functionare", "specie", "rasa", "sex", "varsta_animal", "tip_cazare", "nr_locuri", "cantitate", "data_eveniment"];
   const ATTR_LABEL = { km: "Rulaj (km)", an: "An de fabricație", capacitate: "Capacitate motor (cmc)", putere: "Putere (CP)", marca: "Marcă", model: "Model" };
-  const HIDE = { "piese-auto": ["km"] };                       // atribute fără sens la categoria respectivă
+  const HIDE = { "piese-auto": ["km"], ambarcatiuni: ["km"], "genti-accesorii": ["marime"], "ceasuri-bijuterii": ["marime"], "frumusete-parfumuri": ["marime"] };                       // atribute fără sens la categoria respectivă
   /* ce arătăm pe card, în ordinea asta (primele 4 care există) */
-  const SPEC_ORDER = ["an", "km", "combustibil", "cutie", "capacitate", "putere", "memorie", "ram", "stocare", "procesor", "diagonala", "platforma", "marime", "gen", "marca", "material", "culoare", "tip", "categorie_piesa", "alimentare", "varsta", "clasa_energetica"];
+  const SPEC_ORDER = ["an", "km", "combustibil", "cutie", "capacitate", "putere", "camere", "suprafata", "tip_anunt", "contract", "rasa", "sex", "varsta_animal", "tip_display", "diagonala_cm", "memorie", "aspect", "sanatate_baterie", "ram", "stocare", "procesor", "diagonala", "platforma", "marime", "gen", "marca", "material", "culoare", "tip", "categorie_piesa", "alimentare", "varsta", "clasa_energetica"];
   const SPEC_FMT = {
     km: (v) => fmtN(v) + " km", capacitate: (v) => fmtN(v) + " cmc", putere: (v) => fmtN(v) + " CP",
-    diagonala: (v) => v + "\"", clasa_energetica: (v) => "Clasa " + v, an: (v) => String(v)
+    diagonala: (v) => v + "\"", diagonala_cm: (v) => v + " cm", suprafata: (v) => v + " mp", suprafata_teren: (v) => v + " mp teren", camere: (v) => v + (v === "1" ? " cameră" : " camere"),
+    sanatate_baterie: (v) => v + "% baterie", tonaj: (v) => fmtN(v) + " kg", lungime: (v) => v + " m", ore_functionare: (v) => fmtN(v) + " h", clasa_energetica: (v) => "Clasa " + v, an: (v) => String(v)
   };
+  const NO_STARE = ["locuri-de-munca", "imobiliare", "servicii", "cazare-turism"];   // categorii unde „nou / folosit” nu are sens
   const REC_PLACES = "omnivoRecentPlaces", VIEW_KEY = "omnivoResultsView";
 
   /* ---------- mici utilitare ---------- */
@@ -98,7 +103,7 @@
     return null;
   }
   const rootSlug = (slug) => { const f = node(slug); return f ? (f.parent ? f.parent.slug : f.n.slug) : ""; };
-  const defCurrency = (slug) => (rootSlug(slug) === "auto-moto" ? "EUR" : "RON");
+  const defCurrency = (slug) => (["auto-moto", "imobiliare"].includes(rootSlug(slug)) ? "EUR" : "RON");
   const rank = (k) => { const i = ATTR_ORDER.indexOf(k); return i < 0 ? 100 : i; };
   function defsFor(slug) {
     const f = node(slug); if (!f) return [];
@@ -554,7 +559,7 @@
         h("button", { type: "button", class: "rs-clear", onclick: () => { const q = Dr.q; Dr = Object.assign(blank(), { q }); Dview = "gallery"; renderMain(); refreshCount(); } }, "Șterge")),
       h("div", { class: "rs-db" },
         catField, place, ...head.map(attrField), priceBox, ...tail.map(attrField),
-        field("Stare", pills([["", "Toate"], ["nou", "Nou"], ["folosit", root === "auto-moto" && Dr.category === "piese-auto" ? "Second-hand" : "Folosit"]], Dr.condition, (v) => { Dr.condition = v; schedule(); })),
+        NO_STARE.includes(root) ? null : field("Stare", pills([["", "Toate"], ["nou", "Nou"], ["folosit", root === "auto-moto" && Dr.category === "piese-auto" ? "Second-hand" : "Folosit"]], Dr.condition, (v) => { Dr.condition = v; schedule(); })),
         field("Ordonează după", pills(SORTS, Dr.sort, (v) => { Dr.sort = v; schedule(); })),
         field("Persoană fizică sau firmă", pills(SELLERS, Dr.seller, (v) => { Dr.seller = v; schedule(); })),
         field("Afișare", pills(VIEWS.map(([k, l]) => [k, l, k]), Dview, (v) => { Dview = v; }))),

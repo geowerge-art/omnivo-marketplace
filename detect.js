@@ -7,17 +7,25 @@ const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const STOP = new Set(['de', 'la', 'cu', 'si', 'pe', 'in', 'un', 'o', 'al', 'ale', 'din', 'sau', 'fara', 'pentru', 'vand', 'vind', 'vandut', 'ofer', 'urgent']);
 
 /* Piese care, scrise în titlu, înseamnă aproape sigur o piesă. */
-const STRONG_PARTS = new Set(('far faruri bara capota aripa usa usi portiera oglinda amortizor amortizoare placute discuri jante anvelope cauciucuri ' +
-  'roti radiator alternator electromotor injector injectoare turbina planetara parbriz stop stopuri bascula esapament catalizator bujii bobina cardan ' +
-  'punte tampon grila proiector lampa lampi ambreiaj pompa distributie dezmembrez dezmembrari').split(' '));
+const STRONG_PARTS = new Set(('far faruri capota aripa portiera amortizor amortizoare placute discuri jante anvelope cauciucuri ' +
+  'roti alternator electromotor injector injectoare turbina planetara parbriz stop stopuri esapament catalizator bujii cardan ' +
+  'ambreiaj distributie dezmembrez dezmembrari').split(' '));
+/* Cuvinte care sunt piese doar lângă o mașină („radiator Dacia Logan”), altfel înseamnă altceva („radiator apartament”, „lampă birou”, „ușă interior”). */
+const AMBIG_PARTS = new Set('usa usi oglinda radiator lampa lampi pompa proiector bara tampon grila bobina punte bascula'.split(' '));
 /* Cuvinte care pot fi și piesă, și descrierea unei mașini întregi („motor 1.6”, „cutie automată”). */
 const DUAL_PARTS = new Set('motor motorul cutie interior scaune caroserie bord volan'.split(' '));
 
 /* Specificații care descriu un vehicul întreg (tari) sau doar îl sugerează (slabe). */
 /* Cuvântul care numește obiectul vândut („televizor”, „laptop”) decide mai mult decât marca („samsung”, „lenovo”). */
-const HEAD = { telefoane: 'telefon smartphone iphone', 'tv-audio': 'televizor televizoare soundbar', laptopuri: 'laptop notebook macbook',
+const HEAD = { telefoane: 'telefon smartphone iphone', 'tv-audio': 'televizor televizoare', laptopuri: 'laptop notebook macbook',
   console: 'consola playstation xbox', electrocasnice: 'frigider aragaz aspirator cuptor uscator congelator', biciclete: 'bicicleta trotineta',
-  canapele: 'canapea fotoliu', carucioare: 'carucior', jucarii: 'jucarie lego' };
+  canapele: 'canapea fotoliu', carucioare: 'carucior', jucarii: 'jucarie lego',
+  tablete: 'tableta ipad', smartwatch: 'smartwatch watch', audio: 'soundbar boxa boxe casti', 'foto-video': 'drona camcorder',
+  'componente-pc': 'procesor monitor tastatura imprimanta', camioane: 'camion autocamion', 'camioane-remorci': 'camion autocamion',
+  'rulote-autorulote': 'rulota autorulota', ambarcatiuni: 'barca ambarcatiune iaht', 'instrumente-muzicale': 'chitara pian pianina',
+  caini: 'caine caini catel', pisici: 'pisica pisici pisoi', 'utilaje-agricole': 'tractor tractoare', 'utilaje-industriale': 'utilaj utilaje',
+  terenuri: 'teren', 'case-vile': 'casa vila', cazare: 'cazare pensiune hotel', 'ceasuri-bijuterii': 'ceas ceasuri bijuterii', 'iluminat-sanitare': 'lampa lampi veioza lustra',
+  'frumusete-parfumuri': 'parfum parfumuri' };
 const SPEC_STRONG = [
   /\b\d{2,3}\s?(cp|hp|cai)\b/, /\b(tdi|tdci|dci|hdi|cdi|crdi|tsi|tfsi|fsi|jtd|jtdm|multijet|cdti|bluehdi|ecoboost|ecotec|vtec|mpi|d4d|tce|dti|skyactiv)\b/,
   /\b\d[\d. ]{1,8}\s?km\b/, /\b(inmatriculat|neinmatriculat|itp|rca|proprietar|avariat|accidentat|fiscal)\b/, /\beuro ?[3-6]\b/
@@ -34,15 +42,42 @@ const PHRASES = [
   [/cutie (de )?viteze/, 'piese-auto', 8],
   [/smart tv|tv (led|oled|qled|smart)/, 'tv-audio', 6],
   [/aer conditionat/, 'electrocasnice', 6],
-  [/telefon (mobil|smartphone)/, 'telefoane', 4]
+  [/telefon (mobil|smartphone)/, 'telefoane', 4],
+  [/bara (de )?(protectie|fata|spate|spoiler)|bara (fata|spate)/, 'piese-auto', 9],
+  [/oglinda (retrovizoare|retrovizoara|laterala|exterioara)|oglinzi retrovizoare/, 'piese-auto', 9],
+  [/radiator (apa|ulei|intercooler|racire|clima|aer)\b/, 'piese-auto', 9],
+  [/ceas (smart|inteligent)/, 'smartwatch', 8],
+  [/(baterie|acumulator) (externa|portabila)|power ?bank/, 'accesorii-telefoane', 9],
+  [/lenjerie (de )?(pat|bumbac|satin)/, 'decoratiuni-textile', 9],
+  [/casa (de )?marcat/, 'echipamente-afaceri', 9],
+  [/teren (agricol|arabil|extravilan|intravilan|construibil|forestier)/, 'terenuri', 9],
+  [/utilaje? agricol/, 'utilaje-agricole', 9],
+  [/remorca (agricola|tractor|basculabila)/, 'utilaje-agricole', 9],
+  [/regim hotelier/, 'cazare', 9],
+  [/manusi (de )?(box|portar|ski|schi|mma)/, 'echipament-sportiv', 9],
+  [/(trotineta|bicicleta|bike) (electrica|electric)/, 'biciclete', 9],
+  [/(haine|hainute|body|salopeta|pijama|geaca|pantaloni|tricou|rochie|rochita|ghete|pantofi) (de |pentru )?(bebe|bebelus|bebelusi|copii|copil|fete|fetite|baieti)\b/, 'haine-copii', 9],
+  [/\b(bebe|bebelus|bebelusi|copii|copil|fete|fetite|baieti) (haine|hainute|body|salopeta|pijama|geaca|pantaloni|tricou|rochie|rochita)/, 'haine-copii', 9]
 ];
 /* Tipare numerice care trădează tipul de produs. */
 const PATTERNS = [
   [/\b\d{2,4}\s?gb\b|\bdual sim\b|\b5g\b/, 'telefoane', 2], [/\b\d{2,4}\s?gb\b/, 'laptopuri', 1],
   [/\b(ssd|hdd|ddr[345]|ryzen|core i[3579]|i[3579][ -]?\d{3,5})\b/, 'laptopuri', 4],
   [/\b\d{2,3}\s?(inch|toli)\b|\b(4k|uhd|oled|qled|hdmi)\b/, 'tv-audio', 4],
-  [/\b\d{1,2}([.,]\d)?\s?kg\b|\bbtu\b/, 'electrocasnice', 2]
+  [/\b\d{1,2}([.,]\d)?\s?kg\b|\bbtu\b/, 'electrocasnice', 2],
+  [/\b\d{2,3}\s?cm\b.*\b(4k|uhd|hd|smart|led|oled|qled)\b|\b(4k|uhd|hd|smart|led|oled|qled)\b.*\b\d{2,3}\s?cm\b/, 'tv-audio', 3]
 ];
+
+/* Intenții care se văd din tot titlul, nu dintr-un cuvânt-cheie. */
+const JOB_INTENT = /\b(angajez|angajam|angajare|angajari|caut (loc de )?munca|caut job|job|joburi|(loc|locuri) de munca|post vacant|se cauta|cautam|oferta de munca)\b/;
+const RENT = /\b(chirie|inchiriez|inchiriere|inchiriat|inchiriaza)\b/;
+const APT = /\b(apartament|apartamente|garsoniera|garsoniere|penthouse)\b/;
+const STAY = /\b(cazare|regim hotelier|pensiune|vacanta|sejur)\b/;
+const ACC_PHONE = new Set('husa huse folie incarcator incarcatoare cablu carcasa adaptor powerbank handsfree'.split(' '));
+const ACC_ANIMAL = new Set('hrana crocante lesa zgarda cusca custi litiera transportor colivie'.split(' '));
+const isJob = (slug) => slug.startsWith('joburi-');
+/* „telefon”/„telefoane” sunt aceeași rădăcină; „foto”/„fotoliu” sau „smart”/„smartphone” nu. */
+const sameStem = (w, k) => { const s = Math.min(w.length, k.length); return s >= 5 && Math.abs(w.length - k.length) <= 4 && (w.startsWith(k) || k.startsWith(w)); };
 
 
 function detect(title, leaves) {
@@ -68,15 +103,26 @@ function detect(title, leaves) {
     for (const w of tokens) for (const k of kw) {
       if (w === 'masina' && l.slug !== 'autoturisme') continue;
       if (w === k) add(l.slug, 3);
-      else if (k.length >= 4 && w.length >= 4 && (w.startsWith(k) || k.startsWith(w))) add(l.slug, 2);
+      else if (sameStem(w, k)) add(l.slug, 2);
     }
   }
 
   for (const [slug, words] of Object.entries(HEAD)) for (const w of words.split(' ')) if (tokens.includes(w)) add(slug, 3);
 
+  /* Anunțuri de angajare: domeniile contează doar dacă titlul spune că e un job („angajez sofer”); altfel „instalator” rămâne la Servicii. */
+  const jobs = JOB_INTENT.test(orig);
+  for (const l of leaves) if (isJob(l.slug)) score.set(l.slug, jobs ? score.get(l.slug) + 5 : 0);
+  /* Accesoriul bate telefonul („husă iPhone”), hrana bate animalul („hrană pentru câini”). */
+  if (tokens.some((w) => ACC_PHONE.has(w)) && score.get('telefoane') > 0) { add('accesorii-telefoane', 10); add('telefoane', -3); }
+  if (tokens.some((w) => ACC_ANIMAL.has(w))) add('accesorii-hrana-animale', 8);
+  /* Apartament: de vânzare, dacă nu apare „chirie”; „casă de închiriat” nu e apartament. */
+  if (bySlug.has('apartamente-vanzare') && APT.test(orig) && !STAY.test(orig)) add(RENT.test(orig) ? 'apartamente-inchiriere' : 'apartamente-vanzare', 6);
+  if (RENT.test(orig) && !APT.test(orig)) add('apartamente-inchiriere', -3);
+
   /* Piesă sau mașină întreagă? */
   strongParts += tokens.filter((w) => STRONG_PARTS.has(w)).length;
   const dual = tokens.filter((w) => DUAL_PARTS.has(w));
+  const ambig = tokens.filter((w) => AMBIG_PARTS.has(w));
   const partCtx = /\b(pentru|compatibil|se potriveste|potrivit)\b/.test(orig);
   const strongSpec = SPEC_STRONG.filter((re) => re.test(orig)).length;
   const weakSpec = SPEC_WEAK.filter((re) => re.test(orig)).length + weakExtra;
@@ -85,9 +131,9 @@ function detect(title, leaves) {
   let ask = null;
 
   if (bySlug.has('autoturisme') && bySlug.has('piese-auto')) {
-    const isPart = strongParts > 0 || (partCtx && carHit);
+    const isPart = strongParts > 0 || (partCtx && carHit) || (ambig.length > 0 && (carHit || strongSpec > 0));
     if (isPart) {
-      add('piese-auto', 8 * Math.min(strongParts + (partCtx ? 1 : 0), 2)); add('autoturisme', -4);
+      add('piese-auto', 8 * Math.min(strongParts + (ambig.length ? 1 : 0) + (partCtx ? 1 : 0), 2)); add('autoturisme', -4);
     } else if (dual.length && vehicleish) {
       const mx = Math.max(score.get('autoturisme'), score.get('piese-auto'), 6);
       score.set('autoturisme', mx); score.set('piese-auto', mx);

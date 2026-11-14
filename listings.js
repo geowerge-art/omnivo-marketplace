@@ -6,6 +6,7 @@ const { requireAuth, requireRole, requireVerified } = require('./authmw');
 const { createThrottle, clientIp, PHONE_RE } = require('./security');
 const plans = require('./plans');
 const billing = require('./billing');
+const { deriveDiagonals } = require('./derive');
 const studio = require('./studio');
 const notify = require('./notify');
 const guard = require('./guard');
@@ -56,6 +57,7 @@ async function parse(b) {
     else if (d.type === 'select') { if (!(d.options || []).includes(raw)) return { error: 'ATRIBUT_INVALID', field: d.key }; attributes[d.key] = raw; }
     else attributes[d.key] = String(raw).trim().slice(0, 80);
   }
+  deriveDiagonals(attributes, defs.map((d) => d.key));
   return { v: { title, description, price, currency, condition, seller_type, county, city, address, category_id: cat.rows[0].id, attributes, negotiable: b.negotiable === true, contact_name: contact_name || null, contact_phone: contact_phone || null, contact_wa, contact_show } };
 }
 
