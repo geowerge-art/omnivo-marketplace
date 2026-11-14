@@ -1,136 +1,106 @@
-/* Validările și potrivirea din „Cere oferte” (funcții pure, fără bază de date). */
+/* Cereri / oferte piese (model AutoParts): validări + rute + legătura UI ↔ backend. Fără rețea și fără bază de date. */
 const test = require('node:test');
 const assert = require('node:assert');
-const { parseAddress, parseRequest, parseQuote, parseDealer, dealerMatches, brandKey } = require('./requests');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
 
-const okReq = { part: 'Far stânga', brand: 'VW', model: 'Golf 7', year: 2015, county: 'Cluj' };
-
-test('cerere validă: marca se normalizează, termen 48 h, tip „oricare”', () => {
-  const r = parseRequest(okReq);
-  assert.ok(r.v);
-  assert.strictEqual(r.v.brand_key, 'volkswagen');
-  assert.strictEqual(r.v.hours, 48);
-  assert.strictEqual(r.v.kind, 'oricare');
-  assert.strictEqual(parseRequest({ ...okReq, kind: 'noi' }).v.kind, 'noi');
-  assert.strictEqual(parseRequest({ ...okReq, kind: 'altceva' }).v.kind, 'oricare');
-});
-
-test('cerere invalidă: piesă scurtă, an imposibil, VIN greșit, fără județ', () => {
-  assert.strictEqual(parseRequest({ ...okReq, part: 'ab' }).error, 'PIESA_INVALIDA');
-  assert.strictEqual(parseRequest({ ...okReq, year: 1800 }).error, 'AN_INVALID');
-  assert.strictEqual(parseRequest({ ...okReq, vin: 'ABC' }).error, 'VIN_INVALID');
-  assert.strictEqual(parseRequest({ ...okReq, vin: 'WVWZZZ1KZAW123456' }).v.vin, 'WVWZZZ1KZAW123456');
-  assert.strictEqual(parseRequest({ ...okReq, county: '' }).error, 'JUDET_LIPSA');
-  assert.strictEqual(parseRequest({ ...okReq, hours: 5 }).v.hours, 48);
-  assert.strictEqual(parseRequest({ ...okReq, hours: 72 }).v.hours, 72);
-});
-
-test('cererea e publică: telefon, email, link refuzate; codurile OEM trec', () => {
-  for (const details of ['sună-mă la 0722 123 456', 'ion@mail.ro', 'vezi www.exemplu.ro']) {
-    assert.strictEqual(parseRequest({ ...okReq, details }).error, 'FARA_CONTACT_IN_CERERE', details);
+const orig = Module._load; const routes = {}; let queries = [], script = () => ({ rows: [], rowCount: 0 });
+Module._load = function (req, ...a) {
+  if (req === 'express') {
+    const mk = (name) => { const o = { name }; ['use'].forEach((m) => (o[m] = () => o));
+      ['get', 'post', 'put', 'patch', 'delete'].forEach((m) => (o[m] = (p, ...h) => { routes[`${name} ${m.toUpperCase()} ${p}`] = { handler: h[h.length - 1], mids: h.slice(0, -1).length }; return o; })); return o; };
+    let n = 0; const ex = () => ({}); ex.Router = () => mk('R' + n++); ex.raw = () => () => {}; return ex;
   }
-  assert.ok(parseRequest({ ...okReq, details: 'Cod OEM 1K0 941 005 A, culoare neagră' }).v);
-  for (const details of ['Dacia cod 8200123456', 'Renault 7700 100 123', 'Bosch 0 986 494 123', 'Mercedes A 204 540 12 17']) assert.ok(parseRequest({ ...okReq, details }).v, details);   // coduri OEM lungi, nu telefoane
-  for (const details of ['sună 07 22 12 34 56', 'tel +40 722 123 456', 'tel 0040722123456']) assert.strictEqual(parseRequest({ ...okReq, details }).error, 'FARA_CONTACT_IN_CERERE', details);
+  if (req === './db') return { hasDb: () => true, pool: { connect: async () => ({ query: async () => ({ rows: [], rowCount: 0 }), release() {} }) }, query: async (s, p) => { queries.push({ s, p }); return script(s, p); } };
+  if (req === './config') return { APP_URL: 'http://x' };
+  if (req === './common') return { ah: (f) => f, requireDb: () => {} };
+  if (req === './authmw') return { requireAuth: () => {}, requireVerified: () => {}, requireRole: () => () => {} };
+  if (req === './security') return { createThrottle: () => () => true };
+  if (req === './notify') return { notify: async () => {} };
+  if (req === './live') return { send: () => {} };
+  if (req === './guard') return { gate: async () => false };
+  if (req === './images') return { raw: () => {}, kind: () => 'jpeg', process: async () => ({}), STORAGE: false, removeStored: async () => {} };
+  return orig.call(this, req, ...a);
+};
+const R = require('./requests');
+Module._load = orig;
+
+const good = { title: 'Far stânga', make: 'Audi', model: 'A4', year: '2012', county: 'Timiș' };
+
+test('cerere validă: câmpurile se curăță și primesc valori implicite', () => {
+  const p = R.parseRequest({ ...good, vin: 'wauzzz8k9ca012345', kind: 'noi', extra_parts: [{ title: 'Oglindă dreapta', details: 'electrică' }] });
+  assert.ok(p.v, JSON.stringify(p));
+  assert.strictEqual(p.v.vin, 'WAUZZZ8K9CA012345'); assert.strictEqual(p.v.kind, 'noi'); assert.strictEqual(p.v.extra_parts.length, 1);
+  assert.strictEqual(R.parseRequest(good).v.kind, 'ambele');
 });
 
-test('ofertă: preț obligatoriu, transport gol = de stabilit, 0 = gratuit, piesă nouă acceptată', () => {
-  assert.strictEqual(parseQuote({ price: '' }).error, 'PRET_INVALID');
-  assert.strictEqual(parseQuote({ price: -5 }).error, 'PRET_INVALID');
-  assert.strictEqual(parseQuote({ price: 250 }).v.shipping, null);
-  assert.strictEqual(parseQuote({ price: 250, shipping: 0 }).v.shipping, 0);
-  assert.strictEqual(parseQuote({ price: 250, warranty_days: 1000 }).error, 'GARANTIE_INVALIDA');
-  assert.strictEqual(parseQuote({ price: 250 }).v.eta_days, null);
-  assert.strictEqual(parseQuote({ price: 250, eta_days: 0 }).v.eta_days, 0);
-  assert.strictEqual(parseQuote({ price: 250, eta_days: '3' }).v.eta_days, 3);
-  assert.strictEqual(parseQuote({ price: 250, eta_days: 61 }).error, 'TERMEN_INVALID');
-  assert.strictEqual(parseQuote({ price: 250, eta_days: 1.5 }).error, 'TERMEN_INVALID');
-  assert.strictEqual(parseQuote({ price: 250, state: 'nimic' }).v.state, 'buna');
-  assert.strictEqual(parseQuote({ price: 250, state: 'noua' }).v.state, 'noua');
+test('cerere invalidă: piesă, marcă, an, VIN, județ, prea multe piese', () => {
+  const err = (o) => R.parseRequest({ ...good, ...o }).error;
+  assert.strictEqual(err({ title: 'ab' }), 'PIESA_INVALIDA');
+  assert.strictEqual(err({ make: '' }), 'MARCA_INVALIDA');
+  assert.strictEqual(err({ year: '1900' }), 'AN_INVALID');
+  assert.strictEqual(err({ vin: 'ABC' }), 'VIN_INVALID');
+  assert.strictEqual(err({ county: '' }), 'JUDET_LIPSA');
+  assert.strictEqual(err({ extra_parts: Array.from({ length: 10 }, () => ({ title: 'piesa x' })) }), 'PREA_MULTE_PIESE');
+  assert.strictEqual(err({ extra_parts: 'nu' }), 'PIESE_INVALIDE');
+  assert.strictEqual(err({ extra_parts: [{ title: 'x' }] }), 'PIESA_INVALIDA');
 });
 
-test('ofertă: contactul (telefon, email, link) e refuzat în notă', () => {
-  for (const note of ['sună la 0722 123 456', 'scrie la ion@firma.ro', 'vezi www.firma.ro', 'https://firma.ro']) {
-    assert.strictEqual(parseQuote({ price: 100, note }).error, 'FARA_CONTACT_IN_OFERTA', note);
-  }
-  assert.ok(parseQuote({ price: 100, note: 'Cod OEM 5K0941005, 120000 km' }).v);
+test('cererea e publică: fără telefon, email sau linkuri (dar codurile OEM trec)', () => {
+  for (const d of ['sunați la 0722 123 456', 'scrie la a@b.ro', 'vezi https://x.ro', 'WhatsApp +40 722 123 456']) assert.strictEqual(R.parseRequest({ ...good, description: d }).error, 'FARA_CONTACT_IN_CERERE', d);
+  assert.strictEqual(R.parseRequest({ ...good, description: 'cod OEM 8200123456 sau 0 986 494 123' }).error, undefined);
+  assert.strictEqual(R.parseRequest({ ...good, extra_parts: [{ title: 'bară', details: 'tel 0722123456' }] }).error, 'FARA_CONTACT_IN_CERERE');
 });
 
-test('dezmembrător: CUI, mărci normalizate și fără dubluri', () => {
-  assert.strictEqual(parseDealer({ company: 'A', county: 'Cluj' }).error, 'FIRMA_INVALIDA');
-  assert.strictEqual(parseDealer({ company: 'Auto SRL', cui: 'abc', county: 'Cluj' }).error, 'CUI_INVALID');
-  const d = parseDealer({ company: 'Auto SRL', cui: 'ro 123456', county: 'Cluj', brands: 'VW, Volkswagen, Dacia, Mercedes-Benz', counties: ['Cluj', 'Cluj', 'Bihor'] });
-  assert.strictEqual(d.v.cui, 'RO123456');
-  assert.deepStrictEqual(d.v.brands, ['volkswagen', 'dacia', 'mercedes']);
-  assert.deepStrictEqual(d.v.counties, ['Cluj', 'Bihor']);
+test('oferta: preț obligatoriu, monedă, mesaj fără contact', () => {
+  assert.deepStrictEqual(R.parseOffer({ price: '150.456', message: 'Stare bună' }).v, { price: 150.46, currency: 'RON', message: 'Stare bună' });
+  assert.strictEqual(R.parseOffer({ price: 10, currency: 'EUR' }).v.currency, 'EUR');
+  for (const price of ['', null, undefined, 0, -5, 'abc', 1e9]) assert.strictEqual(R.parseOffer({ price }).error, 'PRET_INVALID', String(price));
+  assert.strictEqual(R.parseOffer({ price: 10, message: 'ma gasesti la 0722123456' }).error, 'FARA_CONTACT_IN_OFERTA');
+  assert.strictEqual(R.parseOffer({ price: 10, message: 'x'.repeat(2001) }).error, 'MESAJ_PREA_LUNG');
 });
 
-test('potrivire: liste goale = toate; altfel marca și județul trebuie acoperite', () => {
-  const r = { brand_key: 'dacia', county: 'Cluj' };
-  assert.ok(dealerMatches({ brands: [], counties: [] }, r));
-  assert.ok(dealerMatches({ brands: ['dacia'], counties: ['Cluj', 'Bihor'] }, r));
-  assert.ok(!dealerMatches({ brands: ['audi'], counties: [] }, r));
-  assert.ok(!dealerMatches({ brands: [], counties: ['Iași'] }, r));
+test('rutele din AutoParts există și cele private cer cont', () => {
+  const need = ['GET /', 'GET /mine', 'GET /summary', 'GET /mine/:id(\\d+)', 'GET /:id(\\d+)', 'POST /:id(\\d+)/mark', 'DELETE /:id(\\d+)/mark', 'POST /:id(\\d+)/reactivate', 'PATCH /:id(\\d+)', 'POST /', 'POST /:id(\\d+)/offers', 'POST /image'];
+  const all = Object.keys(routes).map((k) => k.replace(/^R\d+ /, ''));
+  for (const n of need) assert.ok(all.includes(n), 'lipsește ' + n);
+  for (const n of ['GET /offers-mine'.replace('offers-mine', 'received'), 'GET /mine', 'POST /:id(\\d+)/accept', 'POST /:id(\\d+)/reject', 'PATCH /:id(\\d+)/status', 'POST /:id(\\d+)/answer']) assert.ok(all.includes(n), 'lipsește ' + n);
+  const priv = Object.entries(routes).filter(([k]) => /\/(mine|summary|received|accept|reject|status|answer)/.test(k) || /(POST|PATCH|DELETE) \/(:id.*)?$/.test(k.replace(/^R\d+ /, '')));
+  for (const [k, v] of priv) assert.ok(v.mids >= 1, 'fără verificare de cont: ' + k);
 });
 
-test('brandKey: diacritice, majuscule, alias-uri', () => {
-  assert.strictEqual(brandKey(' ŠKODA '), 'skoda');
-  assert.strictEqual(brandKey('Land-Rover'), 'land rover');
+test('lista publică nu cere cont și filtrează după stare', async () => {
+  const h = routes[Object.keys(routes).find((k) => / GET \/$/.test(k) && routes[k])].handler;
+  script = (s) => (/FROM rq_requests r\s+LEFT JOIN rq_offers mo/.test(s) && /ORDER BY r\.created_at DESC/.test(s) ? { rows: [{ id: 1, title: 'Far' }], rowCount: 1 } : { rows: [{ new: 3, all: 5, offered: 1, later: 0, ignored: 0 }], rowCount: 1 });
+  let out; const res = { set() { return this; }, status() { return this; }, json(j) { out = j; return this; } };
+  await h({ query: { seen: 'offered', q: '50%_x' }, user: null }, res);
+  assert.strictEqual(out.requests.length, 1); assert.strictEqual(out.counts, null);
+  const q = queries.find((x) => /ORDER BY r\.created_at DESC/.test(x.s));
+  assert.match(q.s, /mo\.id IS NOT NULL/); assert.ok(q.p.includes('%50  x%'), 'caracterele LIKE sunt neutralizate');
 });
 
-test('cerere: cod OEM, combustibil, cutie, caroserie; valori necunoscute se ignoră', () => {
-  const v = parseRequest({ ...okReq, oem: ' 1k0  941 005 a ', fuel: 'motorina', gearbox: 'automata', body_type: 'break' }).v;
-  assert.strictEqual(v.oem, '1K0 941 005 A');
-  assert.strictEqual(v.fuel, 'motorina'); assert.strictEqual(v.gearbox, 'automata'); assert.strictEqual(v.body_type, 'break');
-  const w = parseRequest({ ...okReq, fuel: 'apa', gearbox: 'x', body_type: 'nava' }).v;
-  assert.strictEqual(w.fuel, ''); assert.strictEqual(w.gearbox, ''); assert.strictEqual(w.body_type, '');
-  assert.strictEqual(parseRequest({ ...okReq, oem: 'ab@x.ro' }).error, 'OEM_INVALID');
-  assert.strictEqual(parseRequest({ ...okReq }).v.oem, '');
+test('interfața apelează doar rute care există în backend', () => {
+  const ui = fs.readFileSync(path.join(__dirname, 'requests-ui.js'), 'utf8');
+  const all = Object.keys(routes).map((k) => k.replace(/^R\d+ /, ''));
+  const base = { '/api/requests': 'GET /', '/api/offers': 'GET /mine', '/api/orders': 'GET /', '/api/offer-questions': 'GET /' };
+  const used = [...ui.matchAll(/api\((?:"|`)(\/api\/[a-z-]+)([^"`]*)/g)].map((m) => m[1]);
+  assert.ok(used.length >= 15);
+  for (const u of new Set(used)) assert.ok(base[u], 'prefix necunoscut: ' + u);
+  for (const p of ['/api/requests/summary', '/api/requests/mine', '/api/offers/received', '/api/offers/mine', '/api/offer-questions']) assert.ok(ui.includes(p), p);
+  assert.ok(all.includes('GET /'), 'listă');
 });
 
-test('ofertă: factură și mod de plată', () => {
-  const a = parseQuote({ price: 100 }).v;
-  assert.strictEqual(a.invoice, false); assert.strictEqual(a.payment, 'oricare');
-  const b = parseQuote({ price: 100, invoice: true, payment: 'ramburs' }).v;
-  assert.strictEqual(b.invoice, true); assert.strictEqual(b.payment, 'ramburs');
-  assert.strictEqual(parseQuote({ price: 100, payment: 'bitcoin' }).v.payment, 'oricare');
+test('integrare: cârligele din script.js și rutele paginii există', () => {
+  const ui = fs.readFileSync(path.join(__dirname, 'requests-ui.js'), 'utf8');
+  for (const f of ['openRequests', 'rfqSummaryRefresh', 'rfqRefresh', 'rfqMsg']) assert.match(ui, new RegExp('window\\.' + f + ' ='), f);
+  for (const r of ['"/cereri"', '"/cerere-noua"', '"/cererile-mele"', '"/oferte-primite"', '"/ofertele-mele"']) assert.ok(ui.includes(r), r);
+  const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  for (const m of ['/api/requests', '/api/offers', '/api/offer-questions', '/api/orders']) assert.ok(app.includes(`'${m}'`), 'nemontat: ' + m);
 });
 
-test('cerere cu mai multe piese: nume unite, maximum 8, fără contact', () => {
-  const r = parseRequest({ ...okReq, part: '', parts: [{ name: 'Far stânga' }, { name: 'Bară față', details: 'neagră' }] });
-  assert.strictEqual(r.v.part, 'Far stânga, Bară față');
-  assert.strictEqual(r.v.items.length, 2);
-  assert.strictEqual(parseRequest(okReq).v.items.length, 1);   // vechiul câmp „part” = o singură piesă
-  assert.strictEqual(parseRequest({ ...okReq, parts: Array.from({ length: 9 }, () => ({ name: 'Piesă' })) }).error, 'PREA_MULTE_PIESE');
-  assert.strictEqual(parseRequest({ ...okReq, parts: [{ name: 'ab' }] }).error, 'PIESA_INVALIDA');
-  assert.strictEqual(parseRequest({ ...okReq, parts: [{ name: 'Far', details: 'sună 0722 123 456' }] }).error, 'FARA_CONTACT_IN_CERERE');
-});
-
-test('ofertă pe piese: total = suma, parțială permisă, piesă străină refuzată', () => {
-  const ids = [11, 12, 13];
-  const q = parseQuote({ lines: [{ item_id: 11, price: 100.5 }, { item_id: 13, price: '50', state: 'noua' }] }, ids);
-  assert.strictEqual(q.v.price, 150.5);
-  assert.strictEqual(q.v.lines.length, 2);
-  assert.strictEqual(parseQuote({ lines: [{ item_id: 99, price: 5 }] }, ids).error, 'PIESA_NECUNOSCUTA');
-  assert.strictEqual(parseQuote({ lines: [{ item_id: 11, price: 5 }, { item_id: 11, price: 6 }] }, ids).error, 'PIESA_NECUNOSCUTA');
-  assert.strictEqual(parseQuote({ lines: [{ item_id: 11, price: 0 }] }, ids).error, 'PRET_INVALID');
-  assert.strictEqual(parseQuote({ lines: [] }, ids).error, 'FARA_PIESE_IN_OFERTA');
-  assert.strictEqual(parseQuote({ price: 100 }, ids).error, 'FARA_PIESE_IN_OFERTA');   // 3 piese cer preț pe piesă
-  assert.strictEqual(parseQuote({ price: 100 }, [11]).v.price, 100);                      // o piesă: prețul întreg
-});
-
-test('adresa de livrare: telefon permis, județ/localitate/stradă obligatorii, ridicarea nu cere adresă', () => {
-  const a = { name: 'Ion Pop', phone: '0722 123 456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. Memorandumului 5' };
-  assert.strictEqual(parseAddress(a).v.kind, 'domiciliu');
-  assert.strictEqual(parseAddress({ ...a, kind: 'sediu' }).v.kind, 'sediu');
-  assert.strictEqual(parseAddress({ ...a, kind: 'x' }).v.kind, 'domiciliu');
-  assert.strictEqual(parseAddress({ ...a, phone: 'abc' }).error, 'TELEFON_INVALID');
-  assert.strictEqual(parseAddress({ ...a, phone: '123' }).error, 'TELEFON_INVALID');
-  assert.strictEqual(parseAddress({ ...a, name: '' }).error, 'NUME_INVALID');
-  assert.strictEqual(parseAddress({ ...a, county: '' }).error, 'JUDET_LIPSA');
-  assert.strictEqual(parseAddress({ ...a, city: 'C' }).error, 'LOCALITATE_INVALIDA');
-  assert.strictEqual(parseAddress({ ...a, street: 'ab' }).error, 'STRADA_INVALIDA');
-  assert.strictEqual(parseAddress(undefined).error, 'NUME_INVALID');
-  const p = parseAddress({ name: 'Ion', phone: '+40 722 123 456', mode: 'ridicare' });
-  assert.ok(p.v && p.v.mode === 'ridicare' && p.v.street === '');
+test('migrarea 039 creează tabelele rq_* fără să atingă cele vechi', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '039_rfq_autoparts.sql'), 'utf8');
+  for (const t of ['rq_requests', 'rq_offers', 'rq_marks', 'rq_orders', 'rq_questions', 'rq_images']) assert.match(sql, new RegExp(`CREATE TABLE IF NOT EXISTS ${t} `), t);
+  assert.ok(!/DROP TABLE|ALTER TABLE (part_requests|quotes|dealers)/i.test(sql));
 });

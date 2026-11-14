@@ -1,5 +1,11 @@
 # Ce s-a schimbat în această versiune
 
+**„Cereri piese” / „Ofertează piesele” portate 1:1 din AutoParts (înlocuiesc vechiul „Cere oferte”):** `039_rfq_autoparts.sql`, `requests.js`, `requests-ui.js`, `app.js`, `style.css`, `requests.test.js`, `requests.ui.test.js`.
+- pagini: Ofertează piesele (lista publică, filtre Nu am ofertat / Toate / Am ofertat / Ofertez mai târziu / Ignorate, căutare, marcă, județ), Cere oferte piese (formular cu piese multiple, mașină, VIN, tip piese, adresă privată, poze), Cererile mele (Active / Inactive / Rezolvate, reactivare), Ofertele primite, Ofertele mele, Comenzi, Întrebări;
+- cererea se poate modifica în primele 10 minute; durează 7 zile; ofertele (preț + mesaj + poze) le vede doar cumpărătorul; acceptarea refuză celelalte oferte, creează o comandă și dezvăluie contactul;
+- tabele NOI `rq_*`; tabelele vechi (`part_requests`, `quotes`, `dealers`, …) rămân neatinse în baza de date, dar nu mai sunt folosite. Recenziile vechi din „Cere oferte” rămân în profiluri.
+- nemigrat din sistemul vechi: dezmembrători aprobați, licitația ascunsă, chatul ofertei, AWB/livrare, recenzii după comandă.
+
 **Clopoțel în antet:** `index.html`, `icons.js`, `script.js`, `style.css`. Vizibil pentru utilizatorii conectați, cu număr de necitite; deschide Notificările din cont.
 
 **Recenzii în ambele sensuri:** `029_reviews_both_ways.sql`, `profiles.js`, `profile-ui.js`, `requests.js`, `requests-ui.js`, `listings.js`, `account.js`.

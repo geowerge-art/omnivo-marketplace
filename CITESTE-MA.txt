@@ -1,0 +1,17 @@
+Copiaza fisierele din acest zip peste proiectul Omnivo (aceleasi locuri, in radacina), apoi ruleaza: npm run migrate
+
+NOI sau MODIFICATE:
+  039_rfq_autoparts.sql   (nou: migrarea cu tabelele rq_*)
+  requests.js             (inlocuit: backend cereri/oferte/comenzi/intrebari)
+  requests-ui.js          (inlocuit: paginile in stilul AutoParts)
+  requests.test.js        (inlocuit)
+  requests.ui.test.js     (inlocuit)
+  app.js                  (montate /api/offers, /api/offer-questions, /api/orders)
+  style.css               (adaugat bloc rqx-* la final)
+  MODIFICARI.md           (nota noua)
+
+DE STERS din proiect (testele vechi, pentru sistemul inlocuit):
+  requests.summary.ui.test.js
+  requests.summary.test.js
+  requests.photos.test.js
+  requests.offers.test.js

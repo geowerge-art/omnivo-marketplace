@@ -81,6 +81,9 @@ function createApp() {
   app.use('/api/billing', billing.router);
   app.use('/api/account', account.router);
   app.use('/api/requests', requests.router);
+  app.use('/api/offers', requests.offersRouter);
+  app.use('/api/offer-questions', requests.questionsRouter);
+  app.use('/api/orders', requests.ordersRouter);
   app.use('/api/favorites', favorites.router);
   app.use('/api/saved-searches', saved.router);
 

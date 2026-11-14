@@ -1,4 +1,4 @@
-/* Rulează requests-ui.js într-un DOM simulat și verifică comparația ofertelor și „Oferte primite”. */
+/* Rulează requests-ui.js într-un DOM simulat și verifică paginile: lista publică, detaliu, formular, Cererile mele, oferte, comenzi, întrebări. */
 const vm = require('vm'), fs = require('fs');
 class El { constructor(t) { this.tagName = t.toUpperCase(); this.children = []; this.dataset = {}; this._cls = new Set(); this.style = {}; this._t = ''; this.attrs = {}; this.handlers = {};
     this.classList = { toggle: (c, on) => (on ? this._cls.add(c) : this._cls.delete(c)), add: (c) => this._cls.add(c), contains: (c) => this._cls.has(c) }; }
@@ -12,82 +12,72 @@ class El { constructor(t) { this.tagName = t.toUpperCase(); this.children = []; 
 El.prototype.all = El.prototype.all;
 const els = {}; const doc = { createElement: (t) => new El(t), body: new El('body'), getElementById: (id) => els[id] || null, addEventListener() {}, activeElement: null };
 const calls = [];
-const ctx = { document: doc, window: {}, Date, Math, Number, String, Object, Array, Map, Set, Promise, JSON, console, setInterval: () => 0, clearInterval() {}, setTimeout, confirm: () => true, location: { hash: '' }, localStorage: { getItem: () => null, setItem() {} }, navigator: {}, matchMedia: () => ({ matches: false }), history: { replaceState() {} },
+const ctx = { URLSearchParams, document: doc, window: { addEventListener() {} }, addEventListener() {}, Date, Math, Number, String, Object, Array, Map, Set, Promise, JSON, console, setInterval: () => 0, clearInterval() {}, setTimeout, confirm: () => true, location: { hash: '', pathname: '/' }, localStorage: { getItem: () => null, setItem() {} }, navigator: {}, matchMedia: () => ({ matches: false }), history: { replaceState() {}, pushState() {} },
   $: (id) => els[id] || (els[id] = new El('div')), api: async (u, m) => { calls.push([u, m || 'GET']); return ctx.__api(u, m); }, me: { id: 5, role: 'user' }, COUNTIES: ['Cluj', 'Bihor'], showMessage: (...a) => calls.push(['msg', ...a]), errText: (e) => String(e && e.message), ERR: {}, openAuth() {}, openLightbox() {} };
 ctx.Option = class extends El { constructor(t, v) { super('option'); this._t = String(t); this.value = v; } };
-ctx.window = ctx; vm.createContext(ctx);
-let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { viewHub, viewAward, shipCard, addressForm, howBox, partsList, quoteForm, offersBlock, viewReceived, quoteCard, st, go, build, get body() { return body; } };\n})();');
+ctx.window = Object.assign(ctx, { }); vm.createContext(ctx);
+let src = fs.readFileSync(__dirname + '/requests-ui.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.__t = { viewBoard, viewDetail, viewNew, viewMine, viewReceived, viewOffers, viewOrders, viewQuestions, st, go, build, get body() { return body; }, get head() { return head; } };\n})();');
 vm.runInContext(src, ctx);
 const T = ctx.__t; let ok = 0, bad = 0; const t = (n, p) => { p ? ok++ : bad++; console.log(`${p ? 'ok  ' : 'FAIL'} ${n}`); };
-const text = (n) => n.textContent;
-const Q = (o) => ({ id: 1, price: 100, currency: 'RON', state: 'buna', warranty_days: 0, eta_days: null, shipping: null, status: 'sent', created_at: new Date(Date.now() - 5 * 864e5).toISOString(), company: 'X', dealer_id: 9, dealer_county: 'Bihor', rating: null, rating_count: 0, verified: false, images: [], questions: [], ...o });
-const R = { id: 7, county: 'Cluj', status: 'open' };
+const text = (n) => n.textContent; const tick = () => new Promise((r) => setTimeout(r, 5));
+const iso = (d = 0) => new Date(Date.now() + d * 864e5).toISOString();
+const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi', model: 'A4', year: '2012', variant: '', engine: '', kind: 'ambele', county: 'Timiș', city: 'Timișoara', extra_parts: [], status: 'open', expires_at: iso(5), created_at: iso(-1), mine: false, thumb: null, offers_count: 0, my_offer_id: null, my_mark: null, ...o });
 (async () => {
   T.build();
-  const quotes = [Q({ id: 1, company: 'Ieftin', price: 100, shipping: 50, warranty_days: 0, dealer_county: 'Bihor' }),
-    Q({ id: 2, company: 'Garantie', price: 120, shipping: 0, warranty_days: 90, eta_days: 1, rating: '4.8', rating_count: 12, dealer_county: 'Cluj', created_at: new Date().toISOString() }),
-    Q({ id: 3, company: 'EuroPiese', price: 20, currency: 'EUR', shipping: 5, warranty_days: 30, eta_days: 0, dealer_county: 'Cluj' })];
-  T.st.sort = 'total'; T.st.cmp = false;
-  let nodes = T.offersBlock(R, quotes); const all = nodes.map(text).join('|');
-  t('două sau mai multe oferte → bară de sortare + listă', nodes.length === 2 && /3 oferte/.test(text(nodes[0])));
-  const bar = nodes[0], cards = nodes[1].children;
-  t('ordinea implicită: după total (Ieftin 150, Garanție 120 → Garanție primul; EUR 25=125)', cards.map((c) => text(c).match(/Ieftin|Garantie|EuroPiese/)[0]).join() === 'Garantie,EuroPiese,Ieftin');
-  const lab = (n) => text(cards[n]);
-  t('„Cel mai mic total” doar pe oferta cu cel mai mic total (Garanție, 120 lei)', /Cel mai mic total/.test(lab(0)) && !/Cel mai mic total/.test(lab(1)) && !/Cel mai mic total/.test(lab(2)));
-  t('„Cea mai lungă garanție” pe cea de 90 zile', /Cea mai lungă garanție/.test(lab(0)));
-  t('„Livrare cea mai rapidă” pe cea „în stoc” (eta 0)', /Livrare cea mai rapidă/.test(lab(1)));
-  t('„Cel mai bine cotat” pe cea cu ★ 4.8', /Cel mai bine cotat/.test(lab(0)));
-  t('„În județul tău” pe ofertanții din Cluj, nu pe cel din Bihor', /În județul tău/.test(lab(0)) && /În județul tău/.test(lab(1)) && !/În județul tău/.test(lab(2)));
-  t('oferta de azi are „Nouă”, cele vechi nu', /Nouă/.test(lab(0)) && !/Nouă/.test(lab(2)));
-  t('total afișat cu transport: „Total 150 lei” + detaliu piesă/transport', /Total 150 lei/.test(lab(2)) && /piesa 100 lei \+ transport 50 lei/.test(lab(2)));
-  t('transport gratuit afișat', /Total 120 lei/.test(lab(0)) && /transport gratuit/.test(lab(0)));
-  ctx.openProfile = () => {}; nodes = T.offersBlock(R, quotes);
-  t('cu openProfile disponibil, numele devine buton', nodes[1].children[0].all((c) => c.tagName === 'BUTTON' && c.className.includes('rfq-seller')).length === 1);
-  // sortare după garanție
-  const wBtn = nodes[0].children.find((b) => b.dataset && b.dataset.k === 'warranty'); wBtn.handlers.click ? 0 : 0;
-  // butoanele au onclick (proprietate), nu addEventListener
-  wBtn.onclick(); t('sortare după garanție: Garanție, apoi EuroPiese(30), apoi Ieftin(0)', nodes[1].children.map((c) => text(c).match(/Ieftin|Garantie|EuroPiese/)[0]).join() === 'Garantie,EuroPiese,Ieftin');
-  const rBtn = nodes[0].children.find((b) => b.dataset && b.dataset.k === 'new'); rBtn.onclick(); t('sortare după „cele mai noi”: Garanție (azi) primul', /Garantie/.test(text(nodes[1].children[0])));
-  const cBtn = nodes[0].children.find((b) => b.dataset && b.dataset.k === 'cmp'); cBtn.onclick();
-  const tbl = nodes[1].children[0];
-  t('tabel de comparare: un rând pe ofertă + antet', nodes[1].children.length === 1 && tbl.className.includes('rfq-cmp') && tbl.all((c) => c.tagName === 'TR').length === 4);
-  const best = tbl.all((c) => c.tagName === 'TD' && c.className.includes('best'));
-  t('în tabel e evidențiat un singur cel mai mic total (120 lei)', best.length === 1 && /120 lei/.test(text(best[0])));
-  t('butonul din tabel activ pe „Compară”, nu pe sortare', nodes[0].children.filter((b) => b.className && b.className.includes(' on') || (b.classList && b.classList.contains('on'))).map((b) => b.dataset.k).join() === 'cmp');
-  t('o singură ofertă → fără bară de sortare', T.offersBlock(R, [quotes[0]]).length === 1);
-  t('fără oferte → nimic', T.offersBlock(R, []).length === 0);
-  // „Oferte primite”
-  const recv = [{ quote_id: 1, request_id: 7, company: 'A', price: 100, currency: 'RON', shipping: 10, status: 'sent', created_at: new Date().toISOString(), part: 'Far', brand: 'VW', model: 'Golf', year: 2015, request_status: 'open', expires_at: new Date(Date.now() + 36e5 * 5).toISOString(), rating: '4.5', rating_count: 2, state: 'buna', warranty_days: 30, thumb: '/t.webp' },
-    { quote_id: 2, request_id: 7, company: 'B', price: 90, currency: 'RON', shipping: null, status: 'sent', created_at: new Date(Date.now() - 3 * 864e5).toISOString(), part: 'Far', brand: 'VW', model: 'Golf', year: 2015, request_status: 'open', expires_at: new Date(Date.now() + 36e5 * 5).toISOString(), rating: null, rating_count: 0, state: 'uzata', warranty_days: 0 },
-    { quote_id: 3, request_id: 8, company: 'C', price: 50, currency: 'RON', shipping: 0, status: 'sent', created_at: new Date().toISOString(), part: 'Baie ulei', brand: 'BMW', model: '', year: null, request_status: 'open', expires_at: new Date(Date.now() + 36e5 * 5).toISOString(), rating: null, rating_count: 0, state: 'buna', warranty_days: 0 }];
-  ctx.__api = async (u) => (u === '/api/requests/received' ? { offers: recv } : { offers: [] });
-  await T.viewReceived(); const body = T.body, secs = body.children.filter((c) => c.className && c.className.includes('rfq-recv'));
-  t('„Oferte primite”: o secțiune pe cerere (2 cereri)', secs.length === 2);
-  t('secțiunea arată titlul cererii, numărul de oferte și câte sunt noi', /Far VW Golf 2015/.test(text(secs[0])) || /Far VW Golf 2015/.test(text(secs[1])));
-  const s7 = secs.find((s) => /Golf/.test(text(s)));
-  t('ofertele dintr-o cerere sunt în ordinea totalului (B 90+? vs A 110 → B primul)', text(s7).indexOf('B') < text(s7).indexOf('A'));
-  t('total cu transport: A = 110 lei; B fără transport = 90 lei + transp.', /110 lei/.test(text(s7)) && /90 lei \+ transp\./.test(text(s7)));
-  t('oferta de azi are „Nouă”', /Nouă/.test(text(s7)));
-  ctx.__api = async () => ({ offers: [] }); await T.viewReceived(); t('fără oferte → mesaj + buton „Cere oferte pentru o piesă”', /Nu ai primit nicio ofertă/.test(text(T.body)) && /Cere oferte pentru o piesă/.test(text(T.body)));
-  // piese multiple
-  const RM = { id: 9, county: 'Cluj', status: 'open', items: [{ id: 1, name: 'Far stânga', details: '' }, { id: 2, name: 'Bară față', details: 'neagră' }, { id: 3, name: 'Capotă', details: '' }] };
-  t('lista pieselor apare doar la cereri cu mai multe piese', !!T.partsList(RM) && T.partsList({ items: [{ id: 1, name: 'x' }] }) === null && /Bară față · neagră/.test(text(T.partsList(RM))));
-  const part = T.quoteCard(RM, Q({ id: 21, company: 'Parțial', price: 150, lines: [{ item_id: 1, name: 'Far stânga', price: 100 }, { item_id: 3, name: 'Capotă', price: 50 }] }), []);
-  t('oferta parțială: preț pe piesă și „Acoperă 2 din 3 piese”', /Far stânga/.test(text(part)) && /100 lei/.test(text(part)) && /Acoperă 2 din 3 piese/.test(text(part)) && /lipsesc: Bară față/.test(text(part)));
-  const full = T.quoteCard(RM, Q({ id: 22, company: 'Complet', price: 300, lines: RM.items.map((i) => ({ item_id: i.id, name: i.name, price: 100 })) }), []);
-  t('oferta completă: „Acoperă toate piesele”', /Acoperă toate piesele/.test(text(full)));
-  const how = T.howBox(); t('„Cum funcționează” are 3 pași scurți', how.all((n) => n.className === 'rfq-how3-i').length === 3 && /Ceri piesa/.test(text(how)));
-  T.build(); T.viewHub(); const hubTxt = text(T.body); t('pagina de start: două alegeri clare, cumpărător și ofertant', /Caut o piesă/.test(hubTxt) && /Am piese de vândut/.test(hubTxt) && /Ceri piesa/.test(hubTxt));
-  const form = T.quoteForm(RM, () => {}); t('formularul de ofertă are câte un câmp de preț pe piesă', form.all((n) => n.tagName === 'INPUT' && n.attrs.placeholder === 'Preț' ).length === 3 || /Far stânga/.test(text(form)));
-  // adresa de livrare
-  ctx.__api = async (u, m, b) => (u.endsWith('/address') ? { address: { mode: 'livrare', kind: 'sediu', name: 'Ion Pop', phone: '0722123456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. Memorandumului 5', note: '' }, defaults: { name: 'Ion', phone: '' } } : {});
-  await T.viewAward(RM, Q({ id: 31, company: 'Nord Auto', price: 300, pickup: true }));
-  const ab = text(T.body);
-  t('alegerea ofertei cere adresa, completată din cont', /Unde|Cum primești piesele/.test(ab) && /Alegi oferta Nord Auto/.test(ab) && /Alege oferta și trimite adresa/.test(ab));
-  const inputs = T.body.all((n) => n.tagName === 'INPUT');
-  t('câmpurile sunt precompletate cu adresa salvată', inputs.some((i) => i.value === 'Str. Memorandumului 5') && inputs.some((i) => i.value === 'Cluj-Napoca'));
-  const sc = T.shipCard({ mode: 'livrare', kind: 'sediu', name: 'Ion Pop', phone: '0722123456', county: 'Cluj', city: 'Cluj-Napoca', street: 'Str. X 1', note: 'poartă' }, 'Unde trimiți piesele');
-  t('cardul de livrare arată nume, telefon, tip și adresă', /Ion Pop · 0722123456/.test(text(sc)) && /Livrare la sediul firmei: Str\. X 1, Cluj-Napoca, Cluj/.test(text(sc)) && /poartă/.test(text(sc)));
-  t('ridicare personală se arată clar', /Ridică personal/.test(text(T.shipCard({ mode: 'ridicare', name: 'A', phone: '1' }))));
-  console.log(`\n${ok} trecute, ${bad} eșuate`); process.exit(bad ? 1 : 0);
-})().catch((e) => { console.error('EROARE', e); process.exit(1); });
+  // lista publică
+  ctx.__api = async (u) => ({ requests: [REQ({ id: 1 }), REQ({ id: 2, title: 'Alternator', my_offer_id: 9, my_price: 450, my_currency: 'RON' }), REQ({ id: 3, title: 'Bară', mine: true, offers_count: 2, extra_parts: [{ title: 'Grilă' }] })], counts: { new: 1, all: 3, offered: 1, later: 0, ignored: 0 } });
+  await T.go('board'); await tick(); let s = text(T.body);
+  t('Ofertează piesele: filtrele de stare cu număr', /Nu am ofertat încă \(1\)/.test(s) && /Am ofertat \(1\)/.test(s) && /Ofertez mai târziu/.test(s) && /Ignorate/.test(s));
+  t('carduri: titlu, mașină, „Ai ofertat 450 lei”, „Nicio ofertă”, „Cererea ta · 2 oferte”, +1 piesă', /Far stânga/.test(s) && /Audi A4 2012/.test(s) && /Ai ofertat 450 lei/.test(s) && /Nicio ofertă/.test(s) && /Cererea ta · 2 oferte/.test(s) && /\+1 piesă/.test(s));
+  t('butoane „Ofertez mai târziu” și „Ignoră” doar pe cererile fără ofertă ale altora', (s.match(/Ignoră/g) || []).length === 1);
+  t('lista cere seen=new', calls.some((c) => /^\/api\/requests\?seen=new/.test(c[0])));
+  // detaliu public, fără ofertă proprie: formular de ofertă
+  ctx.__api = async (u) => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null });
+  await T.go('detail', 4); await tick(); s = text(T.body);
+  t('detaliu: formular „Trimite o ofertă” cu prețul tău', /Trimite o ofertă/.test(s) && /Prețul tău/.test(s) && /Cerută de Ion/.test(s));
+  // detaliu cu ofertă proprie în așteptare
+  ctx.__api = async () => ({ request: REQ({ id: 4, images: [] }), my_offer: { id: 7, price: 300, currency: 'EUR', message: 'Stare bună', status: 'pending', images: [] }, my_mark: null });
+  await T.go('detail', 4); await tick(); s = text(T.body);
+  t('oferta mea: preț în €, status, Modifică/Retrage', /300 €/.test(s) && /În așteptare/.test(s) && /Modifică oferta/.test(s) && /Retrage oferta/.test(s));
+  // cerere închisă
+  ctx.__api = async () => ({ request: REQ({ id: 4, images: [], status: 'closed' }), my_offer: null, my_mark: null });
+  await T.go('detail', 4); await tick();
+  t('cerere închisă: nu mai primește oferte', /nu mai primește oferte/.test(text(T.body)) && !/Trimite o ofertă/.test(text(T.body)));
+  // cererea mea cu oferte
+  ctx.__api = async (u) => u === '/api/requests/5' ? { request: REQ({ id: 5, mine: true }), my_offer: null } : u === '/api/requests/mine/5' ? { request: REQ({ id: 5, mine: true, images: [], vin: 'WAUZZZ8K9CA012345', ship_address: 'Str. X 1' }), editable: true,
+    offers: [{ id: 1, seller_id: 8, seller_name: 'AutoDez', seller_rating: '4.8', seller_rating_n: 12, price: 200, currency: 'RON', message: 'Garanție 30 zile', status: 'pending', images: [] },
+             { id: 2, seller_id: 9, seller_name: 'Piese SRL', price: 180, currency: 'RON', message: '', status: 'accepted', seller_phone: '0722123456', seller_full_name: 'Mihai P', images: [] }] } : { questions: [] };
+  await T.go('detail', 5); await tick(); s = text(T.body);
+  t('cererea mea: oferte primite (2), VIN și adresa vizibile', /Oferte primite \(2\)/.test(s) && /WAUZZZ8K9CA012345/.test(s) && /Str\. X 1/.test(s));
+  t('ofertă în așteptare: Acceptă / Refuză; acceptată: contact vânzător', /Acceptă oferta/.test(s) && /Refuză/.test(s) && /0722123456/.test(s) && /★ 4\.8 \(12\)/.test(s));
+  t('cerere editabilă: buton Modifică cererea + Închide', /Modifică cererea/.test(s) && /Închide cererea/.test(s));
+  // formular nou
+  T.st.edit = null; T.viewNew(); s = text(T.body);
+  t('Cere oferte piese: câmpurile din AutoParts', ['Piesa căutată', 'Marca', 'Model', 'An', 'Motor', 'Serie șasiu', 'Județ', 'Localitate', 'Adresă de livrare', 'Trimite cererea', 'Adaugă încă o piesă'].every((x) => s.includes(x)));
+  // Cererile mele
+  ctx.__api = async () => ({ requests: [REQ({ id: 1, offers_count: 3, new_offers: 2, best_price: 150 }), REQ({ id: 2, title: 'Veche', status: 'closed' }), REQ({ id: 3, title: 'Rezolvată', status: 'matched' })] });
+  await T.go('mine'); await tick(); s = text(T.body);
+  t('Cererile mele: taburi Active/Inactive/Rezolvate cu număr', /Active \(1\)/.test(s) && /Inactive \(1\)/.test(s) && /Rezolvate \(1\)/.test(s) && /2 noi/.test(s) && /de la 150 lei/.test(s));
+  T.st.mineTab = 'closed'; await T.go('mine'); await tick();
+  t('tab Inactive: buton Reactivează', /Reactivează/.test(text(T.body)) && /Veche/.test(text(T.body)));
+  // Ofertele mele (acceptată => contact cumpărător)
+  ctx.__api = async () => ({ offers: [{ id: 1, request_id: 5, request_title: 'Far', price: 90, currency: 'RON', message: 'ok', status: 'accepted', created_at: iso(-1), buyer_name: 'Ana', buyer_phone: '0733111222', ship_address: 'Str. Y 2', vin: 'VIN123', req_thumb: null }, { id: 2, request_id: 6, request_title: 'Bară', price: 50, currency: 'RON', status: 'rejected', created_at: iso(-2) }] });
+  await T.go('offers'); await tick(); s = text(T.body);
+  t('Ofertele mele: statusuri + contact cumpărător doar la cea acceptată', /Acceptată/.test(s) && /Refuzată/.test(s) && /0733111222/.test(s) && /Str\. Y 2/.test(s) && (s.match(/0733111222/g) || []).length === 1);
+  // Comenzi
+  ctx.__api = async () => ({ orders: [{ id: 1, title: 'Far', price: 90, currency: 'RON', status: 'new', created_at: iso(-1), i_buy: false, other_name: 'Ana', other_phone: '0733' }, { id: 2, title: 'Bară', price: 50, currency: 'RON', status: 'shipped', created_at: iso(-1), i_buy: true, other_name: 'Dan' }] });
+  await T.go('orders'); await tick(); s = text(T.body);
+  t('Comenzi: vânzătorul confirmă, cumpărătorul „Am primit piesa”', /Confirmă comanda/.test(s) && /Am primit piesa/.test(s) && /Nouă/.test(s) && /Expediată/.test(s));
+  // Întrebări
+  ctx.__api = async () => ({ questions: [{ id: 1, request_title: 'Far', price: 90, currency: 'RON', body: 'Are garanție?', answer: null }, { id: 2, request_title: 'Bară', price: 50, currency: 'RON', body: 'Ce an?', answer: '2012' }] });
+  await T.go('questions'); await tick(); s = text(T.body);
+  t('Întrebări: cea fără răspuns are „Răspunde”, cea cu răspuns îl afișează', /Răspunde/.test(s) && /Răspunsul tău: 2012/.test(s));
+  // Ofertele primite
+  ctx.__api = async () => ({ offers: [{ id: 1, request_id: 5, request_title: 'Far', price: 90, currency: 'RON', status: 'pending', seller_name: 'AutoDez', seller_rating: '4.5', created_at: iso(-1) }] });
+  await T.go('received'); await tick(); s = text(T.body);
+  t('Ofertele primite: vânzător, preț, status', /AutoDez/.test(s) && /90 lei/.test(s) && /În așteptare/.test(s));
+  // utilizator nelogat: paginile private cer autentificare
+  let auth = 0; ctx.openAuth = () => auth++; const keep = ctx.me; ctx.me = null; await T.go('mine'); ctx.me = keep;
+  t('nelogat: „Cererile mele” deschide autentificarea', auth === 1);
+  console.log(`\n${ok} ok, ${bad} eșuate`); if (bad) process.exit(1);
+})().catch((e) => { console.error(e); process.exit(1); });

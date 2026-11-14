@@ -1842,3 +1842,27 @@ body.menu-open .bottom-nav { display: none; }
   body:has(.rs-page:not([hidden])) .hdr-bell { display: none; }   /* pe paginile noi: doar ☰ */
   .rs-page .rs-hero-in { padding-right: 56px; }
 }
+
+/* „Oferte piese” în stilul AutoParts: clase noi rqx-*, ca să nu se încurce cu stilurile vechi rfq-* */
+.rqx-chips { display: flex; gap: 6px; overflow-x: auto; margin: 10px 0 0; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.rqx-chips::-webkit-scrollbar { display: none; }
+.rqx-search { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 6px; }
+.rqx-search input[type=search] { grid-column: 1 / -1; }
+.rqx-search input, .rqx-search select { height: 46px; min-width: 0; padding: 0 12px; box-sizing: border-box; width: 100%; }
+.rqx-search button[type=submit] { grid-column: 1 / -1; min-height: 46px; }
+.rqx-card { margin: 8px 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff; display: grid; gap: 8px; }
+.rqx-card h3 { margin: 0; overflow-wrap: anywhere; }
+.rqx-card .rfq-parts-list { margin: 0; padding-left: 20px; }
+.rqx-pricerow { display: grid; grid-template-columns: 1fr 96px; gap: 8px; }
+.rqx-pricerow input, .rqx-pricerow select { height: 46px; box-sizing: border-box; width: 100%; }
+.rqx-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 4px; }
+.rqx-hd b { overflow-wrap: anywhere; }
+.rqx-hd .rfq-chip { margin-left: auto; }
+.rqx-part { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 8px; margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.rqx-part input { width: 100%; box-sizing: border-box; }
+.rqx-part .ghost { justify-self: start; min-height: 36px; }
+.rqx-q { font-weight: 700; overflow-wrap: anywhere; }
+.rqx-a { color: #1b6b3f; overflow-wrap: anywhere; }
+.rqx-wait { color: var(--muted); font-size: 13px; }
+.rfq-lbl { display: block; margin: 12px 0 4px; font-weight: 700; color: var(--navy); }
+.rfq-form > .ghost, .rfq-form > button[type=submit], .rfq-quote > button[type=submit] { margin-top: 12px; }
