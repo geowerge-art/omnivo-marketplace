@@ -9,6 +9,8 @@
     FARA_CONTACT_IN_CERERE: "Cererea e publică: nu scrie telefon, email sau linkuri. Contactul se dă după ce alegi o ofertă.",
     FARA_CONTACT_IN_OFERTA: "Nu scrie telefon, email sau linkuri în ofertă. Contactul se dă după ce cumpărătorul acceptă oferta.",
     FARA_CONTACT_IN_INTREBARE: "Nu scrie telefon, email sau linkuri.", PRET_INVALID: "Scrie un preț valid.", MESAJ_PREA_LUNG: "Mesajul e prea lung (maximum 2000 de caractere).",
+    RQ_RAPORT_MOTIV: "Alege motivul raportării.", RQ_REPORT_PROPRIU: "Nu poți raporta propria cerere sau ofertă.", CERERE_RAPORTATA: "Cererea e în verificare la un moderator și nu poate fi reactivată acum.",
+    RQ_BLOCAT_DE_TINE: "L-ai blocat pe acest utilizator. Deblochează-l ca să continui.", RQ_BLOCAT: "Nu poți trimite oferte sau întrebări acestui utilizator.",
     CERERE_INCHISA: "Cererea s-a închis între timp.", CERERE_PROPRIE: "Nu poți oferta la propria cerere.", OFERTA_EXISTA: "Ai deja o ofertă la această cerere.",
     OFERTA_NU_MAI_E_DISPONIBILA: "Oferta nu mai e disponibilă.", OFERTA_NEGASITA: "Oferta nu mai e disponibilă.", PREA_MULTE_OFERTE: "Ai trimis prea multe oferte. Încearcă mai târziu.",
     EDITARE_EXPIRATA: "Cererea se poate modifica doar în primele 10 minute.", CERERE_NU_SE_POATE_REACTIVA: "Cererea nu se poate reactiva.",
@@ -141,6 +143,21 @@
     return d;
   }
   const priceEl = (t) => { const p = el("p", "rfq-price"); p.append(el("b", "", t)); return p; };
+  /* raportare către moderatori: formular inline sub cerere / ofertă */
+  const REASON = { inselatorie: "Înșelătorie / ofertă suspectă", contact: "Date de contact sau linkuri", interzis: "Piesă sau conținut interzis", spam: "Spam / reclamă", duplicat: "Duplicat", altul: "Altceva" };
+  function reportBox(kind, id, done) {
+    const f = el("form", "rqx-report"), msg = msgBox(), sel = el("select"), det = area("Detalii (opțional)", "", 3);
+    Object.entries(REASON).forEach(([v, t]) => sel.append(new Option(t, v))); det.maxLength = 500;
+    const ok = el("button", "", "Trimite raportarea"); ok.type = "submit";
+    f.append(el("b", "", kind === "request" ? "Raportează cererea" : "Raportează oferta"), field("Motiv", sel), field("Detalii", det), msg, ok, btn("Anulează", "ghost", () => f.remove()));
+    f.onsubmit = (e) => { e.preventDefault(); guarded(ok, msg, async () => { await api(`/api/${kind === "request" ? "requests" : "offers"}/${id}/report`, "POST", { reason: sel.value, details: det.value.trim() }); showMessage("Mulțumim", "Raportarea a fost trimisă echipei Omnivo."); done(); })(); };
+    return f;
+  }
+  function reportRow(kind, id, already, done) {
+    const w = el("div", "rqx-reportrow");
+    if (already) { w.append(el("small", "muted", kind === "request" ? "Ai raportat această cerere. Un moderator o verifică." : "Ai raportat această ofertă. Un moderator o verifică.")); return w; }
+    const b = btn(kind === "request" ? "Raportează cererea" : "Raportează oferta", "ghost rqx-reportbtn", () => { b.hidden = true; w.append(reportBox(kind, id, done)); }); w.append(b); return w;
+  }
   const empty = (t) => el("p", "muted", t);
 
   /* ---------- „Ofertează piesele”: lista publică cu filtre ---------- */
@@ -224,8 +241,9 @@
     const open = r.status === "open" && new Date(r.expires_at) > Date.now();
     if (!open) box.append(el("p", "muted", "Cererea nu mai primește oferte."));
     else if (!me) { box.append(el("p", "rfq-intro", "Ai piesa? Conectează-te ca să trimiți o ofertă.")); box.append(btn("Conectează-te", "", openAuth)); }
+    else if (d.blocked && !d.my_offer) box.append(el("p", "muted", d.blocked === "me" ? "L-ai blocat pe cel care a cerut piesa. Deblochează-l ca să poți oferta." : "Nu poți trimite oferte la această cerere."));
     else if (d.my_offer) {
-      const o = d.my_offer, c = el("div", "rfq-facts"), [t, cl] = OS[o.status];
+      const o = d.my_offer, c = el("div", "rqx-card"), [t, cl] = OS[o.status];
       c.append(el("h3", "", "Oferta ta"), el("em", "rfq-chip " + cl, t), priceEl(money(o.price, o.currency)));
       if (o.message) c.append(el("p", "rfq-note", o.message)); const ph = photoStrip(o.images, r.title); if (ph) c.append(ph);
       box.append(c);
@@ -236,6 +254,7 @@
         acts.append(w); box.append(acts, msg, editBox, qaBox(o.id, false));
       }
     } else { box.append(el("h3", "", "Trimite o ofertă")); box.append(offerForm(r.id, null, () => viewDetail(id))); }
+    if (me) box.append(reportRow("request", r.id, d.reported, () => viewDetail(id)));
     body.replaceChildren(box);
   }
 
@@ -279,7 +298,7 @@
         no.onclick = guarded(no, m2, async () => { await api(`/api/offers/${o.id}/reject`, "POST"); viewDetail(id); });
         a.append(ok, no); c.append(a);
       }
-      if (o.status !== "rejected") c.append(qaBox(o.id, o.status === "pending" && r.status === "open"));
+      if (o.status !== "rejected") c.append(qaBox(o.id, o.status === "pending" && r.status === "open"), reportRow("offer", o.id, o.reported, () => viewDetail(id)));
       c.append(m2); box.append(c);
     });
     body.replaceChildren(box);

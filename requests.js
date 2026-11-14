@@ -24,10 +24,13 @@ const createAllow = createThrottle(8, 24 * 60 * 60 * 1000);   // max 8 cereri pe
 const offerAllow = createThrottle(30, 60 * 60 * 1000);        // max 30 oferte / modificări pe oră
 const questionAllow = createThrottle(30, 60 * 60 * 1000);
 const photoAllow = createThrottle(40, 60 * 60 * 1000);
+const reportAllow = createThrottle(10, 60 * 60 * 1000);
 const MAX_PHOTOS = 6, PHOTO_QUOTA = 60 * 1024 * 1024, MAX_EXTRA = 9, EDIT_MIN = 10, REQUEST_DAYS = 7, MAX_NOTIFY = 300;
 const KINDS = ['ambele', 'noi', 'second-hand'];
 const MARKS = ['later', 'ignored'];
 const SEEN = ['new', 'all', 'offered', 'later', 'ignored'];
+const REASONS = ['inselatorie', 'contact', 'interzis', 'spam', 'duplicat', 'altul'];
+const AUTO_CLOSE_REPORTS = 3;   // 3 utilizatori diferiți în 24 h -> cererea se închide până o verifică un moderator
 const ORDER_STATUS = ['new', 'confirmed', 'shipped', 'done', 'cancelled'];
 
 const toId = (v) => (/^\d{1,10}$/.test(String(v)) ? Number(v) : null);
@@ -37,6 +40,22 @@ const likeEsc = (s) => String(s || '').replace(/[%_\\]/g, ' ').trim().slice(0, 6
 
 // telefon / email / link în texte publice: contactul se dă doar după ce cumpărătorul acceptă oferta
 const CONTACT_RE = /@|https?:\/\/|www\.|(?:\+|\b00)\s?\d[\d\s().-]{8,}\d|\b0[\s.-]?7(?:[\s.-]?\d){8}\b/i;
+
+/* ---------- blocări (tabela user_blocks, aceeași ca la Mesaje) ---------- */
+/* { byMe, byThem }: cine pe cine a blocat între cei doi utilizatori */
+async function blockState(me, other, q = (s, p) => db.query(s, p)) {
+  if (!me || !other) return { byMe: false, byThem: false };
+  const r = await q(
+    `SELECT COUNT(*) FILTER (WHERE blocker_id = $1)::int AS by_me, COUNT(*) FILTER (WHERE blocker_id = $2)::int AS by_them
+       FROM user_blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)`, [me, other]);
+  const x = (r.rows && r.rows[0]) || {};
+  return { byMe: Number(x.by_me) > 0, byThem: Number(x.by_them) > 0 };
+}
+const blockError = (bs) => (bs.byMe ? 'RQ_BLOCAT_DE_TINE' : bs.byThem ? 'RQ_BLOCAT' : null);
+/* cererile pe care cei doi nu și le văd (în oricare sens) */
+const REQ_NOT_BLOCKED = (uid, owner) => `NOT EXISTS (SELECT 1 FROM user_blocks b WHERE (b.blocker_id = ${uid} AND b.blocked_id = ${owner}) OR (b.blocker_id = ${owner} AND b.blocked_id = ${uid}))`;
+/* ofertele vânzătorilor pe care cumpărătorul i-a blocat nu se mai afișează și nu se mai numără */
+const OFFER_NOT_BLOCKED = (o, buyer) => `NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.blocker_id = ${buyer} AND b.blocked_id = ${o}.seller_id)`;
 
 /* ---------- validări (funcții pure, testate în requests.test.js) ---------- */
 function parseRequest(b = {}) {
@@ -142,7 +161,7 @@ router.get('/img/:id(\\d+)', ah(async (req, res) => {
 /* ---------- lista publică: „Ofertează piesele” ---------- */
 const LIST_SQL = `SELECT r.id, r.title, r.description, r.make, r.model, r.year, r.variant, r.engine, r.kind, r.county, r.city, r.extra_parts, r.status, r.expires_at, r.created_at,
         (r.user_id = $1::int) AS mine, ${REQ_THUMB('r.id')} AS thumb,
-        (SELECT COUNT(*)::int FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected' AND r.user_id = $1::int) AS offers_count,
+        (SELECT COUNT(*)::int FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected' AND r.user_id = $1::int AND ${OFFER_NOT_BLOCKED('o', '$1::int')}) AS offers_count,
         mo.id AS my_offer_id, mo.price AS my_price, mo.currency AS my_currency, mk.mark AS my_mark
    FROM rq_requests r
    LEFT JOIN rq_offers mo ON mo.request_id = r.id AND mo.seller_id = $1::int AND mo.status <> 'rejected'
@@ -153,7 +172,7 @@ router.get('/', ah(async (req, res) => {
   const uid = req.user ? req.user.id : 0, q = likeEsc(req.query.q), make = likeEsc(req.query.make), county = likeEsc(req.query.county);
   const seen = SEEN.includes(req.query.seen) ? req.query.seen : 'all';
   const kind = KINDS.includes(req.query.kind) ? req.query.kind : '';
-  const w = ["r.status = 'open'", 'r.expires_at > NOW()'], p = [uid];
+  const w = ["r.status = 'open'", 'r.expires_at > NOW()', REQ_NOT_BLOCKED('$1::int', 'r.user_id')], p = [uid];
   if (q) { p.push('%' + q + '%'); w.push(`(r.title ILIKE $${p.length} OR r.description ILIKE $${p.length} OR r.make ILIKE $${p.length} OR r.model ILIKE $${p.length} OR r.extra_parts::text ILIKE $${p.length})`); }
   if (make) { p.push(make); w.push(`r.make ILIKE $${p.length}`); }
   if (county) { p.push(county); w.push(`r.county = $${p.length}`); }
@@ -167,7 +186,7 @@ router.get('/', ah(async (req, res) => {
     `SELECT COUNT(*) FILTER (WHERE mo.id IS NULL AND mk.mark IS NULL AND r.user_id <> $1)::int AS new, COUNT(*) FILTER (WHERE mo.id IS NOT NULL)::int AS offered,
             COUNT(*) FILTER (WHERE mk.mark = 'later')::int AS later, COUNT(*) FILTER (WHERE mk.mark = 'ignored')::int AS ignored, COUNT(*) FILTER (WHERE mk.mark IS DISTINCT FROM 'ignored')::int AS "all"
        FROM rq_requests r LEFT JOIN rq_offers mo ON mo.request_id = r.id AND mo.seller_id = $1 AND mo.status <> 'rejected' LEFT JOIN rq_marks mk ON mk.request_id = r.id AND mk.user_id = $1
-      WHERE r.status = 'open' AND r.expires_at > NOW()`, [uid])).rows[0] : null;
+      WHERE r.status = 'open' AND r.expires_at > NOW() AND ${REQ_NOT_BLOCKED('$1::int', 'r.user_id')}`, [uid])).rows[0] : null;
   res.set('Cache-Control', 'no-store').json({ requests: r.rows, counts });
 }));
 
@@ -176,9 +195,9 @@ router.get('/mine', requireAuth, ah(async (req, res) => {
   await sweep();
   const r = await db.query(
     `SELECT r.id, r.title, r.make, r.model, r.year, r.kind, r.county, r.city, r.status, r.expires_at, r.created_at, r.extra_parts, ${REQ_THUMB('r.id')} AS thumb,
-            (SELECT COUNT(*)::int FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected') AS offers_count,
-            (SELECT COUNT(*)::int FROM rq_offers o WHERE o.request_id = r.id AND o.status = 'pending' AND o.created_at > COALESCE(r.buyer_seen_at, r.created_at)) AS new_offers,
-            (SELECT MIN(o.price) FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected' AND o.currency = 'RON') AS best_price
+            (SELECT COUNT(*)::int FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected' AND ${OFFER_NOT_BLOCKED('o', 'r.user_id')}) AS offers_count,
+            (SELECT COUNT(*)::int FROM rq_offers o WHERE o.request_id = r.id AND o.status = 'pending' AND o.created_at > COALESCE(r.buyer_seen_at, r.created_at) AND ${OFFER_NOT_BLOCKED('o', 'r.user_id')}) AS new_offers,
+            (SELECT MIN(o.price) FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected' AND o.currency = 'RON' AND ${OFFER_NOT_BLOCKED('o', 'r.user_id')}) AS best_price
        FROM rq_requests r WHERE r.user_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [req.user.id]);
   res.set('Cache-Control', 'no-store').json({ requests: r.rows });
 }));
@@ -188,8 +207,8 @@ router.get('/summary', requireAuth, ah(async (req, res) => {
   const me = req.user.id;
   const r = (await db.query(
     `SELECT (SELECT COUNT(*)::int FROM rq_requests r WHERE r.user_id = $1 AND r.status = 'open') AS open,
-            (SELECT COUNT(*)::int FROM rq_offers o JOIN rq_requests r ON r.id = o.request_id WHERE r.user_id = $1 AND r.status = 'open' AND o.status = 'pending') AS waiting,
-            (SELECT COUNT(*)::int FROM rq_offers o JOIN rq_requests r ON r.id = o.request_id WHERE r.user_id = $1 AND r.status = 'open' AND o.status = 'pending' AND o.created_at > COALESCE(r.buyer_seen_at, r.created_at)) AS new_quotes,
+            (SELECT COUNT(*)::int FROM rq_offers o JOIN rq_requests r ON r.id = o.request_id WHERE r.user_id = $1 AND r.status = 'open' AND o.status = 'pending' AND ${OFFER_NOT_BLOCKED('o', '$1')}) AS waiting,
+            (SELECT COUNT(*)::int FROM rq_offers o JOIN rq_requests r ON r.id = o.request_id WHERE r.user_id = $1 AND r.status = 'open' AND o.status = 'pending' AND o.created_at > COALESCE(r.buyer_seen_at, r.created_at) AND ${OFFER_NOT_BLOCKED('o', '$1')}) AS new_quotes,
             (SELECT COUNT(*)::int FROM rq_questions q WHERE q.buyer_id = $1 AND q.answered_at IS NOT NULL AND q.answered_at > NOW() - INTERVAL '3 days') AS new_answers,
             (SELECT COUNT(*)::int FROM rq_questions q WHERE q.seller_id = $1 AND q.answer IS NULL) AS open_questions`, [me])).rows[0];
   res.set('Cache-Control', 'no-store').json(r);
@@ -209,8 +228,9 @@ router.get('/mine/:id(\\d+)', requireAuth, ah(async (req, res) => {
     `SELECT o.id, o.seller_id, o.price, o.currency, o.message, o.status, o.created_at, o.updated_at, u.nickname AS seller_name, ${RATING('o.seller_id')} AS seller_rating, ${RATING_N('o.seller_id')} AS seller_rating_n,
             ${OFF_IMGS('o.id')} AS images, (SELECT COUNT(*)::int FROM rq_questions q WHERE q.offer_id = o.id) AS questions_count,
             CASE WHEN o.status = 'accepted' THEN u.phone END AS seller_phone, CASE WHEN o.status = 'accepted' THEN u.name END AS seller_full_name,
-            CASE WHEN o.status = 'accepted' THEN (SELECT s.id FROM rq_orders s WHERE s.offer_id = o.id) END AS order_id
-       FROM rq_offers o JOIN users u ON u.id = o.seller_id WHERE o.request_id = $1 ORDER BY (o.status = 'accepted') DESC, (o.status = 'rejected'), o.price ASC, o.created_at`, [id])).rows;
+            CASE WHEN o.status = 'accepted' THEN (SELECT s.id FROM rq_orders s WHERE s.offer_id = o.id) END AS order_id,
+            EXISTS (SELECT 1 FROM rq_reports p WHERE p.kind = 'offer' AND p.offer_id = o.id AND p.reporter_id = $2 AND p.status = 'open') AS reported
+       FROM rq_offers o JOIN users u ON u.id = o.seller_id WHERE o.request_id = $1 AND ${OFFER_NOT_BLOCKED('o', '$2')} ORDER BY (o.status = 'accepted') DESC, (o.status = 'rejected'), o.price ASC, o.created_at`, [id, me])).rows;
   db.query('UPDATE rq_requests SET buyer_seen_at = NOW() WHERE id = $1', [id]).catch(() => {});
   res.set('Cache-Control', 'no-store').json({ request: r, offers, editable: r.status === 'open' && Date.now() - new Date(r.created_at).getTime() < EDIT_MIN * 60000 });
 }));
@@ -221,12 +241,14 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   const r = await loadDetail(id, uid);
   if (!r) return res.status(404).json({ error: 'NEGASIT' });
   delete r.vin; delete r.ship_address; delete r.buyer_seen_at;
-  let my_offer = null, my_mark = null;
+  let my_offer = null, my_mark = null, blocked = null, reported = false;
+  if (uid && !r.mine) { const bs = await blockState(uid, r.user_id); blocked = bs.byMe ? 'me' : bs.byThem ? 'them' : null; }
   if (uid) {
+    reported = (await db.query("SELECT 1 FROM rq_reports WHERE kind = 'request' AND request_id = $1 AND reporter_id = $2 AND status = 'open'", [id, uid])).rowCount > 0;
     my_offer = (await db.query(`SELECT o.id, o.price, o.currency, o.message, o.status, ${OFF_IMGS('o.id')} AS images FROM rq_offers o WHERE o.request_id = $1 AND o.seller_id = $2 AND o.status <> 'rejected'`, [id, uid])).rows[0] || null;
     my_mark = ((await db.query('SELECT mark FROM rq_marks WHERE user_id = $1 AND request_id = $2', [uid, id])).rows[0] || {}).mark || null;
   }
-  res.set('Cache-Control', 'no-store').json({ request: r, my_offer, my_mark });
+  res.set('Cache-Control', 'no-store').json({ request: r, my_offer, my_mark, blocked, reported });
 }));
 
 /* ---------- marcaje, reactivare, ștergere, editare, creare ---------- */
@@ -244,6 +266,7 @@ router.delete('/:id(\\d+)/mark', requireAuth, ah(async (req, res) => {
 }));
 
 router.post('/:id(\\d+)/reactivate', requireAuth, ah(async (req, res) => {
+  if ((await db.query("SELECT 1 FROM rq_reports WHERE request_id = $1 AND status = 'open' AND kind = 'request'", [Number(req.params.id)])).rowCount) return res.status(409).json({ error: 'CERERE_RAPORTATA' });
   const r = await db.query(`UPDATE rq_requests SET status = 'open', expires_at = NOW() + make_interval(days => $3) WHERE id = $1 AND user_id = $2 AND status = 'closed' RETURNING id`, [Number(req.params.id), req.user.id, REQUEST_DAYS]);
   if (!r.rowCount) return res.status(409).json({ error: 'CERERE_NU_SE_POATE_REACTIVA' });
   res.json({ ok: true });
@@ -307,6 +330,8 @@ router.post('/:id(\\d+)/offers', requireVerified, ah(async (req, res) => {
   const r = (await db.query("SELECT id, user_id, title FROM rq_requests WHERE id = $1 AND status = 'open' AND expires_at > NOW()", [id])).rows[0];
   if (!r) return res.status(404).json({ error: 'CERERE_INCHISA' });
   if (r.user_id === req.user.id) return res.status(400).json({ error: 'CERERE_PROPRIE' });
+  const be = blockError(await blockState(req.user.id, r.user_id));
+  if (be) return res.status(403).json({ error: be });
   if ((await db.query("SELECT 1 FROM rq_offers WHERE request_id = $1 AND seller_id = $2 AND status = 'pending'", [id, req.user.id])).rowCount) return res.status(409).json({ error: 'OFERTA_EXISTA' });
   const o = (await db.query('INSERT INTO rq_offers(request_id, seller_id, price, currency, message) VALUES($1,$2,$3,$4,$5) RETURNING id', [id, req.user.id, p.v.price, p.v.currency, p.v.message])).rows[0];
   const ids = imageIds((req.body || {}).image_ids);
@@ -334,7 +359,7 @@ offersRouter.get('/received', requireAuth, ah(async (req, res) => {
   const r = await db.query(
     `SELECT o.id, o.price, o.currency, o.message, o.status, o.created_at, o.seller_id, u.nickname AS seller_name, ${RATING('o.seller_id')} AS seller_rating, ${OFF_THUMB('o.id')} AS thumb,
             q.id AS request_id, q.title AS request_title, ${REQ_THUMB('q.id')} AS req_thumb
-       FROM rq_offers o JOIN rq_requests q ON q.id = o.request_id JOIN users u ON u.id = o.seller_id WHERE q.user_id = $1 ORDER BY o.created_at DESC LIMIT 200`, [req.user.id]);
+       FROM rq_offers o JOIN rq_requests q ON q.id = o.request_id JOIN users u ON u.id = o.seller_id WHERE q.user_id = $1 AND ${OFFER_NOT_BLOCKED('o', '$1')} ORDER BY o.created_at DESC LIMIT 200`, [req.user.id]);
   res.set('Cache-Control', 'no-store').json({ offers: r.rows });
 }));
 
@@ -377,6 +402,8 @@ offersRouter.post('/:id(\\d+)/accept', requireAuth, ah(async (req, res) => {
     if (!o) { await c.query('ROLLBACK'); return res.status(404).json({ error: 'NEGASIT' }); }
     if (o.buyer_id !== req.user.id) { await c.query('ROLLBACK'); return res.status(403).json({ error: 'INTERZIS' }); }
     if (o.status !== 'pending' || o.rstatus !== 'open') { await c.query('ROLLBACK'); return res.status(409).json({ error: 'OFERTA_NU_MAI_E_DISPONIBILA' }); }
+    const be = blockError(await blockState(o.buyer_id, o.seller_id, (q, p) => c.query(q, p)));
+    if (be) { await c.query('ROLLBACK'); return res.status(403).json({ error: be }); }
     await c.query("UPDATE rq_offers SET status = 'accepted', updated_at = NOW() WHERE id = $1", [o.id]);
     const lost = await c.query("UPDATE rq_offers SET status = 'rejected', updated_at = NOW() WHERE request_id = $1 AND id <> $2 AND status = 'pending' RETURNING seller_id", [o.request_id, o.id]);
     await c.query("UPDATE rq_requests SET status = 'matched' WHERE id = $1", [o.request_id]);
@@ -405,6 +432,8 @@ offersRouter.post('/:id(\\d+)/questions', requireVerified, ah(async (req, res) =
   const o = (await db.query(`SELECT o.id, o.seller_id, q.user_id AS buyer_id, q.title FROM rq_offers o JOIN rq_requests q ON q.id = o.request_id WHERE o.id = $1 AND q.status = 'open'`, [Number(req.params.id)])).rows[0];
   if (!o) return res.status(404).json({ error: 'OFERTA_NEGASITA' });
   if (o.buyer_id !== req.user.id) return res.status(403).json({ error: 'INTERZIS' });
+  const be = blockError(await blockState(req.user.id, o.seller_id));
+  if (be) return res.status(403).json({ error: be });
   if ((await db.query('SELECT COUNT(*)::int AS n FROM rq_questions WHERE offer_id = $1', [o.id])).rows[0].n >= 5) return res.status(409).json({ error: 'PREA_MULTE_INTREBARI' });
   const q = (await db.query('INSERT INTO rq_questions(offer_id, buyer_id, seller_id, body) VALUES($1,$2,$3,$4) RETURNING id, created_at', [o.id, req.user.id, o.seller_id, body])).rows[0];
   await notify(o.seller_id, 'rfq_q', null, `Întrebare la oferta ta: ${o.title}`, body.slice(0, 120));
@@ -431,6 +460,35 @@ questionsRouter.post('/:id(\\d+)/answer', requireVerified, ah(async (req, res) =
   live.send(q.buyer_id, 'rfq', {});
   res.json({ ok: true });
 }));
+
+/* ---------- raportări (către moderatori) ---------- */
+async function addReport(req, res, kind, id) {
+  const reason = String((req.body || {}).reason || ''), details = String((req.body || {}).details || '').trim().slice(0, 500);
+  if (!REASONS.includes(reason)) return res.status(400).json({ error: 'RQ_RAPORT_MOTIV' });
+  if (!reportAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const me = req.user.id;
+  const t = (await db.query(
+    kind === 'request' ? "SELECT r.id AS request_id, NULL::int AS offer_id, r.user_id AS owner_id, r.title, r.status FROM rq_requests r WHERE r.id = $1"
+      : "SELECT q.id AS request_id, o.id AS offer_id, o.seller_id AS owner_id, q.title, q.status, q.user_id AS buyer_id FROM rq_offers o JOIN rq_requests q ON q.id = o.request_id WHERE o.id = $1", [id])).rows[0];
+  if (!t) return res.status(404).json({ error: 'NEGASIT' });
+  if (t.owner_id === me) return res.status(400).json({ error: 'RQ_REPORT_PROPRIU' });
+  if (kind === 'offer' && t.buyer_id !== me) return res.status(403).json({ error: 'INTERZIS' });   // ofertele le vede doar cumpărătorul
+  const col = kind === 'request' ? 'request_id' : 'offer_id';
+  const dup = await db.query(`SELECT 1 FROM rq_reports WHERE kind = $1 AND ${col} = $2 AND reporter_id = $3 AND status = 'open'`, [kind, id, me]);
+  if (!dup.rowCount) {
+    await db.query('INSERT INTO rq_reports(kind, request_id, offer_id, reporter_id, target_user_id, target_title, reason, details) VALUES($1,$2,$3,$4,$5,$6,$7,$8)', [kind, t.request_id, t.offer_id, me, t.owner_id, t.title, reason, details]);
+    if (kind === 'request' && t.status === 'open') {
+      const n = (await db.query("SELECT COUNT(DISTINCT reporter_id)::int AS n FROM rq_reports WHERE kind = 'request' AND request_id = $1 AND status = 'open' AND created_at > NOW() - INTERVAL '24 hours'", [id])).rows[0].n;
+      if (n >= AUTO_CLOSE_REPORTS) {
+        const c = await db.query("UPDATE rq_requests SET status = 'closed' WHERE id = $1 AND status = 'open' RETURNING user_id", [id]);
+        if (c.rowCount) { notify(c.rows[0].user_id, 'rfq_mod', null, `Cererea ta e în verificare: ${t.title}`, 'A fost raportată de mai mulți utilizatori; un moderator o verifică.'); live.send(c.rows[0].user_id, 'rfq', { request_id: id }); }
+      }
+    }
+  }
+  res.status(201).json({ ok: true });
+}
+router.post('/:id(\\d+)/report', requireAuth, ah((req, res) => addReport(req, res, 'request', Number(req.params.id))));
+offersRouter.post('/:id(\\d+)/report', requireAuth, ah((req, res) => addReport(req, res, 'offer', Number(req.params.id))));
 
 /* ---------- comenzi (după acceptarea unei oferte) ---------- */
 ordersRouter.get('/', requireAuth, ah(async (req, res) => {
@@ -459,4 +517,4 @@ ordersRouter.patch('/:id(\\d+)/status', requireAuth, ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-module.exports = { router, offersRouter, questionsRouter, ordersRouter, sweep, parseRequest, parseOffer, KINDS, CONTACT_RE };
+module.exports = { router, offersRouter, questionsRouter, ordersRouter, sweep, parseRequest, parseOffer, blockState, blockError, REASONS, KINDS, CONTACT_RE };

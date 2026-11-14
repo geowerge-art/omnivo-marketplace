@@ -1866,3 +1866,7 @@ body.menu-open .bottom-nav { display: none; }
 .rqx-wait { color: var(--muted); font-size: 13px; }
 .rfq-lbl { display: block; margin: 12px 0 4px; font-weight: 700; color: var(--navy); }
 .rfq-form > .ghost, .rfq-form > button[type=submit], .rfq-quote > button[type=submit] { margin-top: 12px; }
+.rqx-reportrow { margin-top: 14px; }
+.rqx-reportbtn { font-size: 13px; min-height: 36px; opacity: .85; }
+.rqx-report { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid #e8c4c0; border-radius: 12px; background: #fbf3f2; }
+.rqx-report select, .rqx-report textarea { width: 100%; box-sizing: border-box; }

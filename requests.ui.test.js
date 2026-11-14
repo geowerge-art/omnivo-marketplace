@@ -35,6 +35,13 @@ const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi'
   ctx.__api = async (u) => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null });
   await T.go('detail', 4); await tick(); s = text(T.body);
   t('detaliu: formular „Trimite o ofertă” cu prețul tău', /Trimite o ofertă/.test(s) && /Prețul tău/.test(s) && /Cerută de Ion/.test(s));
+  t('detaliu public: buton „Raportează cererea”', /Raportează cererea/.test(s));
+  ctx.__api = async () => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null, reported: true });
+  await T.go('detail', 4); await tick(); s = text(T.body);
+  t('deja raportată: mesaj în loc de buton', /Ai raportat această cerere/.test(s) && !/Raportează cererea/.test(s));
+  ctx.__api = async () => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null, blocked: 'me' });
+  await T.go('detail', 4); await tick(); s = text(T.body);
+  t('utilizator blocat: fără formular de ofertă, cu explicație', /L-ai blocat/.test(s) && !/Trimite o ofertă/.test(s));
   // detaliu cu ofertă proprie în așteptare
   ctx.__api = async () => ({ request: REQ({ id: 4, images: [] }), my_offer: { id: 7, price: 300, currency: 'EUR', message: 'Stare bună', status: 'pending', images: [] }, my_mark: null });
   await T.go('detail', 4); await tick(); s = text(T.body);
@@ -51,6 +58,7 @@ const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi'
   t('cererea mea: oferte primite (2), VIN și adresa vizibile', /Oferte primite \(2\)/.test(s) && /WAUZZZ8K9CA012345/.test(s) && /Str\. X 1/.test(s));
   t('ofertă în așteptare: Acceptă / Refuză; acceptată: contact vânzător', /Acceptă oferta/.test(s) && /Refuză/.test(s) && /0722123456/.test(s) && /★ 4\.8 \(12\)/.test(s));
   t('cerere editabilă: buton Modifică cererea + Închide', /Modifică cererea/.test(s) && /Închide cererea/.test(s));
+  t('cererea mea: „Raportează oferta” pe ofertele primite', (s.match(/Raportează oferta/g) || []).length === 2);
   // formular nou
   T.st.edit = null; T.viewNew(); s = text(T.body);
   t('Cere oferte piese: câmpurile din AutoParts', ['Piesa căutată', 'Marca', 'Model', 'An', 'Motor', 'Serie șasiu', 'Județ', 'Localitate', 'Adresă de livrare', 'Trimite cererea', 'Adaugă încă o piesă'].every((x) => s.includes(x)));

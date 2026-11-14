@@ -1,16 +1,26 @@
 Copiaza fisierele din acest zip peste proiectul Omnivo (aceleasi locuri, in radacina), apoi ruleaza: npm run migrate
+(suprascrie tot; migrarile se aplica in ordine: 039 apoi 040)
 
-NOI sau MODIFICATE:
-  039_rfq_autoparts.sql   (nou: migrarea cu tabelele rq_*)
-  requests.js             (inlocuit: backend cereri/oferte/comenzi/intrebari)
-  requests-ui.js          (inlocuit: paginile in stilul AutoParts)
-  requests.test.js        (inlocuit)
-  requests.ui.test.js     (inlocuit)
-  app.js                  (montate /api/offers, /api/offer-questions, /api/orders)
-  style.css               (adaugat bloc rqx-* la final)
-  MODIFICARI.md           (nota noua)
+NOI:
+  039_rfq_autoparts.sql        tabelele rq_* (cereri, oferte, comenzi, intrebari, poze)
+  040_rfq_reports.sql          tabela rq_reports (raportari)
+  admin-requests.js            moderarea cererilor/ofertelor/comenzi/raportarilor in admin
+  admin-requests.test.js       teste backend moderare
+  admin-requests.ui.test.js    test interfata admin
 
-DE STERS din proiect (testele vechi, pentru sistemul inlocuit):
+INLOCUITE / MODIFICATE:
+  requests.js                  backend cereri/oferte/comenzi + blocari + raportari
+  requests-ui.js               paginile in stilul AutoParts + blocare + raportare
+  requests.test.js             teste
+  requests.ui.test.js          teste interfata
+  admin.js                     monteaza admin-requests.js
+  admin-ui.js                  fila "Cereri piese" (cereri, oferte, comenzi, raportari)
+  script.js                    iconita pentru notificarea rfq_mod (o singura linie)
+  app.js                       monteaza /api/offers, /api/offer-questions, /api/orders
+  style.css                    blocuri rqx-* la final
+  MODIFICARI.md                nota
+
+DE STERS din proiect (teste vechi, pentru sistemul inlocuit):
   requests.summary.ui.test.js
   requests.summary.test.js
   requests.photos.test.js

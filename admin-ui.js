@@ -2,7 +2,7 @@
    Folosește din script.js: $, api, me, show, showMessage, errText, price, ERR, openDetail, openAuth, openEdit, openLightbox. */
 (() => {
   Object.assign(ERR, {
-    MOTIV_OBLIGATORIU: "Scrie un motiv.", BLOCARE_MAX_30_ZILE: "Moderatorii pot bloca cel mult 30 de zile.", DOAR_ADMIN: "Doar administratorii pot face asta.",
+    MOTIV_OBLIGATORIU: "Scrie un motiv.", ACTIUNE_INVALIDA: "Acțiunea nu se potrivește cu raportarea.", CERERE_REZOLVATA: "Cererea e rezolvată (oferta a fost acceptată) și nu se mai poate schimba.", STATUS_INVALID: "Stare invalidă.", BLOCARE_MAX_30_ZILE: "Moderatorii pot bloca cel mult 30 de zile.", DOAR_ADMIN: "Doar administratorii pot face asta.",
     CANNOT_BLOCK_SELF: "Nu te poți bloca singur.", ROL_PROPRIU: "Nu îți poți schimba singur rolul.", ADMIN_PRINCIPAL: "Contul principal de administrator nu poate fi schimbat.",
     ULTIMUL_ADMIN: "Trebuie să rămână cel puțin un administrator.", CANNOT_DELETE_ADMIN: "Un administrator nu poate fi șters.", INTERZIS: "Nu ai voie să faci asta.",
     NIMIC_SELECTAT: "Nu ai selectat niciun anunț.", REPORT_PROPRIU: "Nu îți poți raporta propriul anunț.", RAPORT_MOTIV: "Alege motivul raportării."
@@ -10,18 +10,18 @@
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const fmt = (d) => new Date(d).toLocaleString("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   const fmtD = (d) => new Date(d).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" });
-  const TABS = [["over", "Panou"], ["ads", "Anunțuri"], ["users", "Utilizatori"], ["reports", "Raportări"], ["log", "Jurnal"]];
+  const TABS = [["over", "Panou"], ["ads", "Anunțuri"], ["users", "Utilizatori"], ["reports", "Raportări"], ["reqs", "Cereri piese"], ["log", "Jurnal"]];
   const AB = { pending: "De aprobat", approved: "Active", rejected: "Respinse", blocked: "Blocate", sold: "Vândute", all: "Toate", deleted: "Șterse" };
   const UB = { "": "Toți", "status:blocked": "Blocați", "role:moderator": "Moderatori", "role:admin": "Administratori" };
   const RB = { open: "Deschise", resolved: "Rezolvate", dismissed: "Respinse" };
   const ROLE = { user: "Utilizator", moderator: "Moderator", admin: "Administrator" };
   const REASON = { inselatorie: "Înșelătorie", interzis: "Interzis", duplicat: "Duplicat", gresit: "Preț/categorie greșită", vandut: "Deja vândut", altul: "Altceva" };
-  const ACT = { listing_approved: "Anunț aprobat", listing_rejected: "Anunț respins", listing_blocked: "Anunț blocat", listing_pending: "Anunț trimis în moderare", listing_edit: "Anunț editat", listing_delete: "Anunț șters",
+  const ACT = { rfq_report_resolved: "Raportare cerere rezolvată", rfq_report_dismissed: "Raportare cerere respinsă", request_close: "Cerere închisă", request_reopen: "Cerere redeschisă", request_delete: "Cerere ștearsă", offer_remove: "Ofertă scoasă", listing_approved: "Anunț aprobat", listing_rejected: "Anunț respins", listing_blocked: "Anunț blocat", listing_pending: "Anunț trimis în moderare", listing_edit: "Anunț editat", listing_delete: "Anunț șters",
     user_block: "Cont blocat", user_unblock: "Cont deblocat", user_role: "Rol schimbat", user_delete: "Cont șters", report_resolved: "Raportare rezolvată", report_dismissed: "Raportare respinsă", listing_promote: "Promovare anunț", review_delete: "Recenzie ștearsă", credits_adjust: "Credite ajustate" };
-  const ICON = { listing_approved: "✅", listing_rejected: "⛔", listing_blocked: "🚫", listing_pending: "⏳", listing_edit: "✎", listing_delete: "🗑", user_block: "🔒", user_unblock: "🔓", user_role: "🛡", user_delete: "🗑", report_resolved: "⚑", report_dismissed: "⚑", listing_promote: "⭐", review_delete: "★", credits_adjust: "💰" };
+  const ICON = { rfq_report_resolved: "✔", rfq_report_dismissed: "✕", request_close: "🔒", request_reopen: "🔓", request_delete: "🗑", offer_remove: "✂", listing_approved: "✅", listing_rejected: "⛔", listing_blocked: "🚫", listing_pending: "⏳", listing_edit: "✎", listing_delete: "🗑", user_block: "🔒", user_unblock: "🔓", user_role: "🛡", user_delete: "🗑", report_resolved: "⚑", report_dismissed: "⚑", listing_promote: "⭐", review_delete: "★", credits_adjust: "💰" };
   const PILL = { pending: "warn", approved: "ok", rejected: "bad", blocked: "bad", sold: "mute", deleted: "mute" };
   const DIST = [["approved", "#2e9e5b"], ["pending", "#d9a528"], ["sold", "#8a8a8a"], ["rejected", "#d9705f"], ["blocked", "#b3261e"]];
-  const st = { tab: "over", ads: "pending", users: "", reports: "open", q: { ads: "", users: "" }, badge: { pending: 0, reports: 0 }, counts: {}, review: 0, sel: new Set(), selMode: false, updateBulk: () => {} };
+  const st = { tab: "over", ads: "pending", users: "", reports: "open", reqSub: "requests", reqSt: { requests: "open", offers: "pending", orders: "", reports: "open" }, rfqBadge: 0, reqQ: "", q: { ads: "", users: "" }, badge: { pending: 0, reports: 0 }, counts: {}, review: 0, sel: new Set(), selMode: false, updateBulk: () => {} };
   const fail = (e) => showMessage("Eroare", errText(e));
   const pill = (s) => el("span", "adm-pill " + (PILL[s] || "mute"), AB[s] || s);
 
@@ -285,20 +285,113 @@
     const list = el("div", "adm-list two"), top = el("div", "adm-top"); top.append(chips(RB, st.reports, (k) => { st.reports = k; vReports(b); }));
     b.replaceChildren(top, list); paged(list, `/api/admin/reports?status=${st.reports}`, reportRow);
   }
+
+  /* ---- Cereri piese: cereri, oferte, comenzi (moderare) ---- */
+  const RQ_SUB = { requests: "Cereri", offers: "Oferte", orders: "Comenzi", reports: "Raportări" };
+  const RQ_ST = {
+    requests: { "": "Toate", open: "Deschise", matched: "Rezolvate", closed: "Închise" },
+    offers: { "": "Toate", pending: "În așteptare", accepted: "Acceptate", rejected: "Refuzate" },
+    reports: { open: "Deschise", resolved: "Rezolvate", dismissed: "Respinse" },
+    orders: { "": "Toate", new: "Noi", confirmed: "Confirmate", shipped: "Expediate", done: "Finalizate", cancelled: "Anulate" }
+  };
+  const RQ_PILL = { open: "ok", matched: "mute", closed: "bad", pending: "warn", accepted: "ok", rejected: "bad", new: "warn", confirmed: "ok", shipped: "ok", done: "mute", cancelled: "bad", resolved: "ok", dismissed: "mute" };
+  const RQ_LBL = { open: "Deschisă", matched: "Rezolvată", closed: "Închisă", pending: "În așteptare", accepted: "Acceptată", rejected: "Refuzată", new: "Nouă", confirmed: "Confirmată", shipped: "Expediată", done: "Finalizată", cancelled: "Anulată", resolved: "Rezolvată", dismissed: "Respinsă" };
+  const RQ_REASON = { inselatorie: "Înșelătorie", contact: "Date de contact", interzis: "Interzis", spam: "Spam", duplicat: "Duplicat", altul: "Altceva" };
+  const rqPill = (s2) => el("span", "adm-pill " + (RQ_PILL[s2] || "mute"), RQ_LBL[s2] || s2);
+  const rqMoney = (n, c) => `${Number(n).toLocaleString("ro-RO")} ${c === "EUR" ? "€" : "lei"}`;
+  const rqReload = () => vReqs($("admBody"));
+  const rqPhotos = (list, alt) => { if (!list || !list.length) return null; const w = el("div", "rfq-photos sm"); list.forEach((im, i) => { const b = el("button", "rfq-ph"); b.type = "button"; const g = el("img"); g.src = im.thumb || im.url; g.alt = ""; g.loading = "lazy"; b.append(g); b.onclick = () => openLightbox(list.map((x) => x.url), i, alt); w.append(b); }); return w; };
+
+  async function rqRemoveOffer(o, title) {
+    const f = await ask({ title: "Scoate oferta", hint: `${o.seller ? "@" + o.seller + " · " : ""}${rqMoney(o.price, o.currency)} · „${title}”`, label: "Motiv (îl vede vânzătorul)" });
+    if (!f) return; await api(`/api/admin/offers/${o.id}/remove`, "POST", { reason: f.reason }); rqReload();
+  }
+
+  function rqDetail(box, d) {
+    const r = d.request, parts = [r.title, ...(r.extra_parts || []).map((x) => x.title + (x.details ? " · " + x.details : ""))];
+    box.replaceChildren();
+    const info = el("div"); info.append(el("h4", "", "Cerere"));
+    info.append(el("p", "", parts.join("\n")));
+    [[r.make, r.model, r.year, r.variant, r.engine].filter(Boolean).join(" "), r.description, r.vin && "VIN: " + r.vin, r.ship_address && "Livrare: " + r.ship_address, `Cumpărător @${r.owner} · ${r.owner_email || "—"}${r.owner_phone ? " · " + r.owner_phone : ""}${r.owner_status && r.owner_status !== "active" ? " · cont " + r.owner_status : ""}`]
+      .filter(Boolean).forEach((t) => info.append(el("p", "adm-meta", t)));
+    box.append(info); const ph = rqPhotos(r.images, r.title); if (ph) box.append(ph);
+    box.append(el("h4", "", `Oferte (${d.offers.length})`));
+    if (!d.offers.length) box.append(el("p", "muted", "Nicio ofertă."));
+    d.offers.forEach((o) => {
+      const it = item({ lead: el("div", "adm-av", "€"), title: `@${o.seller} · ${rqMoney(o.price, o.currency)}`, tag: rqPill(o.status), meta: [o.message, fmt(o.created_at)],
+        acts: o.status === "pending" ? [["Scoate oferta", () => rqRemoveOffer(o, r.title), "bad"]] : [] });
+      box.append(it); const p2 = rqPhotos(o.images, r.title); if (p2) box.append(p2);
+    });
+  }
+
+  function rqRow(r) {
+    const wrap = el("div"); let open = null;
+    const acts = [];
+    if (r.status === "open") acts.push(["Închide", async () => {
+      const f = await ask({ title: "Închide cererea", hint: `„${r.title}”`, label: "Motiv (îl vede cumpărătorul)" }); if (!f) return;
+      await api(`/api/admin/requests/${r.id}`, "PATCH", { status: "closed", reason: f.reason }); rqReload();
+    }, "bad"]);
+    if (r.status === "closed") acts.push(["Redeschide", async () => { await api(`/api/admin/requests/${r.id}`, "PATCH", { status: "open" }); rqReload(); }, "ok"]);
+    if (me.role === "admin") acts.push(["Șterge", async () => {
+      const f = await ask({ title: "Șterge cererea", hint: `„${r.title}” · se șterg și ofertele`, label: "Motiv (îl vede cumpărătorul)" }); if (!f) return;
+      await api(`/api/admin/requests/${r.id}`, "DELETE", { reason: f.reason }); rqReload();
+    }, "bad"]);
+    const toggle = async () => {
+      if (open) { open.remove(); open = null; return; }
+      open = el("div", "adm-box"); open.append(el("p", "muted", "Se încarcă…")); wrap.append(open);
+      try { rqDetail(open, await api(`/api/admin/requests/${r.id}`)); } catch (e) { open.replaceChildren(el("p", "err", errText(e))); }
+    };
+    wrap.append(item({ lead: el("div", "adm-av", "🔧"), title: r.title + (r.extra_n ? ` +${r.extra_n}` : ""), tag: rqPill(r.status),
+      meta: [[[r.make, r.model, r.year].filter(Boolean).join(" "), [r.county, r.city].filter(Boolean).join(", ")].filter(Boolean).join(" · "), `@${r.owner || "—"} · ${r.offers_count} oferte · ${fmt(r.created_at)}`], acts, onOpen: toggle }));
+    return wrap;
+  }
+  const rqOffer = (o) => item({ lead: el("div", "adm-av", "€"), title: `${rqMoney(o.price, o.currency)} · ${o.request_title}`, tag: rqPill(o.status),
+    meta: [o.message, `@${o.seller} către @${o.buyer} · ${fmt(o.created_at)}`], acts: o.status === "pending" ? [["Scoate oferta", () => rqRemoveOffer(o, o.request_title), "bad"]] : [] });
+  const rqOrder = (o) => item({ lead: el("div", "adm-av", "📦"), title: `${rqMoney(o.price, o.currency)} · ${o.title}`, tag: rqPill(o.status), meta: [`cumpărător @${o.buyer || "—"} · vânzător @${o.seller || "—"}`, fmt(o.created_at)] });
+
+  function rqReport(r) {
+    const done = (to, action) => async () => {
+      const f = await ask({ title: action === "close_request" ? "Închide cererea" : action === "remove_offer" ? "Scoate oferta" : to === "resolved" ? "Marchează rezolvată" : "Respinge raportarea", hint: `„${r.target_title}”`, label: action ? "Motiv (îl vede utilizatorul)" : "Notă", required: !!action });
+      if (!f) return; await api(`/api/admin/rfq-reports/${r.id}`, "PATCH", { status: to, note: f.reason, action }); rqReload();
+    };
+    const acts = [];
+    if (r.status === "open") {
+      acts.push(["Rezolvată", done("resolved"), "ok"], ["Respinge raportarea", done("dismissed")]);
+      if (r.kind === "request" && r.target_status === "open") acts.push(["Închide cererea", done("resolved", "close_request"), "bad"]);
+      if (r.kind === "offer" && r.target_status === "pending") acts.push(["Scoate oferta", done("resolved", "remove_offer"), "bad"]);
+    }
+    return item({ lead: el("div", "adm-av", "⚑"), title: (r.kind === "request" ? "Cerere: " : "Ofertă: ") + r.target_title + (r.kind === "offer" && r.price ? ` · ${rqMoney(r.price, r.currency)}` : ""), tag: el("span", "adm-pill warn", RQ_REASON[r.reason] || r.reason),
+      meta: [r.details, `de la @${r.reporter || "—"} · către @${r.target_user || "—"} · ${fmt(r.created_at)}`, r.target_status ? `Acum: ${RQ_LBL[r.target_status] || r.target_status}` : "Țintă ștearsă", r.admin_note ? `Notă: ${r.admin_note}` : ""],
+      flags: [r.same_target > 1 ? `${r.same_target} raportări pe aceeași țintă` : ""], acts });
+  }
+  const rfqBadge = () => api("/api/admin/rfq-overview").then((d) => { st.rfqBadge = d.open_reports || 0; tabs(); }).catch(() => {});
+
+  async function vReqs(b) {
+    const sub = st.reqSub, top = el("div", "adm-top"), list = el("div", "adm-list two");
+    const load = () => {
+      const base = { requests: "/api/admin/requests", offers: "/api/admin/offers", orders: "/api/admin/rfq-orders", reports: "/api/admin/rfq-reports" }[sub], qs = new URLSearchParams();
+      if (st.reqSt[sub]) qs.set("status", st.reqSt[sub]); if (st.reqQ) qs.set("q", st.reqQ);
+      paged(list, `${base}?${qs}`, { requests: rqRow, offers: rqOffer, orders: rqOrder, reports: rqReport }[sub]);
+    };
+    top.append(chips(RQ_SUB, sub, (k) => { st.reqSub = k; vReqs(b); }), chips(RQ_ST[sub], st.reqSt[sub], (k) => { st.reqSt[sub] = k; vReqs(b); }),
+      ...(sub === "reports" ? [] : [searchBox("Caută cerere, utilizator, piesă…", st.reqQ, (v) => { st.reqQ = v; load(); })]));
+    b.replaceChildren(top, list); load(); rfqBadge();
+  }
   async function vLog(b) { const list = el("div"); b.replaceChildren(list); paged(list, "/api/admin/activity", actRow); }
 
   /* ---- cadru ---- */
   function tabs() {
     $("admTabs").replaceChildren(...TABS.map(([k, t]) => {
       const b = el("button", st.tab === k ? "on" : "", t); b.type = "button";
-      const n = k === "ads" ? st.badge.pending : k === "reports" ? st.badge.reports : 0; if (n) b.append(el("span", "adm-badge", n));
+      const n = k === "ads" ? st.badge.pending : k === "reports" ? st.badge.reports : k === "reqs" ? st.rfqBadge : 0; if (n) b.append(el("span", "adm-badge", n));
       b.onclick = () => go(k); return b;
     }));
   }
-  const VIEWS = { over: vOver, ads: vAds, users: vUsers, reports: vReports, log: vLog };
+  const VIEWS = { over: vOver, ads: vAds, users: vUsers, reports: vReports, reqs: vReqs, log: vLog };
   async function render() {
     const b = $("admBody"); b.replaceChildren(el("p", "muted", "Se încarcă…"));
     try { await VIEWS[st.tab](b); } catch (e) { b.replaceChildren(el("p", "err", errText(e))); }
+    if (st.tab !== "reqs") rfqBadge();
     if (st.tab !== "over" && st.tab !== "ads") api("/api/admin/overview").then((d) => { st.badge = { pending: d.listings.pending, reports: d.reports.open }; tabs(); }).catch(() => {});
   }
   function go(k) { st.tab = k; tabs(); $("admBody").scrollTop = 0; render(); }

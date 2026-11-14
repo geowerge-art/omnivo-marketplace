@@ -1,9 +1,12 @@
 # Ce s-a schimbat în această versiune
 
-**„Cereri piese” / „Ofertează piesele” portate 1:1 din AutoParts (înlocuiesc vechiul „Cere oferte”):** `039_rfq_autoparts.sql`, `requests.js`, `requests-ui.js`, `app.js`, `style.css`, `requests.test.js`, `requests.ui.test.js`.
+**„Cereri piese” / „Ofertează piesele” portate 1:1 din AutoParts (înlocuiesc vechiul „Cere oferte”):** `039_rfq_autoparts.sql`, `requests.js`, `requests-ui.js`, `app.js`, `style.css`, `requests.test.js`, `requests.ui.test.js`, `admin-requests.js`, `admin.js`, `admin-ui.js`, `script.js`, `admin-requests.test.js`, `admin-requests.ui.test.js`.
 - pagini: Ofertează piesele (lista publică, filtre Nu am ofertat / Toate / Am ofertat / Ofertez mai târziu / Ignorate, căutare, marcă, județ), Cere oferte piese (formular cu piese multiple, mașină, VIN, tip piese, adresă privată, poze), Cererile mele (Active / Inactive / Rezolvate, reactivare), Ofertele primite, Ofertele mele, Comenzi, Întrebări;
 - cererea se poate modifica în primele 10 minute; durează 7 zile; ofertele (preț + mesaj + poze) le vede doar cumpărătorul; acceptarea refuză celelalte oferte, creează o comandă și dezvăluie contactul;
 - tabele NOI `rq_*`; tabelele vechi (`part_requests`, `quotes`, `dealers`, …) rămân neatinse în baza de date, dar nu mai sunt folosite. Recenziile vechi din „Cere oferte” rămân în profiluri.
+- **blocări** (tabela `user_blocks`, ca la Mesaje): nu poți oferta sau întreba pe cineva blocat în oricare sens, nu poți accepta oferta unui vânzător blocat, cererile blocate dispar din listă, ofertele vânzătorilor blocați nu se mai afișează și nu se mai numără;
+- **moderare în admin** (`admin-requests.js`, filă nouă „Cereri piese” în `admin-ui.js`): cereri, oferte, comenzi; moderatorul închide/redeschide cereri (cu motiv) și scoate oferte în așteptare, doar adminul șterge cereri; totul intră în Jurnal și utilizatorul primește notificare (`rfq_mod`).
+- **raportări** (`040_rfq_reports.sql`, tabela `rq_reports`): orice utilizator conectat raportează o cerere, iar cumpărătorul raportează ofertele primite (motive: înșelătorie, contact, interzis, spam, duplicat, altul); la 3 raportări de la utilizatori diferiți în 24 h cererea se închide până o verifică un moderator și nu poate fi reactivată cât are raportări deschise; în admin, sub-fila „Raportări” din „Cereri piese” (insignă cu numărul celor deschise) permite rezolvarea/respingerea, cu opțiunea de a închide cererea sau de a scoate oferta.
 - nemigrat din sistemul vechi: dezmembrători aprobați, licitația ascunsă, chatul ofertei, AWB/livrare, recenzii după comandă.
 
 **Clopoțel în antet:** `index.html`, `icons.js`, `script.js`, `style.css`. Vizibil pentru utilizatorii conectați, cu număr de necitite; deschide Notificările din cont.

@@ -315,6 +315,9 @@ router.get('/activity', ah(async (req, res) => {
   res.json({ rows: r.rows });
 }));
 
+/* ---- moderarea cererilor de piese (cereri, oferte, comenzi) ---- */
+require('./admin-requests')(router, { adminOnly, log });
+
 /* ---- raportarea unui anunț, de către orice utilizator ---- */
 const REASONS = ['inselatorie', 'interzis', 'duplicat', 'gresit', 'vandut', 'altul'];
 const reportAllow = createThrottle(10, 60 * 60 * 1000);

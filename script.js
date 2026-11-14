@@ -913,7 +913,7 @@ function toast(text, fn) {
   t.textContent = "🔔 " + text; t.hidden = false; t.onclick = () => { t.hidden = true; if (fn) fn(); };
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
 }
-const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", rfq_edit: "✎", rfq_ship: "📦", rfq_expired: "⌛", rfq_remind: "⏰", review: "★" };
+const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", rfq_edit: "✎", rfq_ship: "📦", rfq_expired: "⌛", rfq_mod: "⚑", rfq_remind: "⏰", review: "★" };
 async function renderNotifs(box) {
   box.replaceChildren(note("Se încarcă…"));
   try {
