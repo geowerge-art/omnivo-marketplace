@@ -5,6 +5,7 @@ const config = require('./config');
 const { ah, requireDb } = require('./common');
 const { requireAuth } = require('./authmw');
 const { createThrottle } = require('./security');
+const { dhash, nearest } = require('./dhash');
 
 let sharp = null;
 try { sharp = require('sharp'); sharp.cache(false); sharp.concurrency(1); } catch { console.warn('„sharp” lipsește: pozele se păstrează la dimensiunea trimisă.'); }
@@ -55,6 +56,22 @@ async function removeStored(...urls) {
   for (const u of urls) if (u && u.startsWith(pre)) await fetch(objUrl(u.slice(pre.length)), { method: 'DELETE', headers: { Authorization: `Bearer ${config.SUPABASE_SERVICE_KEY}`, apikey: config.SUPABASE_SERVICE_KEY } }).catch(() => {});
 }
 
+/* Aceeași poză la alt cont = posibilă înșelătorie (poze furate). Nu blocăm nimic: apare o raportare automată pentru moderatori (fără autor, deci nu ascunde singură anunțul). */
+async function flagDuplicate(listingId, ownerId, imageId, ph) {
+  try {
+    const c = await db.query(
+      `SELECT i.listing_id, i.phash, l.title FROM listing_images i JOIN listings l ON l.id = i.listing_id
+        WHERE i.phash IS NOT NULL AND i.id <> $2 AND l.user_id <> $1 AND l.status IN ('approved', 'pending', 'sold')
+        ORDER BY i.id DESC LIMIT 30000`, [ownerId, imageId]);
+    const m = nearest(ph, c.rows);
+    if (!m) return;
+    const ex = await db.query("SELECT 1 FROM reports WHERE listing_id = $1 AND reason = 'poza_duplicat' AND status = 'open' LIMIT 1", [listingId]);
+    if (ex.rowCount) return;
+    await db.query("INSERT INTO reports(listing_id, reporter_id, reason, details) VALUES($1, NULL, 'poza_duplicat', $2)",
+      [listingId, `O poză seamănă cu una din anunțul #${m.listing_id} („${String(m.title).slice(0, 80)}”), de la alt cont (diferență ${m.dist}/64). Poate fi poză furată sau același obiect.`]);
+  } catch (e) { console.error('flagDuplicate:', e.message); }
+}
+
 router.post('/:id(\\d+)/images', requireAuth, requireDb, raw, ah(async (req, res) => {
   if (!allow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
   const buf = req.body, k = Buffer.isBuffer(buf) && kind(buf);
@@ -72,18 +89,20 @@ router.post('/:id(\\d+)/images', requireAuth, requireDb, raw, ah(async (req, res
   let p;
   try { p = await process(buf, k); } catch { return res.status(400).json({ error: 'POZA_INVALIDA' }); }
   const size = p.full.length + p.thumb.length;
+  const ph = await dhash(sharp, buf);
   let row;
   if (STORAGE) {
     const base = `l${id}/${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     let url, thumbUrl;
     try { url = await put(`${base}.${p.ext}`, p.full, p.type); thumbUrl = await put(`${base}-t.${p.ext}`, p.thumb, p.type); }
     catch (e) { console.error('storage:', e.message); return res.status(502).json({ error: 'STORAGE_EROARE' }); }
-    row = (await db.query('INSERT INTO listing_images(listing_id, url, thumb_url, position, size) VALUES($1,$2,$3,$4,$5) RETURNING id, url', [id, url, thumbUrl, st.rows[0].n, size])).rows[0];
+    row = (await db.query('INSERT INTO listing_images(listing_id, url, thumb_url, position, size, phash) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, url', [id, url, thumbUrl, st.rows[0].n, size, ph])).rows[0];
   } else { // fără Supabase: pozele rămân în Postgres și se servesc din /api/images/:id
-    const ins = await db.query("INSERT INTO listing_images(listing_id, url, position, size, ctype, data, thumb) VALUES($1,'',$2,$3,$4,$5,$6) RETURNING id", [id, st.rows[0].n, size, p.type, p.full, p.thumb]);
+    const ins = await db.query("INSERT INTO listing_images(listing_id, url, position, size, ctype, data, thumb, phash) VALUES($1,'',$2,$3,$4,$5,$6,$7) RETURNING id", [id, st.rows[0].n, size, p.type, p.full, p.thumb, ph]);
     row = (await db.query("UPDATE listing_images SET url = '/api/images/' || id, thumb_url = '/api/images/' || id || '?t=1' WHERE id = $1 RETURNING id, url", [ins.rows[0].id])).rows[0];
   }
   res.status(201).json({ image: row });
+  if (ph) flagDuplicate(id, ownerId, row.id, ph);   // fără să așteptăm: utilizatorul nu vede nimic
 }));
 
 router.delete('/:id(\\d+)/images/:imgId(\\d+)', requireAuth, requireDb, ah(async (req, res) => {
@@ -107,4 +126,4 @@ publicRouter.get('/:id(\\d+)', requireDb, ah(async (req, res) => {
   res.send(req.query.t ? x.thumb : x.data);
 }));
 
-module.exports = { router, publicRouter, kind, process, put, removeStored, STORAGE, raw };
+module.exports = { router, publicRouter, flagDuplicate, kind, process, put, removeStored, STORAGE, raw };

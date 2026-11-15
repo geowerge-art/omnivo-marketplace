@@ -5,3 +5,9 @@ MODIFICATE: app.js, index.html, script.js, style.css, notify.js, MODIFICARI.md
 
 Dupa deploy: /api/health ok:true, iar in log "migrare aplicata: 041_swaps.sql".
 Apoi: Meniu (☰) -> Schimb, si in formularul "Adauga anunt" bifa "Accept si schimb".
+
+--- Detector de poze duplicate ---
+NOI:        042_photo_hash.sql, dhash.js, dhash.test.js
+MODIFICATE: images.js, admin-ui.js, MODIFICARI.md
+Dupa deploy, in log: "migrare aplicata: 042_photo_hash.sql". Test: incarca aceeasi poza la anunturi de pe doua conturi;
+in Moderare -> Raportari apare "Poza duplicata". Pozele vechi nu au amprenta (se compara doar cele noi).

@@ -1,3 +1,12 @@
+# Nou: detector de poze duplicate (gratuit, fără AI)
+
+La fiecare poză încărcată se calculează o amprentă vizuală (dHash, 64 de biți, cu `sharp`, care e deja instalat) și se păstrează în `listing_images.phash`. Dacă aceeași poză (diferență ≤ 4 biți, deci rezistă la redimensionare, comprimare și lumină) există la **alt cont** (anunț aprobat, în așteptare sau vândut), apare o raportare automată „Poză duplicată” în panoul de moderare, cu linkul către celălalt anunț.
+- Nu blochează și nu ascunde nimic singură (raportarea nu are autor, deci nu intră în ascunderea automată la 2 raportări). Decide moderatorul: poate fi poză furată sau același obiect din poza producătorului.
+- Pozele aproape uniforme (negru, alb, cer) sunt ignorate; același cont care repostează nu e semnalat; o singură raportare deschisă per anunț.
+- Pozele vechi nu au amprentă, deci se compară doar cele încărcate după deploy.
+- Fișiere noi: `042_photo_hash.sql`, `dhash.js`, `dhash.test.js`. Modificate: `images.js`, `admin-ui.js` (eticheta „Poză duplicată”).
+- Verificat: testele (8) și raportarea cu baza simulată. **Neverificat:** `sharp` și migrarea 042 pe serverul real (aici `sharp` nu e instalat); după deploy, încarcă aceeași poză de pe două conturi și caută raportarea în Moderare → Raportări.
+
 # Nou: „Schimb” (barter cu potrivire automată, gratuit)
 
 Meniul ☰ → **Schimb**. Fără servicii plătite, fără pachete noi: doar Postgres-ul existent.
