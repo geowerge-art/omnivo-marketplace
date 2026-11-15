@@ -1954,3 +1954,14 @@ body.menu-open .bottom-nav { display: none; }
 .sw-pop h3{margin:0 0 4px}
 .sw-pop select,.sw-pop textarea{display:block;width:100%;margin:8px 0;padding:9px 10px;border:1px solid #d9c9a4;border-radius:10px;font:inherit;box-sizing:border-box;background:#fff}
 .sw-row{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+
+/* ---- Preț sugerat (price-hint-ui.js) ---- */
+.ph-hint{margin:2px 0 10px;padding:9px 12px;border:1px dashed #d9c9a4;border-radius:10px;background:#fbf3dc;font-size:14px;line-height:1.45;color:#2b2416}
+.ph-use{margin-left:4px;padding:5px 11px;border:0;border-radius:999px;background:#14110c;color:#f4ead3;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ---- Răspunsuri rapide în chat (quick-ui.js) ---- */
+.cp-quick{flex:none;display:flex;gap:8px;padding:8px 10px 0;background:#fbf5e8;overflow-x:auto;scrollbar-width:none}
+.cp-quick::-webkit-scrollbar{display:none}
+.cp-quick[hidden]{display:none}
+.cp-q{flex:none;padding:8px 13px;border:1px solid #d9c9a4;border-radius:999px;background:#fffdf8;color:#2b2416;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.cp-q:active{background:#f0e0b8}

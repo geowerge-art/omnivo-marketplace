@@ -1348,6 +1348,7 @@ async function refreshChat() {
     if (!$("chatPresence").classList.contains("typing")) setPresence(d.presence);
     $("chatBlock").textContent = c.blocked ? "Deblochează utilizatorul" : "Blochează utilizatorul";
     c.gone = d.listing.status === "deleted" || d.listing.status === "sold"; setChatGone(c.gone ? d.listing.status : null);
+    if (window.paintQuick) paintQuick(d.my_role, c.blocked || c.gone);
     $("chatInput").disabled = $("chatSend").disabled = $("chatAttach").disabled = c.blocked || c.gone;
     const mine = d.messages.filter((m) => m.mine), last = d.messages.length ? d.messages[d.messages.length - 1].id : 0;
     const sig = `${d.messages.length}:${last}:${mine.filter((m) => m.read).length}:${mine.filter((m) => m.delivered).length}`;

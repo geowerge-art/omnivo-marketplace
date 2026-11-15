@@ -1,7 +1,7 @@
 /* „Schimb”: potrivire directă, lanț de 3, validări. Fără rețea și fără bază de date. */
 const test = require('node:test');
 const assert = require('node:assert');
-const { tokens, wantsScore, matchAll, validWants, mutual } = require('./swap-match');
+const { tokens, titleTokens, wantsScore, matchAll, validWants, mutual } = require('./swap-match');
 
 test('tokens: fără diacritice, fără cuvinte de legătură, tăiere la 5 litere, numerele rămân', () => {
   assert.deepStrictEqual(tokens('Caut o bicicletă sau trotinetă'), ['bicic', 'troti']);
@@ -62,4 +62,22 @@ test('mutual: doar când fiecare caută ce are celălalt, și nu cu sine', () =>
   assert.ok(mutual(L(1, 10, 'Bicicletă', 'laptop'), L(2, 20, 'Laptop Dell', 'bicicletă')));
   assert.ok(!mutual(L(1, 10, 'Bicicletă', 'laptop'), L(2, 20, 'Laptop Dell', 'consolă')));
   assert.ok(!mutual(L(1, 10, 'Bicicletă', 'laptop'), L(2, 10, 'Laptop', 'bicicletă')));
+});
+
+test('sinonime: ce cauți (telefon, consolă, laptop, bike, mașină) se potrivește cu numele obiectului', () => {
+  const y = (w, t) => assert.ok(wantsScore(w, t) >= 0.6, `${w} ~ ${t}`);
+  const n = (w, t) => assert.ok(wantsScore(w, t) < 0.6, `${w} !~ ${t}`);
+  y('telefon', 'iPhone 13 Pro'); y('smartphone', 'iPhone 12'); y('apple', 'iPhone 11'); y('tabletă', 'iPad Air');
+  y('laptop', 'MacBook Air M1'); y('consolă', 'PlayStation 5'); y('bike', 'Bicicletă de munte'); y('bicicletă', 'MTB Cube');
+  y('mașină', 'Dacia Logan 2015'); y('tv', 'Televizor Samsung 43"'); y('PC', 'Calculator gaming');
+  n('telefon', 'Husă iPhone 13'); n('mașină', 'Piese Dacia Logan'); n('consolă', 'Suport PlayStation 5'); n('laptop', 'iPhone 13');
+});
+test('titleTokens: adaugă ce este obiectul, dar nu pentru accesorii', () => {
+  assert.ok(titleTokens('iPhone 13').includes('telef') && titleTokens('iPhone 13').includes('apple'));
+  assert.ok(!titleTokens('Husă iPhone 13').includes('telef'));
+  assert.deepStrictEqual(tokens('TV sau PC'), ['telev', 'calcu']);
+});
+test('lanț cu sinonime: iPhone → consolă → bicicletă → iPhone, fără cuvinte comune', () => {
+  const m = matchAll([L(1, 10, 'Bicicletă MTB', 'telefon')], [L(2, 20, 'iPhone 13', 'consolă'), L(3, 30, 'PlayStation 4', 'bike')]);
+  assert.strictEqual(m.chains.length, 1);
 });

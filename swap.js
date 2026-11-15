@@ -4,7 +4,7 @@ const db = require('./db');
 const { ah, requireDb } = require('./common');
 const { requireAuth } = require('./authmw');
 const { createThrottle } = require('./security');
-const { matchAll, validWants, tokens, fit, mutual } = require('./swap-match');
+const { matchAll, validWants, tokens, titleTokens, fit, mutual } = require('./swap-match');
 
 const router = express.Router();
 router.use(requireDb);
@@ -52,7 +52,7 @@ router.get('/', ah(async (req, res) => {
   const r = await db.query(`${CAND} ORDER BY s.updated_at DESC LIMIT 300`);
   let rows = r.rows;
   const q = tokens(String(req.query.q || '').slice(0, 100));
-  if (q.length) rows = rows.filter((x) => fit(q, tokens(x.title + ' ' + x.wants)) >= 0.6 || fit(q, tokens(x.wants)) > 0);
+  if (q.length) rows = rows.filter((x) => fit(q, titleTokens(x.title + ' ' + x.wants)) >= 0.6 || fit(q, tokens(x.wants)) > 0);
   res.json({ swaps: rows.slice(0, limit), total: rows.length });
 }));
 

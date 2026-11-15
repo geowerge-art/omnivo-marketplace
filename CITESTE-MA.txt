@@ -11,3 +11,9 @@ NOI:        042_photo_hash.sql, dhash.js, dhash.test.js
 MODIFICATE: images.js, admin-ui.js, MODIFICARI.md
 Dupa deploy, in log: "migrare aplicata: 042_photo_hash.sql". Test: incarca aceeasi poza la anunturi de pe doua conturi;
 in Moderare -> Raportari apare "Poza duplicata". Pozele vechi nu au amprenta (se compara doar cele noi).
+
+--- Pret sugerat, sinonime la Schimb, raspunsuri rapide in chat ---
+NOI:        price-hint.js, price-hint-ui.js, price-hint.test.js, quick-ui.js
+MODIFICATE: swap-match.js, swap.js, swap.test.js, listings.js, index.html, app.js, script.js, style.css, MODIFICARI.md
+Fara migrari noi. Test: "Adauga anunt" -> alege categoria si scrie titlul -> apare "Anunturi asemanatoare" (doar daca sunt destule anunturi in categorie);
+in orice conversatie apar butoanele cu fraze rapide deasupra campului de mesaj.

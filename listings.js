@@ -10,6 +10,7 @@ const { deriveDiagonals } = require('./derive');
 const studio = require('./studio');
 const notify = require('./notify');
 const guard = require('./guard');
+const priceHint = require('./price-hint');
 
 const router = express.Router();
 const adminRouter = express.Router();
@@ -137,6 +138,20 @@ router.get('/', ah(async (req, res) => {
     db.query(`SELECT COUNT(*)::int n ${FROM} WHERE ${w}`, vals)
   ]);
   res.json({ listings: rows.rows, total: cnt.rows[0].n, limit, offset });
+}));
+
+/* Preț sugerat în formularul de anunț: ?category_id=&currency=&title=&condition= (doar anunțuri publice, aprobate sau vândute). */
+const hintAllow = createThrottle(120, 60 * 60 * 1000);
+router.get('/price-hint', ah(async (req, res) => {
+  if (!hintAllow('ip' + clientIp(req))) return res.status(429).json({ error: 'PREA_MULTE_CERERI' });
+  const cat = Number(req.query.category_id) || 0, cur = req.query.currency === 'EUR' ? 'EUR' : 'RON';
+  if (!cat) return res.json({ hint: null });
+  const cond = ['nou', 'folosit'].includes(req.query.condition) ? req.query.condition : null;
+  const r = await db.query(
+    `SELECT l.title, l.price::float AS price, l.condition FROM listings l
+      WHERE l.category_id = $1 AND l.currency = $2 AND l.price > 0 AND l.status IN ('approved', 'sold')
+      ORDER BY l.id DESC LIMIT 400`, [cat, cur]);
+  res.set('Cache-Control', 'no-store').json({ hint: priceHint.suggest(r.rows, String(req.query.title || '').slice(0, 120), cond), currency: cur });
 }));
 
 /* „Oferte bune": anunțuri cu prețul sub piață. Piața = mediana prețurilor comparabile (aceeași categorie, stare, monedă; fără bugetul ales),

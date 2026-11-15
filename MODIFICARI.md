@@ -1,3 +1,10 @@
+# Nou: preț sugerat, sinonime la Schimb, răspunsuri rapide în chat (gratuite, fără AI)
+
+- **Preț sugerat** (formularul de anunț): după ce ai ales categoria și ai scris titlul, apare „Anunțuri asemănătoare: 1.200–1.600 lei (mediană 1.400, din 23 anunțuri)” și butonul „Pune 1.400 lei”. Vine din anunțurile publicate (aprobate sau vândute) din aceeași categorie și monedă, cu titluri asemănătoare; dacă sunt prea puține asemănătoare (sub 5) se folosește categoria (minim 8), iar dacă nici atât nu apare nimic. Sfertul de jos și cel de sus, deci nu ia în calcul extremele. Fișiere: `price-hint.js`, `price-hint-ui.js`, `price-hint.test.js`, ruta `GET /api/listings/price-hint` în `listings.js` (limită 120 de cereri/oră per IP).
+- **Schimb, cu sinonime:** „telefon” se potrivește cu „iPhone 13”, „consolă” cu „PlayStation 5”, „laptop” cu „MacBook”, „bike” cu „bicicletă”, „tv” cu „televizor”. Nu și cu accesoriile („Husă iPhone”, „Piese Dacia”). Listele sunt în `swap-match.js` (`EQ_GROUPS`, `HYPER_GROUPS`) și se completează ușor.
+- **Răspunsuri rapide în chat:** butoane cu fraze uzuale, diferite pentru cumpărător și vânzător. Apăsarea pune textul în câmp (îl poți modifica), nu îl trimite singură; dispar când scrii. Fișier: `quick-ui.js` (+ o linie în `script.js`).
+- Verificat: testele (price-hint 8, swap 20) și interfața în Chromium cu API simulat. **Neverificat:** interogarea SQL din `price-hint` pe Postgres real.
+
 # Nou: detector de poze duplicate (gratuit, fără AI)
 
 La fiecare poză încărcată se calculează o amprentă vizuală (dHash, 64 de biți, cu `sharp`, care e deja instalat) și se păstrează în `listing_images.phash`. Dacă aceeași poză (diferență ≤ 4 biți, deci rezistă la redimensionare, comprimare și lumină) există la **alt cont** (anunț aprobat, în așteptare sau vândut), apare o raportare automată „Poză duplicată” în panoul de moderare, cu linkul către celălalt anunț.
