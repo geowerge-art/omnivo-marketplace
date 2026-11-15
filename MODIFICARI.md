@@ -1,3 +1,14 @@
+# Nou: „Schimb” (barter cu potrivire automată, gratuit)
+
+Meniul ☰ → **Schimb**. Fără servicii plătite, fără pachete noi: doar Postgres-ul existent.
+- Proprietarul alege un anunț al lui și scrie ce caută în schimb (ex. „laptop sau tabletă”; fără telefon/email/linkuri).
+- **Schimburi**: lista publică, cu căutare; „Propun schimb” trimite un mesaj în chatul anunțului (prin `/api/messages`, deci rămân blocările, limitele și notificările existente).
+- **Ale mele și potriviri**: *potrivire dublă* (ce vreau eu are el, ce are el vreau eu) și **lanț de 3 persoane** (A vrea ce are B, B vrea ce are C, C vrea ce are A), ceva ce OLX/Facebook nu fac.
+- Fișiere noi: `041_swaps.sql`, `swap-match.js` (potrivirea, funcții pure), `swap.js` (API `/api/swaps`), `swap-ui.js`, `swap.test.js`, `swap.routes.test.js`. Modificate: `app.js`, `index.html`, `script.js` (o linie), `style.css` (bloc la final).
+- **În formularul de anunț:** bifa „Accept și schimb” + „Ce cauți în schimb?” (se salvează după anunț; dacă schimbul nu reușește, anunțul rămâne salvat și ești anunțat; la editare se precompletează).
+- **Notificare la potrivire dublă nouă** (tip `swap`, ⇄): când un anunț la schimb e salvat sau aprobat, ambele părți primesc notificare, o singură dată per pereche, cel mult 5 pe oră per utilizator. Fișiere în plus: `notify.js` (o linie), `swap.js` (`notifyMatches`).
+- Verificat: testele noi (17) trec, interfața rulată în Chromium pe telefon cu API simulat. **Neverificat:** migrarea 041 și interogările SQL pe Postgres real; după deploy, în log trebuie să apară `migrare aplicată: 041_swaps.sql`.
+
 # Ce s-a schimbat în această versiune
 
 **„Cereri piese” / „Ofertează piesele” portate 1:1 din AutoParts (înlocuiesc vechiul „Cere oferte”):** `039_rfq_autoparts.sql`, `requests.js`, `requests-ui.js`, `app.js`, `style.css`, `requests.test.js`, `requests.ui.test.js`, `admin-requests.js`, `admin.js`, `admin-ui.js`, `script.js`, `admin-requests.test.js`, `admin-requests.ui.test.js`.

@@ -1,15 +1,7 @@
-Copiaza fisierele din acest zip peste proiectul Omnivo (aceleasi locuri, in radacina). Nu e nevoie de migrare.
+Copiaza fisierele din acest folder peste proiectul Omnivo (aceleasi locuri, in radacina). Migrarea 041 ruleaza singura la pornire.
 
-NOI:
-  omni.js          cautare libera: scoate pretul si locul din text
-  omni.test.js     teste (15)
+NOI:        041_swaps.sql, swap-match.js, swap.js, swap-ui.js, swap.test.js, swap.routes.test.js
+MODIFICATE: app.js, index.html, script.js, style.css, notify.js, MODIFICARI.md
 
-MODIFICATE:
-  index.html       bara de jos noua (Omni in centru), meniul nou, text exemplu in cautare, tag <script src="/omni.js">
-  script.js        placile din meniu (mine, msgs, saved, plan, sell) si exemplele de cautare
-  style.css        bloc nou "Omni" la final (culorile se schimba din variabilele --om-*)
-  results-ui.js    smart(): foloseste omni.js la cautare
-  app.js           omni.js in lista fisierelor publice
-  MODIFICARI.md    note
-
-Dupa deploy, pe telefon: apasa Omni (centru jos), apoi bara de meniu din dreapta sus, apoi un exemplu din meniu.
+Dupa deploy: /api/health ok:true, iar in log "migrare aplicata: 041_swaps.sql".
+Apoi: Meniu (☰) -> Schimb, si in formularul "Adauga anunt" bifa "Accept si schimb".

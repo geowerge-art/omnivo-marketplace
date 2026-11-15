@@ -77,6 +77,7 @@ $("sideMenu")?.addEventListener("click", (e) => {
     if (k === "cats") { setDrawer(true); if (!cats.length) loadCats(); }   // același sertar cu categorii ca până acum
     else if (k === "ads") $("anunturi")?.scrollIntoView({ behavior: "smooth" });
     else if (k === "rfq") window.openRequests && window.openRequests();
+    else if (k === "swap") window.openSwap && window.openSwap();
     else if (k === "favs") { if (!me) return openAuth("Intră în cont ca să vezi favoritele."); openAccount(); accGo("favs"); }
     else if (k === "sell") openSell();
     else if (k === "mine") { if (!me) return openAuth("Intră în cont ca să vezi anunțurile tale."); openAccount(); accGo("mine"); }
@@ -252,6 +253,13 @@ $("sellForm")?.addEventListener("submit", async (e) => {
       const r = await api(`/api/listings/${editing}`, "PATCH", payload); id = editing;
       note = r.resubmitted ? "Modificările sunt salvate. Anunțul a fost retrimis la moderare și apare după aprobare." : "Modificările au fost salvate.";
     } else { id = (await api("/api/listings", "POST", payload)).listing.id; note = "Anunțul tău a fost salvat. Dacă nu apare imediat, așteaptă aprobarea."; }
+    let swapNote = "";
+    try {   // „Accept și schimb”: se salvează separat; dacă nu reușește, anunțul rămâne salvat
+      if (f.get("swap") === "on" && String(f.get("swap_wants") || "").trim()) await api(`/api/swaps/${id}`, "PUT", { wants: f.get("swap_wants") });
+      else if (wasEdit) await api(`/api/swaps/${id}`, "DELETE");
+      else if (f.get("swap") === "on") swapNote = " Nu ai scris ce cauți în schimb: poți adăuga din Meniu → Schimb.";
+    } catch (swErr) { swapNote = ` Schimbul nu s-a salvat: ${errText(swErr)} Îl poți adăuga din Meniu → Schimb.`; }
+    note += swapNote;
     let failed = 0;
     for (let i = 0; i < photos.length; i++) {
       show($("sellProg"), `Se încarcă poza ${i + 1} din ${photos.length}…`);
@@ -266,6 +274,10 @@ $("sellForm")?.addEventListener("submit", async (e) => {
   } catch (err) { if (err.status === 401) { $("sellDialog").close(); openAuth(); } else show($("sellErr"), errText(err)); }
   $("sellSubmit").disabled = false;
 });
+
+const syncSwapRow = () => { const c = $("sellSwap"), r = $("sellSwapRow"); if (c && r) r.hidden = !c.checked; };
+$("sellSwap")?.addEventListener("change", () => { syncSwapRow(); if ($("sellSwap").checked) $("sellSwapWants")?.focus(); });
+$("sellForm")?.addEventListener("reset", () => setTimeout(syncSwapRow, 0));
 
 /* ---- editarea unui anunț existent: același formular, precompletat ---- */
 function resetSell() {
@@ -302,6 +314,8 @@ async function openEdit(l, copy) {   // copy = anunț nou, completat după unul 
   if (l.county) $("sellCounty").value = l.county;
   cityManual = true; $("sellCity").value = l.city || ""; $("sellAddr").value = l.address || ""; syncCities();
   $("sellDesc").value = l.description || ""; $("sellForm").elements.negotiable.checked = !!l.negotiable;
+  $("sellSwap").checked = false; $("sellSwapWants").value = ""; syncSwapRow();
+  if (!copy) api(`/api/swaps/${l.id}`).then((s) => { $("sellSwap").checked = true; $("sellSwapWants").value = s.wants; syncSwapRow(); }).catch(() => {});
   renderSellContact(l.edit.contact); renderExisting(); renderPrev(); open("sellDialog");
   if (copy) { catManual = true; }
 }
@@ -920,7 +934,7 @@ function toast(text, fn) {
   t.textContent = "🔔 " + text; t.hidden = false; t.onclick = () => { t.hidden = true; if (fn) fn(); };
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
 }
-const NK = { mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", rfq_edit: "✎", rfq_ship: "📦", rfq_expired: "⌛", rfq_mod: "⚑", rfq_remind: "⏰", review: "★" };
+const NK = { swap: "⇄", mod_pending: "⏳", rfq_new: "🔧", rfq_quote: "💬", rfq_won: "🏆", rfq_lost: "•", rfq_msg: "✉", rfq_dealer: "✓", price: "↓", match: "🔎", mod_approved: "✓", mod_rejected: "✕", mod_blocked: "⛔", rfq_done: "✔", rfq_q: "?", rfq_a: "↩", rfq_edit: "✎", rfq_ship: "📦", rfq_expired: "⌛", rfq_mod: "⚑", rfq_remind: "⏰", review: "★" };
 async function renderNotifs(box) {
   box.replaceChildren(note("Se încarcă…"));
   try {

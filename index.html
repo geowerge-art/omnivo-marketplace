@@ -139,6 +139,7 @@
       <button type="button" data-sm="msgs"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Mesaje</span></button>
       <button type="button" data-sm="favs"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.5-7-10a4 4 0 017-2.5A4 4 0 0119 10c0 5.5-7 10-7 10z"/></svg><span>Favorite</span></button>
       <button type="button" data-sm="rfq"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7"/></svg><span>Oferte piese</span></button>
+      <button type="button" data-sm="swap"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg><span>Schimb</span></button>
       <button type="button" data-sm="saved"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Căutări salvate</span></button>
       <button type="button" data-sm="plan"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 10h18"/></svg><span>Plan și plăți</span></button>
     </div>
@@ -186,6 +187,8 @@
 <div><label for="sellCur">Moneda</label><select id="sellCur" name="currency"><option value="RON">lei</option><option value="EUR">€</option></select></div>
 </div>
 <label class="check"><input type="checkbox" name="negotiable"> Preț negociabil</label>
+<label class="check"><input type="checkbox" id="sellSwap" name="swap"> Accept și schimb</label>
+<div id="sellSwapRow" hidden><label for="sellSwapWants">Ce cauți în schimb?</label><input id="sellSwapWants" name="swap_wants" type="text" maxlength="120" placeholder="Ex: laptop sau tabletă" autocomplete="off"></div>
 <p id="sellAutoAttrs" class="auto-note" hidden></p>
 <div id="sellAttrs"></div>
 <div class="sec">Stare</div>
@@ -489,6 +492,7 @@
   <script src="/billing-ui.js"></script>
   <script src="/studio-ui.js"></script>
   <script src="/requests-ui.js"></script>
+  <script src="/swap-ui.js"></script>
   <script src="/omni.js"></script>
   <script src="/results-ui.js"></script>
 </body>

@@ -51,6 +51,7 @@ async function matchSaved(listingId) {
       await notify(s.user_id, 'match', l.id, `Anunț nou: ${l.title}`, `Se potrivește cu căutarea ta „${String(s.label || s.q || 'salvată').slice(0, 80)}”` + (l.price != null ? ` · ${money(l.price, l.currency)}` : ''));
     }
   } catch (e) { console.error('matchSaved:', e.message); }
+  try { require('./swap').notifyMatches(listingId); } catch (e) { console.error('swap match:', e.message); }   // anunț aprobat și pus la schimb: potriviri de schimb
 }
 
 /* rezultatul moderării, pentru vânzător */

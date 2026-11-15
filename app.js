@@ -25,6 +25,7 @@ const profiles = require('./profiles');
 const billing = require('./billing');
 const account = require('./account');
 const requests = require('./requests');
+const swap = require('./swap');
 
 function createApp() {
   const app = express();
@@ -84,13 +85,14 @@ function createApp() {
   app.use('/api/offers', requests.offersRouter);
   app.use('/api/offer-questions', requests.questionsRouter);
   app.use('/api/orders', requests.ordersRouter);
+  app.use('/api/swaps', swap.router);
   app.use('/api/favorites', favorites.router);
   app.use('/api/saved-searches', saved.router);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'NEGASIT' })); // niciodată index.html pentru /api/*
 
   // Servim doar fișierele publice, pe listă; restul (server.js etc.) nu poate fi descărcat
-  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js', 'admin-ui.js', 'profile-ui.js', 'billing-ui.js', 'studio-ui.js', 'doc-ui.js', 'privacy-ui.js', 'requests-ui.js', 'results-ui.js', 'results.css', 'omni.js'];
+  const PUBLIC_FILES = ['index.html', 'style.css', 'script.js', 'icons.js', 'autofill.js', 'cities.js', 'admin-ui.js', 'profile-ui.js', 'billing-ui.js', 'studio-ui.js', 'doc-ui.js', 'privacy-ui.js', 'requests-ui.js', 'results-ui.js', 'results.css', 'omni.js', 'swap-ui.js'];
   for (const f of PUBLIC_FILES) app.get('/' + f, (req, res) => res.sendFile(path.join(__dirname, f)));
   app.use(seo.router);     // /anunt/ID-titlu, sitemap.xml, robots.txt
   app.use(pages.router);   // /termeni, /confidentialitate, /cookies, /siguranta, /ajutor, /contact
