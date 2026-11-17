@@ -30,21 +30,25 @@ const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi'
   t('Ofertează piesele: filtrele de stare cu număr', /Nu am ofertat încă \(1\)/.test(s) && /Am ofertat \(1\)/.test(s) && /Ofertez mai târziu/.test(s) && /Ignorate/.test(s));
   t('carduri: titlu, mașină, „Ai ofertat 450 lei”, „Nicio ofertă”, „Cererea ta · 2 oferte”, +1 piesă', /Far stânga/.test(s) && /Audi A4 2012/.test(s) && /Ai ofertat 450 lei/.test(s) && /Nicio ofertă/.test(s) && /Cererea ta · 2 oferte/.test(s) && /\+1 piesă/.test(s));
   t('butoane „Ofertez mai târziu” și „Ignoră” doar pe cererile fără ofertă ale altora', (s.match(/Ignoră/g) || []).length === 1);
+  t('„Trimite-mi pe email” jos pe pagină', /Trimite-mi pe email notificările/.test(s));
   t('lista cere seen=new', calls.some((c) => /^\/api\/requests\?seen=new/.test(c[0])));
   // detaliu public, fără ofertă proprie: formular de ofertă
   ctx.__api = async (u) => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null });
   await T.go('detail', 4); await tick(); s = text(T.body);
   t('detaliu: formular „Trimite o ofertă” cu prețul tău', /Trimite o ofertă/.test(s) && /Prețul tău/.test(s) && /Cerută de Ion/.test(s));
+  t('formular ofertă: „Atașează un anunț (opțional)”', /Atașează un anunț/.test(s));
   t('detaliu public: buton „Raportează cererea”', /Raportează cererea/.test(s));
+  t('detaliu public: „Arată telefonul cumpărătorului”', /Arată telefonul cumpărătorului/.test(s));
   ctx.__api = async () => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null, reported: true });
   await T.go('detail', 4); await tick(); s = text(T.body);
   t('deja raportată: mesaj în loc de buton', /Ai raportat această cerere/.test(s) && !/Raportează cererea/.test(s));
   ctx.__api = async () => ({ request: REQ({ id: 4, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null, blocked: 'me' });
   await T.go('detail', 4); await tick(); s = text(T.body);
-  t('utilizator blocat: fără formular de ofertă, cu explicație', /L-ai blocat/.test(s) && !/Trimite o ofertă/.test(s));
+  t('utilizator blocat: fără formular de ofertă și fără contact, cu explicație', /L-ai blocat/.test(s) && !/Trimite o ofertă/.test(s) && !/Arată telefonul/.test(s));
   // detaliu cu ofertă proprie în așteptare
-  ctx.__api = async () => ({ request: REQ({ id: 4, images: [] }), my_offer: { id: 7, price: 300, currency: 'EUR', message: 'Stare bună', status: 'pending', images: [] }, my_mark: null });
+  ctx.__api = async () => ({ request: REQ({ id: 4, images: [] }), my_offer: { id: 7, price: 300, currency: 'EUR', message: 'Stare bună', status: 'pending', images: [], listing_id: 77, listing: { id: 77, title: 'Far Audi A4 stânga', price: 250, currency: 'RON', thumb: '/t.jpg', status: 'approved' } }, my_mark: null });
   await T.go('detail', 4); await tick(); s = text(T.body);
+  t('oferta mea: anunțul atașat (titlu, preț, „Vezi anunțul”)', /Far Audi A4 stânga/.test(s) && /250 lei · Vezi anunțul/.test(s));
   t('oferta mea: preț în €, status, Modifică/Retrage', /300 €/.test(s) && /În așteptare/.test(s) && /Modifică oferta/.test(s) && /Retrage oferta/.test(s));
   // cerere închisă
   ctx.__api = async () => ({ request: REQ({ id: 4, images: [], status: 'closed' }), my_offer: null, my_mark: null });
@@ -52,11 +56,12 @@ const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi'
   t('cerere închisă: nu mai primește oferte', /nu mai primește oferte/.test(text(T.body)) && !/Trimite o ofertă/.test(text(T.body)));
   // cererea mea cu oferte
   ctx.__api = async (u) => u === '/api/requests/5' ? { request: REQ({ id: 5, mine: true }), my_offer: null } : u === '/api/requests/mine/5' ? { request: REQ({ id: 5, mine: true, images: [], vin: 'WAUZZZ8K9CA012345', ship_address: 'Str. X 1' }), editable: true,
-    offers: [{ id: 1, seller_id: 8, seller_name: 'AutoDez', seller_rating: '4.8', seller_rating_n: 12, price: 200, currency: 'RON', message: 'Garanție 30 zile', status: 'pending', images: [] },
+    offers: [{ id: 1, seller_id: 8, seller_name: 'AutoDez', seller_rating: '4.8', seller_rating_n: 12, price: 200, currency: 'RON', message: 'Garanție 30 zile', status: 'pending', images: [], listing: { id: 55, title: 'Far stânga Audi A4 B8', price: 190, currency: 'RON', status: 'sold' } },
              { id: 2, seller_id: 9, seller_name: 'Piese SRL', price: 180, currency: 'RON', message: '', status: 'accepted', seller_phone: '0722123456', seller_full_name: 'Mihai P', images: [] }] } : { questions: [] };
   await T.go('detail', 5); await tick(); s = text(T.body);
   t('cererea mea: oferte primite (2), VIN și adresa vizibile', /Oferte primite \(2\)/.test(s) && /WAUZZZ8K9CA012345/.test(s) && /Str\. X 1/.test(s));
   t('ofertă în așteptare: Acceptă / Refuză; acceptată: contact vânzător', /Acceptă oferta/.test(s) && /Refuză/.test(s) && /0722123456/.test(s) && /★ 4\.8 \(12\)/.test(s));
+  t('oferta primită: anunțul vânzătorului (marcat „Vândut” când e vândut)', /Far stânga Audi A4 B8/.test(s) && /190 lei · Vândut/.test(s));
   t('cerere editabilă: buton Modifică cererea + Închide', /Modifică cererea/.test(s) && /Închide cererea/.test(s));
   t('cererea mea: „Raportează oferta” pe ofertele primite', (s.match(/Raportează oferta/g) || []).length === 2);
   // formular nou
@@ -76,6 +81,41 @@ const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi'
   ctx.__api = async () => ({ orders: [{ id: 1, title: 'Far', price: 90, currency: 'RON', status: 'new', created_at: iso(-1), i_buy: false, other_name: 'Ana', other_phone: '0733' }, { id: 2, title: 'Bară', price: 50, currency: 'RON', status: 'shipped', created_at: iso(-1), i_buy: true, other_name: 'Dan' }] });
   await T.go('orders'); await tick(); s = text(T.body);
   t('Comenzi: vânzătorul confirmă, cumpărătorul „Am primit piesa”', /Confirmă comanda/.test(s) && /Am primit piesa/.test(s) && /Nouă/.test(s) && /Expediată/.test(s));
+  // Comenzi: detalii, motiv, AWB, calificativ
+  const ORDER = (o) => ({ id: 1, title: 'Far', price: 90, currency: 'RON', status: 'new', created_at: iso(-1), i_buy: false, other_name: 'Ana', phones: [{ phone: '0733111222', whatsapp: true }], make: 'Audi', model: 'A4', year: '2012', ship_address: 'Str. X 1', city: 'Cluj', county: 'Cluj', vin: 'WAUZZZ8K', extra_parts: [{ title: 'Oglindă', details: 'dreapta' }], offer_message: 'Garanție 30 zile', thumb: '/img/1', ...o });
+  ctx.__api = async () => ({ orders: [ORDER({ listing: { id: 66, title: 'Far Audi A4 original', price: 300, currency: 'RON', status: 'approved' } }), ORDER({ id: 2, title: 'Bară', i_buy: true, status: 'shipped', unseen: true, awb: 'AWB123' }), ORDER({ id: 3, title: 'Capotă', i_buy: true, status: 'done', their_rating: { stars: 4, comment: 'Serios' } }),
+    ORDER({ id: 4, title: 'Aripă', status: 'done', my_rating: { stars: 5, comment: 'Plătitor bun' } }), ORDER({ id: 5, title: 'Far dreapta', status: 'suspended', status_reason: 'Aștept piesa', seller_note: 'sună marți' })] });
+  await T.go('orders'); await tick(); s = text(T.body);
+  t('comandă nouă (vânzător): Confirmă, Expediată, Suspendă, Anulează, AWB / notă', /Confirmă comanda/.test(s) && /Marchează expediată/.test(s) && /Suspendă/.test(s) && /Anulează/.test(s) && /AWB \/ notă/.test(s));
+  t('comandă: anunțul atașat la ofertă', /Far Audi A4 original/.test(s) && /300 lei · Vezi anunțul/.test(s));
+  t('contact celălalt: telefon + WhatsApp; detalii: mașină, piese, livrare, VIN, ofertă', /0733111222/.test(s) && /WhatsApp/.test(s) && /Audi A4 2012/.test(s) && /Oglindă · dreapta/.test(s) && /Livrare: Str\. X 1, Cluj, Cluj/.test(s) && /VIN: WAUZZZ8K/.test(s) && /Oferta: Garanție 30 zile/.test(s));
+  t('cumpărător, expediată: „Am primit piesa”, AWB și insigna „Actualizat”', /Am primit piesa/.test(s) && /AWB: AWB123/.test(s) && /Actualizat/.test(s));
+  t('finalizată: cumpărătorul califică vânzătorul și vede calificativul primit', /Califică vânzătorul/.test(s) && /te-a calificat: ★★★★☆ · Serios/.test(s));
+  t('finalizată: vânzătorul vede calificativul dat și poate modifica', /Calificativul tău pentru cumpărătorul: ★★★★★ · Plătitor bun/.test(s) && /Modifică calificativul/.test(s));
+  t('suspendată: motiv + notă privată, se poate relua (Confirmă) dar nu suspenda din nou', /Motiv: Aștept piesa/.test(s) && /Notă privată: sună marți/.test(s));
+  t('lista cere comenzile cu marcarea „văzut”', calls.some((c) => c[0] === '/api/orders?seen=buyer'));
+  // interacțiuni: suspendare cu motiv obligatoriu, calificativ
+  const walk = (n, f, out = []) => { if (f(n)) out.push(n); (n.children || []).forEach((c) => walk(c, f, out)); return out; };
+  const card = (title) => walk(T.body, (n) => n.className && /rfq-quote/.test(n.className) && n.textContent.includes(title))[0];
+  const btnIn = (n, txt) => walk(n, (x) => x.tagName === 'BUTTON' && x.textContent === txt)[0];
+  const c1 = card('Far'); btnIn(c1, 'Suspendă').onclick(); await tick();
+  const rf = walk(c1, (n) => n.tagName === 'FORM')[0]; t('„Suspendă” deschide formularul de motiv', !!rf);
+  walk(rf, (n) => n.tagName === 'INPUT')[0].value = '';   // în browser un input nou are value ""
+  calls.length = 0; rf.onsubmit({ preventDefault() {} }); await tick();
+  t('fără motiv: nu se trimite nimic, apare eroarea', !calls.some((c) => /status/.test(c[0])) && /minimum 3 caractere/.test(rf.textContent));
+  walk(rf, (n) => n.tagName === 'INPUT')[0].value = 'Piesa nu mai e pe stoc'; rf.onsubmit({ preventDefault() {} }); await tick();
+  t('cu motiv: PATCH /api/orders/1/status', calls.some((c) => c[0] === '/api/orders/1/status' && c[1] === 'PATCH'));
+  ctx.__api = async () => ({ orders: [ORDER({ id: 3, title: 'Capotă', i_buy: true, status: 'done' })] }); await T.go('orders'); await tick();
+  const c3 = card('Capotă'); const sendBtn = btnIn(c3, 'Trimite calificativul'); calls.length = 0;
+  sendBtn.onclick(); await tick(); t('calificativ fără stele: nu se trimite', !calls.some((c) => /rating/.test(c[0])) && /de la 1 la 5 stele/.test(c3.textContent));
+  walk(c3, (n) => n.className === 'rqx-star')[3].onclick(); sendBtn.onclick(); await tick();
+  t('calificativ cu 4 stele: PUT /api/orders/3/rating', calls.some((c) => c[0] === '/api/orders/3/rating' && c[1] === 'PUT'));
+  ctx.__api = async () => ({ orders: [ORDER({ id: 1 })] }); await T.go('orders'); await tick();
+  const c6 = card('Far'); btnIn(c6, 'AWB / notă').onclick(); await tick(); const df = walk(c6, (n) => n.tagName === 'FORM')[0]; calls.length = 0; df.onsubmit({ preventDefault() {} }); await tick();
+  t('AWB / notă: PATCH /api/orders/1/details', calls.some((c) => c[0] === '/api/orders/1/details' && c[1] === 'PATCH'));
+  // „Comenzi (n)” în tab când sunt comenzi actualizate
+  ctx.rfqSummary.order_updates = 2; ctx.__api = async () => ({ requests: [], counts: { new: 0, all: 0, offered: 0, later: 0, ignored: 0 } }); await T.go('board'); await tick();
+  t('tab „Comenzi (2)” pentru comenzile actualizate', /Comenzi \(2\)/.test(ctx.$('rfqTabs').textContent)); ctx.rfqSummary.order_updates = 0;
   // Întrebări
   ctx.__api = async () => ({ questions: [{ id: 1, request_title: 'Far', price: 90, currency: 'RON', body: 'Are garanție?', answer: null }, { id: 2, request_title: 'Bară', price: 50, currency: 'RON', body: 'Ce an?', answer: '2012' }] });
   await T.go('questions'); await tick(); s = text(T.body);

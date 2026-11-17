@@ -3,7 +3,7 @@
    Moderatorul poate închide/redeschide cereri și scoate oferte în așteptare; ștergerea unei cereri e doar pentru admin. */
 const db = require('./db');
 const { ah } = require('./common');
-const notifyMod = require('./notify');
+const rfqNotify = require('./rfq-notify');
 
 const ST = ['open', 'matched', 'closed'];
 const OST = ['pending', 'accepted', 'rejected'];
@@ -18,7 +18,7 @@ const clip = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const IMGS = (col, id) => `(SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', COALESCE(i.url, '/api/admin/requests/img/' || i.id), 'thumb', COALESCE(i.thumb_url, i.url, '/api/admin/requests/img/' || i.id || '?t=1')) ORDER BY i.position, i.id), '[]'::json) FROM rq_images i WHERE i.${col} = ${id})`;
 
 module.exports = function mount(router, { adminOnly, log }) {
-  const notify = (...a) => notifyMod.notify(...a);
+  const notify = (...a) => rfqNotify.notify(...a);   // în aplicație + email (rfq-notify.js)
 
   router.get('/requests/img/:id(\\d+)', ah(async (req, res) => {
     const r = await db.query('SELECT data, thumb, ctype FROM rq_images WHERE id = $1 AND data IS NOT NULL', [Number(req.params.id)]);
@@ -97,7 +97,7 @@ module.exports = function mount(router, { adminOnly, log }) {
       `DELETE FROM rq_offers o USING rq_requests q WHERE o.id = $1 AND o.status = 'pending' AND q.id = o.request_id RETURNING o.seller_id, q.title, q.id AS rid, q.user_id AS buyer_id`, [id]);
     if (!r.rowCount) return res.status(409).json({ error: 'OFERTA_NU_MAI_E_DISPONIBILA' });
     await log(req, 'offer_remove', 'offer', id, `${r.rows[0].title} · ${reason}`);
-    await notify(r.rows[0].seller_id, 'rfq_mod', null, `Oferta ta a fost scoasă de un moderator: ${r.rows[0].title}`, reason);
+    await notify(r.rows[0].seller_id, 'rfq_mod', null, `Oferta ta a fost scoasă de un moderator: ${r.rows[0].title}`, reason, { path: '/ofertele-mele' });
     res.json({ ok: true });
   }));
 
@@ -133,13 +133,15 @@ module.exports = function mount(router, { adminOnly, log }) {
     if (!['resolved', 'dismissed'].includes(to)) return res.status(400).json({ error: 'STATUS_INVALID' });
     if (action && !['close_request', 'remove_offer'].includes(action)) return res.status(400).json({ error: 'STATUS_INVALID' });
     if (action && !note) return res.status(400).json({ error: 'MOTIV_OBLIGATORIU' });
-    const p = (await db.query('SELECT id, kind, request_id, offer_id, target_title FROM rq_reports WHERE id = $1', [Number(req.params.id)])).rows[0];
+    const p = (await db.query('SELECT id, kind, request_id, offer_id, target_title, reporter_id FROM rq_reports WHERE id = $1', [Number(req.params.id)])).rows[0];
     if (!p) return res.status(404).json({ error: 'NEGASIT' });
+    const tell = (done) => (p.reporter_id ? notify(p.reporter_id, 'rfq_mod', null, `Raportarea ta a fost verificată: ${p.target_title}`, done ? 'Am luat măsuri. Mulțumim!' : 'Nu am găsit o încălcare a regulilor. Mulțumim că ne-ai anunțat.', { email: false }) : null);
     if (action === 'close_request') {
       if (p.kind !== 'request' || !p.request_id) return res.status(409).json({ error: 'ACTIUNE_INVALIDA' });
       const c = await db.query("UPDATE rq_requests SET status = 'closed' WHERE id = $1 AND status = 'open' RETURNING user_id, title", [p.request_id]);
       if (c.rowCount) { await log(req, 'request_close', 'request', p.request_id, `${c.rows[0].title} · prin raportare: ${note}`); await notify(c.rows[0].user_id, 'rfq_mod', null, `Cererea ta a fost închisă de un moderator: ${c.rows[0].title}`, note); }
       await db.query("UPDATE rq_reports SET status = 'resolved', resolved_by = $1, resolved_at = NOW(), admin_note = $2 WHERE kind = 'request' AND request_id = $3 AND status = 'open'", [req.user.id, note, p.request_id]);
+      await tell(true);
       return res.json({ ok: true });
     }
     if (action === 'remove_offer') {
@@ -148,11 +150,13 @@ module.exports = function mount(router, { adminOnly, log }) {
       const d = await db.query("DELETE FROM rq_offers WHERE id = $1 AND status = 'pending' RETURNING seller_id", [p.offer_id]);
       if (!d.rowCount) return res.status(409).json({ error: 'OFERTA_NU_MAI_E_DISPONIBILA' });
       await log(req, 'offer_remove', 'offer', p.offer_id, `${p.target_title} · prin raportare: ${note}`);
-      await notify(d.rows[0].seller_id, 'rfq_mod', null, `Oferta ta a fost scoasă de un moderator: ${p.target_title}`, note);
+      await notify(d.rows[0].seller_id, 'rfq_mod', null, `Oferta ta a fost scoasă de un moderator: ${p.target_title}`, note, { path: '/ofertele-mele' });
+      await tell(true);
       return res.json({ ok: true });
     }
     await db.query('UPDATE rq_reports SET status = $1, resolved_by = $2, resolved_at = NOW(), admin_note = $3 WHERE id = $4', [to, req.user.id, note || null, p.id]);
     await log(req, 'rfq_report_' + to, 'report', p.id, note);
+    await tell(to === 'resolved');
     res.json({ ok: true });
   }));
 

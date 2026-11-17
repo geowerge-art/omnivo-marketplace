@@ -9,7 +9,7 @@ const config = require('./config');
 const { ah, requireDb } = require('./common');
 const { requireAuth, requireVerified } = require('./authmw');
 const { createThrottle } = require('./security');
-const notifyMod = require('./notify');
+const rfqNotify = require('./rfq-notify');
 const live = require('./live');
 const guard = require('./guard');
 const imgs = require('./images');
@@ -31,10 +31,11 @@ const MARKS = ['later', 'ignored'];
 const SEEN = ['new', 'all', 'offered', 'later', 'ignored'];
 const REASONS = ['inselatorie', 'contact', 'interzis', 'spam', 'duplicat', 'altul'];
 const AUTO_CLOSE_REPORTS = 3;   // 3 utilizatori diferiți în 24 h -> cererea se închide până o verifică un moderator
-const ORDER_STATUS = ['new', 'confirmed', 'shipped', 'done', 'cancelled'];
+const ORDER_STATUS = ['new', 'confirmed', 'shipped', 'done', 'cancelled', 'suspended'];
+const MAX_NEW_EMAILS = 100, NEW_EMAILS_PER_DAY = 10;   // câte emailuri „cerere nouă” pleacă la o cerere / pe zi la același vânzător
 
 const toId = (v) => (/^\d{1,10}$/.test(String(v)) ? Number(v) : null);
-const notify = (...a) => notifyMod.notify(...a);
+const notify = (...a) => rfqNotify.notify(...a);   // în aplicație + email (vezi rfq-notify.js)
 const money = (n, cur) => `${Number(n).toLocaleString('ro-RO')} ${cur === 'EUR' ? '€' : 'lei'}`;
 const likeEsc = (s) => String(s || '').replace(/[%_\\]/g, ' ').trim().slice(0, 60);
 
@@ -91,7 +92,12 @@ function parseOffer(b = {}) {
   const message = String(b.message || '').trim();
   if (message.length > 2000) return { error: 'MESAJ_PREA_LUNG' };
   if (CONTACT_RE.test(message)) return { error: 'FARA_CONTACT_IN_OFERTA' };
-  return { v: { price: Math.round(price * 100) / 100, currency: b.currency === 'EUR' ? 'EUR' : 'RON', message } };
+  const v = { price: Math.round(price * 100) / 100, currency: b.currency === 'EUR' ? 'EUR' : 'RON', message };
+  if (b.listing_id !== undefined) {   // anunț atașat: absent = neatins, null/"" = scos, număr = atașat
+    if (b.listing_id === null || b.listing_id === '') v.listing_id = null;
+    else { const id = toId(b.listing_id); if (!id) return { error: 'ANUNT_INVALID' }; v.listing_id = id; }
+  }
+  return { v };
 }
 
 /* ---------- expirare ---------- */
@@ -109,6 +115,11 @@ const REQ_IMGS = (rid) => IMG_FIELDS(`i.request_id = ${rid}`);
 const OFF_IMGS = (oid) => IMG_FIELDS(`i.offer_id = ${oid}`);
 const REQ_THUMB = (rid) => `(SELECT COALESCE(i.thumb_url, i.url, '/api/requests/img/' || i.id || '?t=1') FROM rq_images i WHERE i.request_id = ${rid} ORDER BY i.position, i.id LIMIT 1)`;
 const OFF_THUMB = (oid) => `(SELECT COALESCE(i.thumb_url, i.url, '/api/requests/img/' || i.id || '?t=1') FROM rq_images i WHERE i.offer_id = ${oid} ORDER BY i.position, i.id LIMIT 1)`;
+/* anunțul atașat la o ofertă (doar dacă e încă public) */
+const LISTING_JSON = (o) => `(SELECT json_build_object('id', l.id, 'title', l.title, 'price', l.price, 'currency', l.currency, 'status', l.status,
+    'thumb', (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1))
+  FROM listings l WHERE l.id = ${o}.listing_id AND l.status IN ('approved', 'sold'))`;
+const ownListing = async (uid, id) => (await db.query("SELECT 1 FROM listings WHERE id = $1 AND user_id = $2 AND status = 'approved'", [id, uid])).rowCount > 0;
 const RATING = (uid) => `(SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = ${uid} AND role = 'seller')`;
 const RATING_N = (uid) => `(SELECT COUNT(*)::int FROM reviews WHERE seller_id = ${uid} AND role = 'seller')`;
 
@@ -210,7 +221,9 @@ router.get('/summary', requireAuth, ah(async (req, res) => {
             (SELECT COUNT(*)::int FROM rq_offers o JOIN rq_requests r ON r.id = o.request_id WHERE r.user_id = $1 AND r.status = 'open' AND o.status = 'pending' AND ${OFFER_NOT_BLOCKED('o', '$1')}) AS waiting,
             (SELECT COUNT(*)::int FROM rq_offers o JOIN rq_requests r ON r.id = o.request_id WHERE r.user_id = $1 AND r.status = 'open' AND o.status = 'pending' AND o.created_at > COALESCE(r.buyer_seen_at, r.created_at) AND ${OFFER_NOT_BLOCKED('o', '$1')}) AS new_quotes,
             (SELECT COUNT(*)::int FROM rq_questions q WHERE q.buyer_id = $1 AND q.answered_at IS NOT NULL AND q.answered_at > NOW() - INTERVAL '3 days') AS new_answers,
-            (SELECT COUNT(*)::int FROM rq_questions q WHERE q.seller_id = $1 AND q.answer IS NULL) AS open_questions`, [me])).rows[0];
+            (SELECT COUNT(*)::int FROM rq_questions q WHERE q.seller_id = $1 AND q.answer IS NULL) AS open_questions,
+            (SELECT COUNT(*)::int FROM rq_orders s WHERE s.buyer_id = $1 AND s.buyer_seen_status IS DISTINCT FROM s.status) AS order_updates,
+            (SELECT rfq_email FROM users WHERE id = $1) AS email_on`, [me])).rows[0];
   res.set('Cache-Control', 'no-store').json(r);
 }));
 
@@ -228,7 +241,7 @@ router.get('/mine/:id(\\d+)', requireAuth, ah(async (req, res) => {
     `SELECT o.id, o.seller_id, o.price, o.currency, o.message, o.status, o.created_at, o.updated_at, u.nickname AS seller_name, ${RATING('o.seller_id')} AS seller_rating, ${RATING_N('o.seller_id')} AS seller_rating_n,
             ${OFF_IMGS('o.id')} AS images, (SELECT COUNT(*)::int FROM rq_questions q WHERE q.offer_id = o.id) AS questions_count,
             CASE WHEN o.status = 'accepted' THEN u.phone END AS seller_phone, CASE WHEN o.status = 'accepted' THEN u.name END AS seller_full_name,
-            CASE WHEN o.status = 'accepted' THEN (SELECT s.id FROM rq_orders s WHERE s.offer_id = o.id) END AS order_id,
+            CASE WHEN o.status = 'accepted' THEN (SELECT s.id FROM rq_orders s WHERE s.offer_id = o.id) END AS order_id, ${LISTING_JSON('o')} AS listing,
             EXISTS (SELECT 1 FROM rq_reports p WHERE p.kind = 'offer' AND p.offer_id = o.id AND p.reporter_id = $2 AND p.status = 'open') AS reported
        FROM rq_offers o JOIN users u ON u.id = o.seller_id WHERE o.request_id = $1 AND ${OFFER_NOT_BLOCKED('o', '$2')} ORDER BY (o.status = 'accepted') DESC, (o.status = 'rejected'), o.price ASC, o.created_at`, [id, me])).rows;
   db.query('UPDATE rq_requests SET buyer_seen_at = NOW() WHERE id = $1', [id]).catch(() => {});
@@ -245,7 +258,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
   if (uid && !r.mine) { const bs = await blockState(uid, r.user_id); blocked = bs.byMe ? 'me' : bs.byThem ? 'them' : null; }
   if (uid) {
     reported = (await db.query("SELECT 1 FROM rq_reports WHERE kind = 'request' AND request_id = $1 AND reporter_id = $2 AND status = 'open'", [id, uid])).rowCount > 0;
-    my_offer = (await db.query(`SELECT o.id, o.price, o.currency, o.message, o.status, ${OFF_IMGS('o.id')} AS images FROM rq_offers o WHERE o.request_id = $1 AND o.seller_id = $2 AND o.status <> 'rejected'`, [id, uid])).rows[0] || null;
+    my_offer = (await db.query(`SELECT o.id, o.price, o.currency, o.message, o.status, o.listing_id, ${LISTING_JSON('o')} AS listing, ${OFF_IMGS('o.id')} AS images FROM rq_offers o WHERE o.request_id = $1 AND o.seller_id = $2 AND o.status <> 'rejected'`, [id, uid])).rows[0] || null;
     my_mark = ((await db.query('SELECT mark FROM rq_marks WHERE user_id = $1 AND request_id = $2', [uid, id])).rows[0] || {}).mark || null;
   }
   res.set('Cache-Control', 'no-store').json({ request: r, my_offer, my_mark, blocked, reported });
@@ -315,8 +328,14 @@ async function distribute(id, buyerId, v) {
     `SELECT DISTINCT l.user_id FROM listings l JOIN users u ON u.id = l.user_id
       WHERE l.status = 'approved' AND u.status = 'active' AND l.user_id <> $1 AND l.title ILIKE $2 LIMIT $3`, [buyerId, '%' + likeEsc(v.make) + '%', MAX_NOTIFY]);
   const title = [v.title, v.make, v.model, v.year].filter(Boolean).join(' ');
+  const ids = d.rows.map((x) => x.user_id);
+  const today = ids.length ? (await db.query("SELECT user_id, COUNT(*)::int AS n FROM notifications WHERE kind = 'rfq_new' AND created_at > NOW() - INTERVAL '1 day' AND user_id = ANY($1::int[]) GROUP BY user_id", [ids])).rows : [];
+  const had = new Map(today.map((x) => [x.user_id, x.n]));
+  let mails = 0;
   for (const x of d.rows) {
-    await notify(x.user_id, 'rfq_new', null, `Cerere nouă: ${title}`, `${v.county}${v.city ? ', ' + v.city : ''} · trimite o ofertă`);
+    const mail = mails < MAX_NEW_EMAILS && (had.get(x.user_id) || 0) < NEW_EMAILS_PER_DAY;
+    if (mail) mails++;
+    await notify(x.user_id, 'rfq_new', null, `Cerere nouă: ${title}`, `${v.county}${v.city ? ', ' + v.city : ''} · trimite o ofertă`, { email: mail });
     live.send(x.user_id, 'rfq', { request_id: id });
   }
 }
@@ -333,7 +352,8 @@ router.post('/:id(\\d+)/offers', requireVerified, ah(async (req, res) => {
   const be = blockError(await blockState(req.user.id, r.user_id));
   if (be) return res.status(403).json({ error: be });
   if ((await db.query("SELECT 1 FROM rq_offers WHERE request_id = $1 AND seller_id = $2 AND status = 'pending'", [id, req.user.id])).rowCount) return res.status(409).json({ error: 'OFERTA_EXISTA' });
-  const o = (await db.query('INSERT INTO rq_offers(request_id, seller_id, price, currency, message) VALUES($1,$2,$3,$4,$5) RETURNING id', [id, req.user.id, p.v.price, p.v.currency, p.v.message])).rows[0];
+  if (p.v.listing_id && !(await ownListing(req.user.id, p.v.listing_id))) return res.status(400).json({ error: 'ANUNT_INVALID' });
+  const o = (await db.query('INSERT INTO rq_offers(request_id, seller_id, price, currency, message, listing_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING id', [id, req.user.id, p.v.price, p.v.currency, p.v.message, p.v.listing_id || null])).rows[0];
   const ids = imageIds((req.body || {}).image_ids);
   if (ids.length) await attachImages('offer_id', o.id, req.user.id, ids);
   db.query("DELETE FROM rq_marks WHERE user_id = $1 AND request_id = $2", [req.user.id, id]).catch(() => {});
@@ -345,7 +365,7 @@ router.post('/:id(\\d+)/offers', requireVerified, ah(async (req, res) => {
 offersRouter.get('/mine', requireAuth, ah(async (req, res) => {
   const me = req.user.id;
   const r = await db.query(
-    `SELECT o.id, o.price, o.currency, o.message, o.status, o.created_at, o.updated_at, ${OFF_THUMB('o.id')} AS thumb, ${OFF_IMGS('o.id')} AS images,
+    `SELECT o.id, o.price, o.currency, o.message, o.status, o.created_at, o.updated_at, o.listing_id, ${LISTING_JSON('o')} AS listing, ${OFF_THUMB('o.id')} AS thumb, ${OFF_IMGS('o.id')} AS images,
             q.id AS request_id, q.title AS request_title, q.make, q.model, q.year, q.county, q.city, q.status AS request_status, q.user_id AS buyer_id,
             u.nickname AS buyer_name, ${REQ_THUMB('q.id')} AS req_thumb,
             CASE WHEN o.status = 'accepted' THEN q.vin END AS vin, CASE WHEN o.status = 'accepted' THEN q.ship_address END AS ship_address,
@@ -367,11 +387,12 @@ offersRouter.patch('/:id(\\d+)', requireVerified, ah(async (req, res) => {
   if (!offerAllow('u' + req.user.id)) return res.status(429).json({ error: 'PREA_MULTE_OFERTE' });
   const p = parseOffer(req.body);
   if (p.error) return res.status(400).json({ error: p.error });
-  const id = Number(req.params.id);
+  const id = Number(req.params.id), hasL = Object.prototype.hasOwnProperty.call(p.v, 'listing_id');
+  if (hasL && p.v.listing_id && !(await ownListing(req.user.id, p.v.listing_id))) return res.status(400).json({ error: 'ANUNT_INVALID' });
   const r = await db.query(
-    `UPDATE rq_offers o SET price=$1, currency=$5, message=$2, updated_at=NOW() FROM rq_requests q
+    `UPDATE rq_offers o SET price=$1, currency=$5, message=$2, listing_id = CASE WHEN $6::boolean THEN $7::int ELSE o.listing_id END, updated_at=NOW() FROM rq_requests q
       WHERE o.id=$3 AND o.seller_id=$4 AND o.status='pending' AND q.id=o.request_id AND q.status='open' RETURNING o.id, q.user_id AS buyer_id, q.title`,
-    [p.v.price, p.v.message, id, req.user.id, p.v.currency]);
+    [p.v.price, p.v.message, id, req.user.id, p.v.currency, hasL, hasL ? p.v.listing_id : null]);
   if (!r.rowCount) return res.status(409).json({ error: 'OFERTA_NU_MAI_E_DISPONIBILA' });
   if ((req.body || {}).image_ids !== undefined) await attachImages('offer_id', id, req.user.id, imageIds(req.body.image_ids));
   await notify(r.rows[0].buyer_id, 'rfq_edit', null, `Ofertă modificată: ${r.rows[0].title}`, money(p.v.price, p.v.currency));
@@ -407,10 +428,11 @@ offersRouter.post('/:id(\\d+)/accept', requireAuth, ah(async (req, res) => {
     await c.query("UPDATE rq_offers SET status = 'accepted', updated_at = NOW() WHERE id = $1", [o.id]);
     const lost = await c.query("UPDATE rq_offers SET status = 'rejected', updated_at = NOW() WHERE request_id = $1 AND id <> $2 AND status = 'pending' RETURNING seller_id", [o.request_id, o.id]);
     await c.query("UPDATE rq_requests SET status = 'matched' WHERE id = $1", [o.request_id]);
-    const ord = await c.query('INSERT INTO rq_orders(offer_id, request_id, buyer_id, seller_id, title, price, currency) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id', [o.id, o.request_id, o.buyer_id, o.seller_id, o.title, o.price, o.currency]);
+    const ord = await c.query("INSERT INTO rq_orders(offer_id, request_id, buyer_id, seller_id, title, price, currency, buyer_seen_status) VALUES($1,$2,$3,$4,$5,$6,$7,'new') RETURNING id", [o.id, o.request_id, o.buyer_id, o.seller_id, o.title, o.price, o.currency]);
     await c.query('COMMIT');
     await notify(o.seller_id, 'rfq_won', null, `Ofertă acceptată: ${o.title}`, 'Comandă nouă. Contactul cumpărătorului e în „Ofertele mele”.');
     live.send(o.seller_id, 'rfq', { request_id: o.request_id });
+    await notify(o.buyer_id, 'rfq_done', null, `Comandă creată: ${o.title}`, `${money(o.price, o.currency)} · contactul vânzătorului e în „Cererile mele” și în „Comenzi”.`, { email: false, path: '/comenzi-piese' });
     for (const l of lost.rows) await notify(l.seller_id, 'rfq_lost', null, `Cerere încheiată: ${o.title}`, 'Cumpărătorul a ales altă ofertă.');
     res.json({ ok: true, order_id: ord.rows[0].id });
   } catch (e) { try { await c.query('ROLLBACK'); } catch {} throw e; } finally { c.release(); }
@@ -490,31 +512,118 @@ async function addReport(req, res, kind, id) {
 router.post('/:id(\\d+)/report', requireAuth, ah((req, res) => addReport(req, res, 'request', Number(req.params.id))));
 offersRouter.post('/:id(\\d+)/report', requireAuth, ah((req, res) => addReport(req, res, 'offer', Number(req.params.id))));
 
+/* ---------- contact pe cerere și preferința de email ---------- */
+const phonesOf = (u) => [...(u.phone ? [{ phone: u.phone, whatsapp: !!u.whatsapp }] : []), ...(Array.isArray(u.extra_phones) ? u.extra_phones : []).filter((x) => x && x.phone).map((x) => ({ phone: x.phone, whatsapp: !!x.wa }))];
+const contactAllow = createThrottle(60, 60 * 60 * 1000);
+
+/* telefonul cumpărătorului, doar dacă și l-a făcut vizibil în cont (users.show_phone), ca la AutoParts */
+router.get('/:id(\\d+)/contact', requireAuth, ah(async (req, res) => {
+  if (!contactAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const q = (await db.query("SELECT user_id FROM rq_requests WHERE id = $1 AND status = 'open' AND expires_at > NOW()", [Number(req.params.id)])).rows[0];
+  if (!q) return res.status(404).json({ error: 'NEGASIT' });
+  if (q.user_id === req.user.id) return res.status(400).json({ error: 'CERERE_PROPRIE' });
+  const be = blockError(await blockState(req.user.id, q.user_id));
+  if (be) return res.status(403).json({ error: be });
+  const u = (await db.query('SELECT phone, whatsapp, extra_phones, show_phone FROM users WHERE id = $1', [q.user_id])).rows[0] || {};
+  res.set('Cache-Control', 'no-store').json({ phones: u.show_phone ? phonesOf(u) : [], shown: !!u.show_phone });
+}));
+
+router.put('/email-pref', requireAuth, ah(async (req, res) => {
+  await db.query('UPDATE users SET rfq_email = $1 WHERE id = $2', [(req.body || {}).on !== false, req.user.id]);
+  res.json({ ok: true });
+}));
+
 /* ---------- comenzi (după acceptarea unei oferte) ---------- */
+const LINK_RE = /(https?:\/\/|www\.|\S+@\S+\.\S+)/i;
+/* tranziții permise, ca la AutoParts; cumpărătorul doar anulează o comandă nouă sau confirmă primirea după expediere */
+const NEXT = { new: ['confirmed', 'shipped', 'done', 'suspended', 'cancelled'], confirmed: ['shipped', 'done', 'suspended', 'cancelled'], shipped: ['done', 'suspended', 'cancelled'], suspended: ['confirmed', 'shipped', 'done', 'cancelled'] };
+const ORDER_LBL = { confirmed: 'confirmată', shipped: 'expediată', done: 'finalizată', suspended: 'suspendată', cancelled: 'anulată' };
+const ratingAllow = createThrottle(30, 60 * 60 * 1000);
+const detailsAllow = createThrottle(60, 60 * 60 * 1000);
+
 ordersRouter.get('/', requireAuth, ah(async (req, res) => {
   const me = req.user.id;
   const r = await db.query(
-    `SELECT s.id, s.title, s.price, s.currency, s.status, s.created_at, s.updated_at, s.request_id, s.offer_id, (s.buyer_id = $1) AS i_buy,
-            CASE WHEN s.buyer_id = $1 THEN us.nickname ELSE ub.nickname END AS other_name, CASE WHEN s.buyer_id = $1 THEN us.phone ELSE ub.phone END AS other_phone
-       FROM rq_orders s LEFT JOIN users ub ON ub.id = s.buyer_id LEFT JOIN users us ON us.id = s.seller_id
+    `SELECT s.id, s.title, s.price, s.currency, s.status, s.status_reason, s.awb, CASE WHEN s.seller_id = $1 THEN s.seller_note END AS seller_note, s.created_at, s.updated_at, s.request_id, s.offer_id, (s.buyer_id = $1) AS i_buy,
+            CASE WHEN s.buyer_id = $1 THEN s.seller_id ELSE s.buyer_id END AS other_id,
+            CASE WHEN s.buyer_id = $1 THEN us.nickname ELSE ub.nickname END AS other_name, CASE WHEN s.buyer_id = $1 THEN us.name ELSE ub.name END AS other_full_name,
+            CASE WHEN s.buyer_id = $1 THEN us.phone ELSE ub.phone END AS phone, CASE WHEN s.buyer_id = $1 THEN us.whatsapp ELSE ub.whatsapp END AS whatsapp,
+            CASE WHEN s.buyer_id = $1 THEN us.extra_phones ELSE ub.extra_phones END AS extra_phones,
+            (s.buyer_id = $1 AND s.buyer_seen_status IS DISTINCT FROM s.status) AS unseen,
+            q.make, q.model, q.year, q.variant, q.engine, q.county, q.city, q.ship_address, q.vin, q.extra_parts, q.description, o.message AS offer_message,
+            COALESCE(${REQ_THUMB('s.request_id')}, ${OFF_THUMB('s.offer_id')}) AS thumb, ${LISTING_JSON('o')} AS listing,
+            (SELECT json_build_object('stars', v.rating, 'comment', v.body) FROM reviews v WHERE v.order_id = s.id AND v.reviewer_id = $1) AS my_rating,
+            (SELECT json_build_object('stars', v.rating, 'comment', v.body) FROM reviews v WHERE v.order_id = s.id AND v.reviewer_id <> $1) AS their_rating
+       FROM rq_orders s LEFT JOIN users ub ON ub.id = s.buyer_id LEFT JOIN users us ON us.id = s.seller_id LEFT JOIN rq_requests q ON q.id = s.request_id LEFT JOIN rq_offers o ON o.id = s.offer_id
       WHERE s.buyer_id = $1 OR s.seller_id = $1 ORDER BY s.created_at DESC LIMIT 200`, [me]);
-  res.set('Cache-Control', 'no-store').json({ orders: r.rows });
+  // cumpărătorul a deschis „Comenzi”: starea curentă devine „văzută” (după ce am citit, ca insigna să ajungă o dată la el)
+  if (req.query.seen === 'buyer') await db.query('UPDATE rq_orders SET buyer_seen_status = status WHERE buyer_id = $1 AND buyer_seen_status IS DISTINCT FROM status', [me]);
+  res.set('Cache-Control', 'no-store').json({ orders: r.rows.map(({ phone, whatsapp, extra_phones, ...x }) => ({ ...x, phones: phonesOf({ phone, whatsapp, extra_phones }) })) });
 }));
 
 ordersRouter.patch('/:id(\\d+)/status', requireAuth, ah(async (req, res) => {
-  const status = (req.body || {}).status;
+  const status = String((req.body || {}).status || ''), reason = String((req.body || {}).reason || '').trim().slice(0, 500);
   if (!ORDER_STATUS.includes(status) || status === 'new') return res.status(400).json({ error: 'STATUS_INVALID' });
   const s = (await db.query('SELECT id, buyer_id, seller_id, status, title FROM rq_orders WHERE id = $1', [Number(req.params.id)])).rows[0];
   const me = req.user.id;
   if (!s || (s.buyer_id !== me && s.seller_id !== me)) return res.status(404).json({ error: 'NEGASIT' });
   if (s.status === 'done' || s.status === 'cancelled') return res.status(409).json({ error: 'COMANDA_INCHEIATA' });
   const seller = s.seller_id === me;
-  if ((status === 'confirmed' || status === 'shipped') && !seller) return res.status(403).json({ error: 'INTERZIS' });
-  if (status === 'done' && seller) return res.status(403).json({ error: 'INTERZIS' });
-  await db.query('UPDATE rq_orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, s.id]);
-  const other = seller ? s.buyer_id : s.seller_id, L = { confirmed: 'confirmată', shipped: 'expediată', done: 'finalizată', cancelled: 'anulată' };
-  if (other) await notify(other, status === 'shipped' ? 'rfq_ship' : 'rfq_done', null, `Comandă ${L[status]}: ${s.title}`, '');
+  if (!seller && !((status === 'cancelled' && s.status === 'new') || (status === 'done' && s.status === 'shipped'))) return res.status(403).json({ error: 'INTERZIS' });
+  if (!(NEXT[s.status] || []).includes(status)) return res.status(409).json({ error: 'STATUS_INVALID' });
+  if (reason && LINK_RE.test(reason)) return res.status(400).json({ error: 'LINK_INTERZIS' });
+  if (seller && ['suspended', 'cancelled'].includes(status) && reason.length < 3) return res.status(400).json({ error: 'MOTIV_OBLIGATORIU' });
+  const u = await db.query('UPDATE rq_orders SET status = $1, status_reason = $4, updated_at = NOW() WHERE id = $2 AND status = $3 RETURNING id', [status, s.id, s.status, ['suspended', 'cancelled', 'done'].includes(status) && reason ? reason : null]);
+  if (!u.rowCount) return res.status(409).json({ error: 'COMANDA_INCHEIATA' });
+  const other = seller ? s.buyer_id : s.seller_id;
+  const kind = status === 'shipped' ? 'rfq_ship' : status === 'done' || status === 'confirmed' ? 'rfq_done' : 'rfq_lost';
+  if (other) {
+    await notify(other, kind, null, `Comandă ${ORDER_LBL[status]}: ${s.title}`, [reason && `Mesaj: ${reason}`, status === 'done' ? 'Poți acorda un calificativ din „Comenzi”.' : ''].filter(Boolean).join(' · '), { email: true, path: '/comenzi-piese' });
+    live.send(other, 'rfq', {});
+  }
+  res.json({ ok: true, status });
+}));
+
+/* AWB și notă privată (doar vânzătorul); cumpărătorul primește notificare când apare un AWB nou */
+ordersRouter.patch('/:id(\\d+)/details', requireAuth, ah(async (req, res) => {
+  if (!detailsAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const o = (await db.query('SELECT id, buyer_id, title, awb FROM rq_orders WHERE id = $1 AND seller_id = $2', [Number(req.params.id), req.user.id])).rows[0];
+  if (!o) return res.status(404).json({ error: 'NEGASIT' });
+  const b = req.body || {}, sets = [], vals = [o.id];
+  let newAwb = null;
+  if (Object.prototype.hasOwnProperty.call(b, 'awb')) {
+    const awb = String(b.awb || '').replace(/\s+/g, '').slice(0, 40);
+    if (awb && !/^[A-Za-z0-9._-]{3,40}$/.test(awb)) return res.status(400).json({ error: 'AWB_INVALID' });
+    vals.push(awb || null); sets.push('awb = $' + vals.length);
+    if (awb && awb !== o.awb) newAwb = awb;
+  }
+  if (Object.prototype.hasOwnProperty.call(b, 'seller_note')) { vals.push(String(b.seller_note || '').trim().slice(0, 1000) || null); sets.push('seller_note = $' + vals.length); }
+  if (!sets.length) return res.status(400).json({ error: 'NIMIC_DE_SALVAT' });
+  await db.query(`UPDATE rq_orders SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, vals);
+  if (newAwb && o.buyer_id) { await notify(o.buyer_id, 'rfq_ship', null, `Comanda „${o.title}” are AWB: ${newAwb}`, '', { email: true, path: '/comenzi-piese' }); live.send(o.buyer_id, 'rfq', {}); }
   res.json({ ok: true });
 }));
 
-module.exports = { router, offersRouter, questionsRouter, ordersRouter, sweep, parseRequest, parseOffer, blockState, blockError, REASONS, KINDS, CONTACT_RE };
+/* calificativ după comandă finalizată: cumpărătorul îl califică pe vânzător și invers; se poate modifica; apare în profil (tabela reviews) */
+ordersRouter.put('/:id(\\d+)/rating', requireAuth, ah(async (req, res) => {
+  if (!ratingAllow('u' + req.user.id)) return res.status(429).json({ error: 'RATE_LIMIT' });
+  const b = req.body || {}, stars = Number(b.stars), comment = String(b.comment || '').trim().slice(0, 500);
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) return res.status(400).json({ error: 'CALIFICATIV_INVALID' });
+  if (comment && LINK_RE.test(comment)) return res.status(400).json({ error: 'LINK_INTERZIS' });
+  const o = (await db.query('SELECT id, buyer_id, seller_id, status, title FROM rq_orders WHERE id = $1', [Number(req.params.id)])).rows[0];
+  const me = req.user.id;
+  if (!o || !o.buyer_id || !o.seller_id || (o.buyer_id !== me && o.seller_id !== me)) return res.status(404).json({ error: 'NEGASIT' });
+  if (o.status !== 'done') return res.status(409).json({ error: 'COMANDA_NEFINALIZATA' });
+  const asBuyer = o.buyer_id === me, rated = asBuyer ? o.seller_id : o.buyer_id, role = asBuyer ? 'seller' : 'buyer';   // role = în ce rol e calificat cel evaluat
+  const r = await db.query(
+    `INSERT INTO reviews(seller_id, reviewer_id, rating, body, role, order_id) VALUES($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (reviewer_id, order_id) WHERE order_id IS NOT NULL DO UPDATE SET rating = EXCLUDED.rating, body = EXCLUDED.body, updated_at = NOW() RETURNING (xmax = 0) AS created`,
+    [rated, me, stars, comment || null, role, o.id]);
+  if (r.rows[0] && r.rows[0].created) {
+    await notify(rated, 'review', null, `Ai primit un calificativ de ${stars} ${stars === 1 ? 'stea' : 'stele'}`, `Pentru comanda „${o.title}”, ca ${role === 'seller' ? 'vânzător' : 'cumpărător'}.`, { email: true, path: '/comenzi-piese' });
+    live.send(rated, 'rfq', {});
+  }
+  res.json({ ok: true, stars, comment });
+}));
+
+module.exports = { router, offersRouter, questionsRouter, ordersRouter, sweep, parseRequest, parseOffer, LISTING_JSON, blockState, blockError, REASONS, KINDS, CONTACT_RE };

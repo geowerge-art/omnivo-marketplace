@@ -95,6 +95,23 @@ test('raportări: listare pe stări și rezolvare cu acțiune (închide cererea 
   assert.strictEqual(r.body.ok, true); assert.deepStrictEqual(logs.at(-1).slice(0, 3), ['rfq_report_dismissed', 'report', 3]);
 });
 
+test('raportare verificată: cel care a raportat e anunțat în aplicație (fără email), cu rezultatul', async () => {
+  const row = (kind) => ({ rows: [{ id: 9, kind, request_id: 5, offer_id: kind === 'offer' ? 3 : null, target_title: 'Far', reporter_id: 4 }], rowCount: 1 });
+  script = (s) => (/FROM rq_reports WHERE id/.test(s) ? row('request') : { rows: [], rowCount: 1 });
+  notes.length = 0;
+  await call('PATCH /rfq-reports/:id', { params: { id: '9' }, body: { status: 'dismissed', note: 'Fals' } });
+  let n = notes.find((x) => x[0] === 4); assert.ok(n, 'reporterul e anunțat'); assert.strictEqual(n[1], 'rfq_mod'); assert.match(n[3], /Raportarea ta a fost verificată: Far/); assert.match(n[4], /Nu am găsit o încălcare/);
+  notes.length = 0; await call('PATCH /rfq-reports/:id', { params: { id: '9' }, body: { status: 'resolved' } });
+  n = notes.find((x) => x[0] === 4); assert.match(n[4], /Am luat măsuri/);
+  // cu acțiune: și proprietarul conținutului, și reporterul
+  script = (s) => (/FROM rq_reports WHERE id/.test(s) ? row('request') : /UPDATE rq_requests SET status = 'closed'/.test(s) ? { rows: [{ user_id: 9, title: 'Far' }], rowCount: 1 } : { rows: [], rowCount: 1 });
+  notes.length = 0; await call('PATCH /rfq-reports/:id', { params: { id: '9' }, body: { status: 'resolved', action: 'close_request', note: 'Spam' } });
+  assert.deepStrictEqual(notes.map((x) => x[0]).sort(), [4, 9]);
+  // fără reporter (cont șters): nu se notifică nimeni în plus
+  script = (s) => (/FROM rq_reports WHERE id/.test(s) ? { rows: [{ id: 9, kind: 'request', request_id: 5, offer_id: null, target_title: 'Far', reporter_id: null }], rowCount: 1 } : { rows: [], rowCount: 1 });
+  notes.length = 0; await call('PATCH /rfq-reports/:id', { params: { id: '9' }, body: { status: 'dismissed' } }); assert.strictEqual(notes.length, 0);
+});
+
 test('integrare: admin.js montează modulul, iar interfața folosește doar rute existente', () => {
   const adm = fs.readFileSync(path.join(__dirname, 'admin.js'), 'utf8');
   assert.match(adm, /require\('\.\/admin-requests'\)\(router, \{ adminOnly, log \}\)/);

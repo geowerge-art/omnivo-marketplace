@@ -1,19 +1,24 @@
-Copiaza fisierele din acest folder peste proiectul Omnivo (aceleasi locuri, in radacina). Migrarea 041 ruleaza singura la pornire.
+Versiune peste arhiva ta noua (omnivo-marketplace-main__4_, cea cu swap / photo_hash).
+Copiaza fisierele din acest zip peste proiect (aceleasi locuri, in radacina), apoi ruleaza: npm run migrate
+Migrari noi (dupa 041_swaps si 042_photo_hash): 043_rfq_orders_reviews.sql, apoi 044_offer_listing.sql
 
-NOI:        041_swaps.sql, swap-match.js, swap.js, swap-ui.js, swap.test.js, swap.routes.test.js
-MODIFICATE: app.js, index.html, script.js, style.css, notify.js, MODIFICARI.md
+NOI:
+  043_rfq_orders_reviews.sql   comenzi (suspendare, motiv, AWB, nota), reviews.order_id, users.rfq_email
+  044_offer_listing.sql        rq_offers.listing_id (anunt atasat la oferta)
+  rfq-notify.js                notificari in aplicatie + email pentru cereri/oferte/comenzi
+  rfq-notify.test.js           teste pentru notificari si email
 
-Dupa deploy: /api/health ok:true, iar in log "migrare aplicata: 041_swaps.sql".
-Apoi: Meniu (☰) -> Schimb, si in formularul "Adauga anunt" bifa "Accept si schimb".
+MODIFICATE:
+  requests.js                  comenzi bogate, calificative, AWB, contact pe cerere, preferinta email, anunt atasat
+  requests-ui.js               pagina "Comenzi", calificative, contact, bifa de email, "Atașează un anunț"
+  admin-requests.js            moderarea trimite si email; cel care raporteaza afla rezultatul
+  profiles.js                  recenziile din comenzi apar in profil cu titlul comenzii
+  style.css                    stiluri noi la final (rqx-*)
+  requests.test.js, requests.ui.test.js, admin-requests.test.js   teste actualizate
+  MODIFICARI.md                nota
 
---- Detector de poze duplicate ---
-NOI:        042_photo_hash.sql, dhash.js, dhash.test.js
-MODIFICATE: images.js, admin-ui.js, MODIFICARI.md
-Dupa deploy, in log: "migrare aplicata: 042_photo_hash.sql". Test: incarca aceeasi poza la anunturi de pe doua conturi;
-in Moderare -> Raportari apare "Poza duplicata". Pozele vechi nu au amprenta (se compara doar cele noi).
-
---- Pret sugerat, sinonime la Schimb, raspunsuri rapide in chat ---
-NOI:        price-hint.js, price-hint-ui.js, price-hint.test.js, quick-ui.js
-MODIFICATE: swap-match.js, swap.js, swap.test.js, listings.js, index.html, app.js, script.js, style.css, MODIFICARI.md
-Fara migrari noi. Test: "Adauga anunt" -> alege categoria si scrie titlul -> apare "Anunturi asemanatoare" (doar daca sunt destule anunturi in categorie);
-in orice conversatie apar butoanele cu fraze rapide deasupra campului de mesaj.
+DE STERS din proiect (testele vechi, pentru sistemul inlocuit; inca sunt in arhiva ta si pica):
+  requests.offers.test.js
+  requests.photos.test.js
+  requests.summary.test.js
+  requests.summary.ui.test.js

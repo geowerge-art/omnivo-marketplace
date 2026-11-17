@@ -65,9 +65,9 @@ router.get('/:id(\\d+)/reviews', ah(async (req, res) => {
   const role = roleOf(req.query.role);
   const r = await db.query(
     `SELECT r.id, r.rating, r.body, r.created_at, r.reviewer_id, u.nickname AS reviewer, l.title AS listing,
-            CASE WHEN pr.id IS NOT NULL THEN concat_ws(' ', pr.part, pr.brand, pr.model) END AS request
+            CASE WHEN pr.id IS NOT NULL THEN concat_ws(' ', pr.part, pr.brand, pr.model) WHEN ro.id IS NOT NULL THEN ro.title END AS request
        FROM reviews r LEFT JOIN users u ON u.id = r.reviewer_id LEFT JOIN listings l ON l.id = r.listing_id
-       LEFT JOIN quotes q ON q.id = r.quote_id LEFT JOIN part_requests pr ON pr.id = q.request_id
+       LEFT JOIN quotes q ON q.id = r.quote_id LEFT JOIN part_requests pr ON pr.id = q.request_id LEFT JOIN rq_orders ro ON ro.id = r.order_id
       WHERE r.seller_id = $1 AND r.role = $2 ORDER BY r.created_at DESC LIMIT ${lim} OFFSET ${off}`, [uid(req.params.id), role]);
   const me = req.user;
   res.json({ role, rows: r.rows.map((x) => ({ ...x, can_delete: !!me && (me.id === x.reviewer_id || isStaff(me)) })) });
