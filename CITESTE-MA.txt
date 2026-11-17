@@ -7,12 +7,14 @@ NOI:
   044_offer_listing.sql        rq_offers.listing_id (anunt atasat la oferta)
   rfq-notify.js                notificari in aplicatie + email pentru cereri/oferte/comenzi
   rfq-notify.test.js           teste pentru notificari si email
+  erase.test.js                teste pentru stergerea contului
 
 MODIFICATE:
   requests.js                  comenzi bogate, calificative, AWB, contact pe cerere, preferinta email, anunt atasat
   requests-ui.js               pagina "Comenzi", calificative, contact, bifa de email, "Atașează un anunț"
   admin-requests.js            moderarea trimite si email; cel care raporteaza afla rezultatul
   profiles.js                  recenziile din comenzi apar in profil cu titlul comenzii
+  erase.js                     la stergerea contului se sterg si pozele cererilor/ofertelor din Storage, nota privata, comenzile orfane
   style.css                    stiluri noi la final (rqx-*)
   requests.test.js, requests.ui.test.js, admin-requests.test.js   teste actualizate
   MODIFICARI.md                nota
