@@ -109,6 +109,22 @@ async function sweep() {
   }
 }
 
+/* oferte în așteptare al căror anunț atașat nu mai e disponibil (vândut, șters, blocat, expirat...): cumpărătorul e anunțat o singură dată, în aplicație */
+const GONE = { sold: 'a fost vândut', deleted: 'a fost șters', rejected: 'a fost respins', blocked: 'a fost blocat', pending: 'e în verificare' };
+async function sweepListings() {
+  const r = await db.query(
+    `UPDATE rq_offers o SET listing_notified = TRUE FROM listings l, rq_requests q
+      WHERE l.id = o.listing_id AND q.id = o.request_id AND o.status = 'pending' AND q.status = 'open' AND NOT o.listing_notified
+        AND NOT (${LIVE('l')})
+      RETURNING q.user_id AS buyer_id, q.id AS request_id, q.title AS request_title, l.title AS listing_title, l.status AS listing_status`);
+  for (const x of r.rows) {
+    const why = GONE[x.listing_status] || 'a expirat';
+    await notify(x.buyer_id, 'rfq_edit', null, `Anunțul din oferta pentru „${x.request_title}” ${why}`, `„${x.listing_title}” nu mai e disponibil. Oferta rămâne valabilă: poți să-i scrii vânzătorului înainte să o accepți.`, { email: false, path: '/cererile-mele' });
+    live.send(x.buyer_id, 'rfq', { request_id: x.request_id });
+  }
+  return r.rowCount;
+}
+
 /* ---------- poze ---------- */
 const IMG_FIELDS = (own) => `(SELECT COALESCE(json_agg(json_build_object('id', i.id, 'url', COALESCE(i.url, '/api/requests/img/' || i.id), 'thumb', COALESCE(i.thumb_url, i.url, '/api/requests/img/' || i.id || '?t=1')) ORDER BY i.position, i.id), '[]'::json) FROM rq_images i WHERE ${own})`;
 const REQ_IMGS = (rid) => IMG_FIELDS(`i.request_id = ${rid}`);
@@ -116,10 +132,14 @@ const OFF_IMGS = (oid) => IMG_FIELDS(`i.offer_id = ${oid}`);
 const REQ_THUMB = (rid) => `(SELECT COALESCE(i.thumb_url, i.url, '/api/requests/img/' || i.id || '?t=1') FROM rq_images i WHERE i.request_id = ${rid} ORDER BY i.position, i.id LIMIT 1)`;
 const OFF_THUMB = (oid) => `(SELECT COALESCE(i.thumb_url, i.url, '/api/requests/img/' || i.id || '?t=1') FROM rq_images i WHERE i.offer_id = ${oid} ORDER BY i.position, i.id LIMIT 1)`;
 /* anunțul atașat la o ofertă (doar dacă e încă public) */
+/* anunț care se mai vede pe site: publicat și neexpirat */
+const LIVE = (l) => `${l}.status = 'approved' AND (${l}.expires_at IS NULL OR ${l}.expires_at > NOW())`;
+/* marca din cerere apare în titlul, descrierea sau atributul „Marca mașinii” al anunțului (r = cererea, l = anunțul) */
+const MAKE_IN = (r, l) => `(position(lower(${r}.make) IN lower(${l}.title)) > 0 OR position(lower(${r}.make) IN lower(${l}.description)) > 0 OR position(lower(${r}.make) IN lower(COALESCE(${l}.attributes->>'marca_auto', ''))) > 0)`;
 const LISTING_JSON = (o) => `(SELECT json_build_object('id', l.id, 'title', l.title, 'price', l.price, 'currency', l.currency, 'status', l.status,
     'thumb', (SELECT COALESCE(i.thumb_url, i.url) FROM listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1))
-  FROM listings l WHERE l.id = ${o}.listing_id AND l.status IN ('approved', 'sold'))`;
-const ownListing = async (uid, id) => (await db.query("SELECT 1 FROM listings WHERE id = $1 AND user_id = $2 AND status = 'approved'", [id, uid])).rowCount > 0;
+  FROM listings l WHERE l.id = ${o}.listing_id AND (l.status = 'sold' OR (${LIVE('l')})))`;
+const ownListing = async (uid, id) => (await db.query(`SELECT 1 FROM listings l WHERE l.id = $1 AND l.user_id = $2 AND ${LIVE('l')}`, [id, uid])).rowCount > 0;
 const RATING = (uid) => `(SELECT ROUND(AVG(rating)::numeric, 1) FROM reviews WHERE seller_id = ${uid} AND role = 'seller')`;
 const RATING_N = (uid) => `(SELECT COUNT(*)::int FROM reviews WHERE seller_id = ${uid} AND role = 'seller')`;
 
@@ -211,6 +231,33 @@ router.get('/mine', requireAuth, ah(async (req, res) => {
             (SELECT MIN(o.price) FROM rq_offers o WHERE o.request_id = r.id AND o.status <> 'rejected' AND o.currency = 'RON' AND ${OFFER_NOT_BLOCKED('o', 'r.user_id')}) AS best_price
        FROM rq_requests r WHERE r.user_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [req.user.id]);
   res.set('Cache-Control', 'no-store').json({ requests: r.rows });
+}));
+
+/* cererile deschise potrivite cu anunțurile mele de piese (categoria piese-auto, anunțuri publicate): marca din cerere apare în titlul/descrierea anunțului,
+   sau un cuvânt din piesa cerută apare în titlu. Fără cererile mele, cele ignorate, cele la care am ofertat deja și cele dintre utilizatori blocați.
+   ?listing_id=ID limitează la un anunț. Răspuns: by_listing (câte potriviri are fiecare anunț) și requests (unice, cu cel mai bun anunț potrivit). */
+router.get('/matching', requireAuth, ah(async (req, res) => {
+  const me = req.user.id, lid = toId(req.query.listing_id);
+  const r = await db.query(
+    `SELECT l.id AS listing_id, l.title AS listing_title, r.id, r.title, r.make, r.model, r.year, r.county, r.city, r.kind, r.created_at, r.expires_at,
+            jsonb_array_length(r.extra_parts) AS extra_n, ${REQ_THUMB('r.id')} AS thumb,
+            ${MAKE_IN('r', 'l')} AS by_make
+       FROM listings l JOIN categories c ON c.id = l.category_id AND c.slug = 'piese-auto'
+       JOIN rq_requests r ON r.status = 'open' AND r.expires_at > NOW() AND r.user_id <> $1
+       LEFT JOIN rq_marks mk ON mk.request_id = r.id AND mk.user_id = $1
+       LEFT JOIN rq_offers mo ON mo.request_id = r.id AND mo.seller_id = $1 AND mo.status <> 'rejected'
+      WHERE l.user_id = $1 AND ${LIVE('l')} AND ($2::int IS NULL OR l.id = $2)
+        AND mk.mark IS DISTINCT FROM 'ignored' AND mo.id IS NULL AND ${REQ_NOT_BLOCKED('$1::int', 'r.user_id')}
+        AND (${MAKE_IN('r', 'l')}
+             OR EXISTS (SELECT 1 FROM unnest(regexp_split_to_array(lower(r.title || ' ' || COALESCE((SELECT string_agg(x->>'title', ' ') FROM jsonb_array_elements(r.extra_parts) x), '')), '[^[:alnum:]ăâîșțşţ]+')) w
+                         WHERE length(w) >= 4 AND w <> ALL($3::text[]) AND position(w IN lower(l.title)) > 0))
+      ORDER BY by_make DESC, r.created_at DESC LIMIT 300`, [me, lid, [...STOP]]);
+  const by = new Map(), seen = new Set(), requests = [];
+  for (const x of r.rows) {
+    by.set(x.listing_id, (by.get(x.listing_id) || 0) + 1);
+    if (!seen.has(x.id) && requests.length < 100) { seen.add(x.id); requests.push(x); }
+  }
+  res.set('Cache-Control', 'no-store').json({ by_listing: [...by].map(([listing_id, count]) => ({ listing_id, count })), requests });
 }));
 
 router.get('/summary', requireAuth, ah(async (req, res) => {
@@ -321,12 +368,20 @@ router.post('/', requireVerified, ah(async (req, res) => {
   distribute(id, req.user.id, v).catch((e) => console.error('rfq distribute:', e.message));
 }));
 
-/* vânzătorii cu anunțuri active care pomenesc marca primesc o notificare */
+/* vânzătorii de PIESE (categoria piese-auto) care au un anunț potrivit primesc notificare: marca în titlu/descriere, sau un cuvânt din piesa cerută în titlu.
+   Cei care vând mașini întregi sau alte lucruri nu sunt anunțați; mai întâi cei care se potrivesc și la marcă, și la piesă. */
+const STOP = new Set(['pentru', 'stanga', 'stânga', 'dreapta', 'fata', 'față', 'spate', 'noua', 'nouă', 'noul', 'second', 'hand', 'piesa', 'piese', 'original', 'originala', 'originală', 'auto', 'masina', 'mașina']);
+const partWords = (v) => [...new Set([v.title, ...(v.extra_parts || []).map((x) => x.title)].join(' ').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !STOP.has(w)))].slice(0, 8);
 async function distribute(id, buyerId, v) {
   if (!v.make) return;
+  const mk = '%' + likeEsc(v.make) + '%', words = partWords(v).map((w) => '%' + likeEsc(w) + '%').filter((w) => w.length > 2);
   const d = await db.query(
-    `SELECT DISTINCT l.user_id FROM listings l JOIN users u ON u.id = l.user_id
-      WHERE l.status = 'approved' AND u.status = 'active' AND l.user_id <> $1 AND l.title ILIKE $2 LIMIT $3`, [buyerId, '%' + likeEsc(v.make) + '%', MAX_NOTIFY]);
+    `SELECT l.user_id FROM listings l JOIN users u ON u.id = l.user_id JOIN categories c ON c.id = l.category_id
+      WHERE c.slug = 'piese-auto' AND ${LIVE('l')} AND u.status = 'active' AND l.user_id <> $1
+        AND (l.title ILIKE $2 OR l.description ILIKE $2 OR COALESCE(l.attributes->>'marca_auto', '') ILIKE $2 OR l.title ILIKE ANY($3::text[]))
+      GROUP BY l.user_id
+      ORDER BY MAX(CASE WHEN (l.title ILIKE $2 OR l.description ILIKE $2 OR COALESCE(l.attributes->>'marca_auto', '') ILIKE $2) AND l.title ILIKE ANY($3::text[]) THEN 2 ELSE 1 END) DESC, MAX(l.created_at) DESC LIMIT $4`,
+    [buyerId, mk, words, MAX_NOTIFY]);
   const title = [v.title, v.make, v.model, v.year].filter(Boolean).join(' ');
   const ids = d.rows.map((x) => x.user_id);
   const today = ids.length ? (await db.query("SELECT user_id, COUNT(*)::int AS n FROM notifications WHERE kind = 'rfq_new' AND created_at > NOW() - INTERVAL '1 day' AND user_id = ANY($1::int[]) GROUP BY user_id", [ids])).rows : [];
@@ -390,7 +445,7 @@ offersRouter.patch('/:id(\\d+)', requireVerified, ah(async (req, res) => {
   const id = Number(req.params.id), hasL = Object.prototype.hasOwnProperty.call(p.v, 'listing_id');
   if (hasL && p.v.listing_id && !(await ownListing(req.user.id, p.v.listing_id))) return res.status(400).json({ error: 'ANUNT_INVALID' });
   const r = await db.query(
-    `UPDATE rq_offers o SET price=$1, currency=$5, message=$2, listing_id = CASE WHEN $6::boolean THEN $7::int ELSE o.listing_id END, updated_at=NOW() FROM rq_requests q
+    `UPDATE rq_offers o SET price=$1, currency=$5, message=$2, listing_id = CASE WHEN $6::boolean THEN $7::int ELSE o.listing_id END, listing_notified = CASE WHEN $6::boolean THEN FALSE ELSE o.listing_notified END, updated_at=NOW() FROM rq_requests q
       WHERE o.id=$3 AND o.seller_id=$4 AND o.status='pending' AND q.id=o.request_id AND q.status='open' RETURNING o.id, q.user_id AS buyer_id, q.title`,
     [p.v.price, p.v.message, id, req.user.id, p.v.currency, hasL, hasL ? p.v.listing_id : null]);
   if (!r.rowCount) return res.status(409).json({ error: 'OFERTA_NU_MAI_E_DISPONIBILA' });
@@ -626,4 +681,4 @@ ordersRouter.put('/:id(\\d+)/rating', requireAuth, ah(async (req, res) => {
   res.json({ ok: true, stars, comment });
 }));
 
-module.exports = { router, offersRouter, questionsRouter, ordersRouter, sweep, parseRequest, parseOffer, LISTING_JSON, blockState, blockError, REASONS, KINDS, CONTACT_RE };
+module.exports = { router, offersRouter, questionsRouter, ordersRouter, sweep, sweepListings, parseRequest, parseOffer, LISTING_JSON, blockState, blockError, REASONS, KINDS, CONTACT_RE };

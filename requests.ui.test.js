@@ -113,6 +113,48 @@ const REQ = (o) => ({ id: 1, title: 'Far stânga', description: '', make: 'Audi'
   ctx.__api = async () => ({ orders: [ORDER({ id: 1 })] }); await T.go('orders'); await tick();
   const c6 = card('Far'); btnIn(c6, 'AWB / notă').onclick(); await tick(); const df = walk(c6, (n) => n.tagName === 'FORM')[0]; calls.length = 0; df.onsubmit({ preventDefault() {} }); await tick();
   t('AWB / notă: PATCH /api/orders/1/details', calls.some((c) => c[0] === '/api/orders/1/details' && c[1] === 'PATCH'));
+  // anunțuri ↔ cereri: Potrivite pentru mine, buton pe anunț, insigna din „Anunțurile mele”
+  El.prototype.showModal = function () { this.open = true; }; El.prototype.close = function () { this.open = false; };
+  const MATCH = { by_listing: [{ listing_id: 10, count: 2 }, { listing_id: 11, count: 1 }], requests: [{ id: 21, listing_id: 10, listing_title: 'Far Audi A4 B8', title: 'Far stânga', make: 'Audi', model: 'A4', year: '2012', county: 'Timiș', city: 'Timișoara', kind: 'ambele', extra_n: 1, created_at: iso(-1), expires_at: iso(5) }, { id: 22, listing_id: 11, listing_title: 'Alternator Bosch', title: 'Alternator', make: 'Bosch', county: 'Cluj', created_at: iso(-1), expires_at: iso(5), extra_n: 0 }] };
+  ctx.__api = async (u) => (/\/api\/requests\/matching/.test(u) ? MATCH : { requests: [], counts: {} });
+  await T.go('matching'); await tick(); s = text(T.body);
+  t('„Potrivite pentru mine”: cererile potrivite cu anunțul meu', /Far stânga \+1 piesă/.test(s) && /Anunțul tău: Far Audi A4 B8/.test(s) && /Anunțul tău: Alternator Bosch/.test(s) && (s.match(/Se potrivește/g) || []).length === 2);
+  t('tab „Potrivite pentru mine” pentru utilizatorii conectați', /Potrivite pentru mine/.test(ctx.$('rfqTabs').textContent));
+  // click pe o cerere: formularul de ofertă are anunțul potrivit preselectat
+  ctx.__api = async (u) => (/\/api\/listings\/mine/.test(u) ? { listings: [{ id: 10, title: 'Far Audi A4 B8', status: 'approved' }, { id: 11, title: 'Alternator Bosch', status: 'approved' }, { id: 12, title: 'Vechi', status: 'sold' }] }
+    : /\/api\/requests\/21/.test(u) ? { request: REQ({ id: 21, images: [], buyer_name: 'Ion' }), my_offer: null, my_mark: null } : MATCH);
+  ctx.__api0 = ctx.__api; await T.go('matching'); await tick();
+  walk(T.body, (n) => n.className && /rfq-row/.test(n.className) && n.textContent.includes('Far stânga'))[0].onclick(); await tick(); await tick();
+  const sel = walk(T.body, (n) => n.tagName === 'SELECT' && (n.children || []).some((o) => o._t === 'Fără anunț atașat'))[0];
+  t('oferta pornită din „Potrivite”: anunțul 10 e preselectat, doar anunțurile publicate se oferă', !!sel && sel.value === '10' && (sel.children || []).map((o) => o._t).join('|') === 'Fără anunț atașat|Far Audi A4 B8|Alternator Bosch');
+  await T.go('board'); T.st.view = 'board';
+  t('după ce părăsești cererea, preselectarea se șterge', T.st.preListing === null);
+  // buton pe pagina anunțului (cumpărător): precompletează formularul de cerere
+  const box = new El('div'); ctx.rfqListingCta({ id: 10, title: 'Far Audi A4 B8', category_slug: 'piese-auto', status: 'approved' }, box, false);
+  const cta = walk(box, (n) => n.tagName === 'BUTTON')[0]; t('anunț de piese: „Cere oferte pentru o piesă asemănătoare”', !!cta && /Cere oferte pentru o piesă asemănătoare/.test(cta.textContent));
+  cta.onclick(); await tick();
+  t('butonul deschide formularul de cerere completat cu titlul anunțului', T.st.view === 'new' && walk(T.body, (n) => n.tagName === 'INPUT' && n.value === 'Far Audi A4 B8').length === 1);
+  const none = new El('div'); ctx.rfqListingCta({ id: 1, title: 'iPhone', category_slug: 'telefoane', status: 'approved' }, none, false); ctx.rfqListingCta({ id: 2, title: 'Far', category_slug: 'piese-auto', status: 'sold' }, none, false);
+  t('fără buton la alte categorii sau anunțuri vândute', (none.children || []).length === 0);
+  // proprietar: câte cereri se potrivesc
+  ctx.__api = async () => ({ by_listing: [{ listing_id: 10, count: 2 }], requests: [] }); const ob = new El('div');
+  ctx.rfqListingCta({ id: 10, title: 'Far Audi A4 B8', category_slug: 'piese-auto', status: 'approved' }, ob, true); await tick();
+  t('proprietar: „2 cereri potrivite pentru acest anunț”', /2 cereri potrivite pentru acest anunț/.test(ob.textContent));
+  ctx.__api = async () => ({ by_listing: [], requests: [] }); const ob2 = new El('div'); ctx.rfqListingCta({ id: 10, title: 'x', category_slug: 'piese-auto', status: 'approved' }, ob2, true); await tick();
+  t('proprietar fără potriviri: nimic de afișat', (ob2.children || []).length === 0);
+  // insigna din „Anunțurile mele”: o singură cerere către server pentru toate cardurile
+  calls.length = 0; ctx.__api = async (u) => ({ by_listing: [{ listing_id: 10, count: 1 }, { listing_id: 11, count: 3 }], requests: [] });
+  const c10 = new El('div'), c11 = new El('div'), c99 = new El('div'), cx = new El('div');
+  ctx.rfqMatchBadge({ id: 10, category_slug: 'piese-auto' }, c10); ctx.rfqMatchBadge({ id: 11, category_slug: 'piese-auto' }, c11); ctx.rfqMatchBadge({ id: 99, category_slug: 'piese-auto' }, c99); ctx.rfqMatchBadge({ id: 10, category_slug: 'telefoane' }, cx); await tick();
+  t('insigne: „1 cerere potrivită” / „3 cereri potrivite”, fără insignă la cele fără potriviri sau la alte categorii', /1 cerere potrivită/.test(c10.textContent) && /3 cereri potrivite/.test(c11.textContent) && !c99.children.length && !cx.children.length);
+  t('insignele folosesc o singură cerere către server', calls.filter((c) => /\/api\/requests\/matching/.test(c[0])).length <= 1);
+  // navigare rapidă: o pagină lentă nu o suprascrie pe cea deschisă între timp
+  ctx.__api = (url) => new Promise((ok) => setTimeout(() => ok(/\/api\/requests\?/.test(url) ? { requests: [REQ({ id: 9, title: 'LENTA' })], counts: {} } : {}), 40));
+  const slow = T.go('board'); T.go('new'); await new Promise((r) => setTimeout(r, 80)); await slow;
+  t('pagina lentă („Ofertează piesele”) nu o înlocuiește pe cea nouă („Cere oferte piese”)', T.st.view === 'new' && /Piesa căutată/.test(text(T.body)) && !/LENTA/.test(text(T.body)));
+  ctx.__api = (url) => new Promise((ok, no) => setTimeout(() => no(new Error('EROARE_LENTA')), 40));
+  T.go('board'); T.go('new'); await new Promise((r) => setTimeout(r, 80));
+  t('nici eroarea unei pagini vechi nu apare peste pagina nouă', /Piesa căutată/.test(text(T.body)) && !/EROARE_LENTA/.test(text(T.body)));
   // „Comenzi (n)” în tab când sunt comenzi actualizate
   ctx.rfqSummary.order_updates = 2; ctx.__api = async () => ({ requests: [], counts: { new: 0, all: 0, offered: 0, later: 0, ignored: 0 } }); await T.go('board'); await tick();
   t('tab „Comenzi (2)” pentru comenzile actualizate', /Comenzi \(2\)/.test(ctx.$('rfqTabs').textContent)); ctx.rfqSummary.order_updates = 0;

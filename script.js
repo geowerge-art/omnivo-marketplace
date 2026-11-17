@@ -528,7 +528,7 @@ function accMenu() {
   const secs = document.createElement("div"); secs.className = "acc-sections";
   secs.append(
     accBar("Anunțurile mele", [...status, accItem("Studio · statistici", () => accGo("studio"))], "accBarMine", ""),
-    accBar("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests(), (() => { const x = window.rfqSummary || {}, n = (x.new_quotes || 0) + (x.new_answers || 0); return n ? n + (n === 1 ? " nouă" : " noi") : (x.waiting || ""); })(), "accRfqN"), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))], "accBarBuy"),
+    accBar("Cumpăr", [accItem("Oferte piese (cere sau oferă)", () => window.openRequests && window.openRequests(), (() => { const x = window.rfqSummary || {}, n = (x.new_quotes || 0) + (x.new_answers || 0) + (x.order_updates || 0); return n ? n + (n === 1 ? " nouă" : " noi") : (x.waiting || ""); })(), "accRfqN"), accItem("Favorite", () => accGo("favs"), favIds.size || ""), accItem("Căutări salvate", () => accGo("saved"))], "accBarBuy"),
     accBar("Profil și setări", [accItem("Notificări", () => accGo("notif"), notifCount || "", "accNotifN"), accItem("Profilul meu public", () => window.openProfile && window.openProfile(me.id)), accItem("Date generale și telefon", openSettings), accItem("Datele mele și ștergerea contului", () => window.openData && window.openData())], "accBarProf"),
     accBar("Plan și plăți", [accItem("Planul meu", () => accGo("plan"), "", "accPlanTag"), accItem("Portofel și credite", () => accGo("wallet"), "", "accCredTag")], "accBarPlan")
   );
@@ -686,6 +686,7 @@ function mineRow(l, box) {
   const stats = document.createElement("div"); stats.className = "mc-stats";
   [["view", l.views || 0, "Vizualizări"], ["msg", l.msgs || 0, "Mesaje"], ["heart", l.favs || 0, "Salvări la favorite"]].forEach(([k, n, tt]) => { const s = document.createElement("span"); s.title = tt; s.setAttribute("aria-label", `${tt}: ${n}`); s.innerHTML = aico(k, 20); s.append(" " + n); stats.appendChild(s); });
   r.append(top, stats);
+  if (window.rfqMatchBadge && l.status === "approved") rfqMatchBadge(l, r);   // „N cereri potrivite” pentru anunțurile de piese
   if (l.status === "deleted" && l.deleted_at) { const left = Math.max(0, Math.ceil((new Date(l.deleted_at).getTime() + 30 * DAY - Date.now()) / DAY)); const n = document.createElement("p"); n.className = "mc-note"; n.textContent = `Se șterge definitiv automat pe ${dShort(new Date(l.deleted_at).getTime() + 30 * DAY)} (${left === 1 ? "mai e 1 zi" : `mai sunt ${left} zile`}).`; r.appendChild(n); }
   const mains = listingActs(l).filter((a) => a.main).slice(0, 2);
   if (mains.length) {
@@ -1011,6 +1012,7 @@ async function openDetail(id) {
       }
       const cta = listingActs(m, { detail: true }).find((a) => a.key === (ex.k ? "renew" : l.status === "sold" ? "resume" : "promo"));
       if (cta) { const bt = document.createElement("button"); bt.type = "button"; bt.className = "own-cta"; bt.textContent = ex.k ? "Reînnoiește pentru 30 de zile" : cta.label; bt.addEventListener("click", () => runAct(cta, bt)); ob.appendChild(bt); }
+      if (window.rfqListingCta) rfqListingCta(l, ob, true);   // cererile potrivite cu acest anunț
       ob.hidden = false;
     }
     else if (live) {
@@ -1029,6 +1031,7 @@ async function openDetail(id) {
       act.appendChild(favBtn(l.id, true));
       if (l.seller_id) btn("✉️ Trimite mesaj", () => { $("detailDialog").close(); me ? openChat(l.id, l.seller_id, l.title) : openAuth(); }, l.has_phone && l.status !== "sold" ? "alt" : "call");
       if (!l.has_phone && l.status !== "sold") { const n = document.createElement("small"); n.className = "ad-nophone"; n.textContent = "Vânzătorul nu a afișat telefonul. Scrie-i un mesaj."; act.prepend(n); }
+      if (window.rfqListingCta) rfqListingCta(l, act, false);   // „Cere oferte pentru o piesă asemănătoare”
     }
     { const pd = $("profileDialog"); if (pd && pd.open) pd.close(); }   // anunț deschis din profilul vânzătorului: profilul se închide, altfel anunțul rămâne dedesubt
     open("detailDialog"); $("detailDialog").scrollTop = 0; detUrlSync(l);

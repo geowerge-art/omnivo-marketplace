@@ -1983,3 +1983,5 @@ body.menu-open .bottom-nav { display: none; }
 .rqx-listing img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex: none; }
 .rqx-lt { display: grid; min-width: 0; }
 .rqx-lt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rqx-cta { width: 100%; margin-top: 10px; min-height: 46px; border: 1px solid var(--gold); border-radius: 14px; background: #fffaf0; color: var(--navy); font: inherit; font-weight: 700; cursor: pointer; }
+.mc-rfq { display: block; width: calc(100% - 24px); margin: 8px 12px 12px; min-height: 40px; border: 1px solid var(--gold); border-radius: 12px; background: #fffaf0; color: var(--navy); font: inherit; font-weight: 700; cursor: pointer; }

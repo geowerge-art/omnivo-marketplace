@@ -26,6 +26,7 @@ Module._load = function (req, ...a) {
 };
 const R = require('./requests');
 Module._load = orig;
+require('./rfq-notify').clock.now = () => new Date('2026-11-17T10:00:00Z');   // 12:00 în România: emailurile pleacă imediat (nu e interval de liniște)
 
 const tick = (ms = 15) => new Promise((r) => setTimeout(r, ms));
 const good = { title: 'Far stânga', make: 'Audi', model: 'A4', year: '2012', county: 'Timiș' };
@@ -278,7 +279,7 @@ test('preferința de email se salvează; rezumatul expune comenzile actualizate 
 
 test('cerere nouă: emailuri plafonate (max. pe zi la același vânzător), notificarea în aplicație pleacă mereu', async () => {
   script = (s) => (/INSERT INTO rq_requests/.test(s) ? { rows: [{ id: 5 }], rowCount: 1 }
-    : /SELECT DISTINCT l\.user_id/.test(s) ? { rows: [{ user_id: 11 }, { user_id: 12 }, { user_id: 13 }], rowCount: 3 }
+    : /FROM listings l JOIN users u/.test(s) ? { rows: [{ user_id: 11 }, { user_id: 12 }, { user_id: 13 }], rowCount: 3 }
     : /FROM notifications WHERE kind = 'rfq_new'/.test(s) ? { rows: [{ user_id: 11, n: 10 }] }
     : /FROM users WHERE id/.test(s) ? user() : { rows: [], rowCount: 0 });
   notes.length = 0; mails.length = 0;
@@ -299,7 +300,7 @@ test('anunț atașat la ofertă: validare (absent = neatins, null = scos, id inv
 test('anunț atașat: doar anunțuri publicate ale vânzătorului, la creare și la modificare', async () => {
   const offer = H('R0 POST /:id(\\d+)/offers'), patch = H('R1 PATCH /:id(\\d+)');
   const mk = (owned) => (s) => /FROM rq_requests WHERE id/.test(s) ? { rows: [{ id: 1, user_id: 7, title: 'Far' }], rowCount: 1 }
-    : /FROM listings WHERE id = \$1 AND user_id = \$2 AND status = 'approved'/.test(s) ? { rows: owned ? [{ '?column?': 1 }] : [], rowCount: owned ? 1 : 0 }
+    : /FROM listings l WHERE l\.id = \$1 AND l\.user_id = \$2 AND l\.status = 'approved' AND \(l\.expires_at IS NULL OR l\.expires_at > NOW\(\)\)/.test(s) ? { rows: owned ? [{ '?column?': 1 }] : [], rowCount: owned ? 1 : 0 }
     : /INSERT INTO rq_offers/.test(s) ? { rows: [{ id: 9 }], rowCount: 1 }
     : /UPDATE rq_offers o SET/.test(s) ? { rows: [{ id: 9, buyer_id: 7, title: 'Far' }], rowCount: 1 }
     : { rows: [], rowCount: 0 };
@@ -321,8 +322,74 @@ test('anunț atașat: doar anunțuri publicate ale vânzătorului, la creare și
 test('anunțul atașat se întoarce pe oferta primită, oferta mea, ofertele mele și comandă (doar dacă e încă public)', () => {
   const src = fs.readFileSync(path.join(__dirname, 'requests.js'), 'utf8');
   assert.ok((src.match(/\$\{LISTING_JSON\('o'\)\} AS listing/g) || []).length >= 4, 'în toate cele 4 locuri');
-  const sql = R.LISTING_JSON('o'); assert.match(sql, /l\.id = o\.listing_id AND l\.status IN \('approved', 'sold'\)/); assert.match(sql, /FROM listing_images i WHERE i\.listing_id = l\.id/);
+  const sql = R.LISTING_JSON('o'); assert.match(sql, /l\.id = o\.listing_id AND \(l\.status = 'sold' OR \(l\.status = 'approved' AND \(l\.expires_at IS NULL OR l\.expires_at > NOW\(\)\)\)\)/, 'anunțurile expirate nu se mai arată'); assert.match(sql, /FROM listing_images i WHERE i\.listing_id = l\.id/);
   const mig = fs.readFileSync(path.join(__dirname, '044_offer_listing.sql'), 'utf8'); assert.match(mig, /ADD COLUMN IF NOT EXISTS listing_id INTEGER REFERENCES listings\(id\) ON DELETE SET NULL/);
+});
+
+test('cerere nouă: sunt anunțați doar vânzătorii de piese (categoria piese-auto), cu cuvintele potrivite, mai întâi cei care se potrivesc și la marcă și la piesă', async () => {
+  script = (s) => (/INSERT INTO rq_requests/.test(s) ? { rows: [{ id: 5 }], rowCount: 1 } : { rows: [], rowCount: 0 });
+  queries = []; const r = resp();
+  await H('R0 POST /')({ body: { ...good, make: '50%_Audi', title: 'Alternator Bosch pentru stânga', extra_parts: [{ title: 'Bujii incandescente', details: '' }, { title: 'Far', details: '' }] }, user: { id: 5 } }, r); await tick(30);
+  const q = queries.find((x) => /FROM listings l JOIN users u/.test(x.s)); assert.ok(q, 'căutarea vânzătorilor a rulat');
+  assert.match(q.s, /JOIN categories c ON c\.id = l\.category_id/); assert.match(q.s, /c\.slug = 'piese-auto'/); assert.match(q.s, /l\.status = 'approved' AND \(l\.expires_at IS NULL OR l\.expires_at > NOW\(\)\) AND u\.status = 'active' AND l\.user_id <> \$1/); assert.match(q.s, /COALESCE\(l\.attributes->>'marca_auto', ''\) ILIKE \$2/, 'și după atributul Marca mașinii');
+  assert.match(q.s, /ORDER BY MAX\(CASE WHEN .* THEN 2 ELSE 1 END\) DESC/s);
+  assert.strictEqual(q.p[0], 5); assert.strictEqual(q.p[1], '%50  Audi%', 'caracterele LIKE din marcă sunt neutralizate');
+  assert.deepStrictEqual(q.p[2], ['%alternator%', '%bosch%', '%bujii%', '%incandescente%'], 'fără cuvinte scurte (far) sau banale (pentru, stânga)');
+  assert.strictEqual(q.p[3], 300);
+});
+
+test('cereri potrivite cu anunțurile mele: doar piese-auto publicate, fără cererile mele / ignorate / deja ofertate / blocate', async () => {
+  assert.ok(routes['R0 GET /matching'] && routes['R0 GET /matching'].mids >= 1, 'cere cont');
+  const row = (listing_id, id, extra) => ({ listing_id, listing_title: 'Far Audi A4 B8', id, title: 'Far', make: 'Audi', model: 'A4', year: '2012', county: 'Timiș', city: '', kind: 'ambele', created_at: new Date(), expires_at: new Date(), extra_n: 0, thumb: null, by_make: true, ...extra });
+  script = () => ({ rows: [row(10, 1), row(11, 1), row(10, 2), row(11, 3, { by_make: false })], rowCount: 4 });
+  queries = []; const r = resp(); await H('R0 GET /matching')({ query: { listing_id: '10' }, user: { id: 5 } }, r);
+  const q = queries[0]; assert.match(q.s, /c\.slug = 'piese-auto'/); assert.match(q.s, /l\.user_id = \$1 AND l\.status = 'approved' AND \(l\.expires_at IS NULL OR l\.expires_at > NOW\(\)\) AND \(\$2::int IS NULL OR l\.id = \$2\)/); assert.match(q.s, /lower\(COALESCE\(l\.attributes->>'marca_auto', ''\)\)/, 'marca din atributul anunțului');
+  assert.match(q.s, /r\.status = 'open' AND r\.expires_at > NOW\(\) AND r\.user_id <> \$1/); assert.match(q.s, /mk\.mark IS DISTINCT FROM 'ignored' AND mo\.id IS NULL/);
+  assert.match(q.s, /b\.blocker_id = \$1::int AND b\.blocked_id = r\.user_id\) OR \(b\.blocker_id = r\.user_id/); assert.match(q.s, /w <> ALL\(\$3::text\[\]\)/);
+  assert.strictEqual(q.p[0], 5); assert.strictEqual(q.p[1], 10); assert.ok(Array.isArray(q.p[2]) && q.p[2].includes('pentru') && q.p[2].includes('stanga'));
+  assert.deepStrictEqual(r.body.by_listing, [{ listing_id: 10, count: 2 }, { listing_id: 11, count: 2 }]);
+  assert.deepStrictEqual(r.body.requests.map((x) => x.id), [1, 2, 3], 'cererile sunt unice (cererea 1 se potrivește cu două anunțuri)');
+  assert.strictEqual(r.body.requests[0].listing_id, 10, 'primul anunț potrivit rămâne');
+  queries = []; await H('R0 GET /matching')({ query: { listing_id: 'abc' }, user: { id: 5 } }, resp()); assert.strictEqual(queries[0].p[1], null, 'listing_id invalid = toate anunțurile');
+  queries = []; await H('R0 GET /matching')({ query: {}, user: { id: 5 } }, resp()); assert.strictEqual(queries[0].p[1], null);
+});
+
+test('integrare anunțuri: script.js are cârligele, detaliul anunțului expune categoria', () => {
+  const sc = fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8');
+  assert.match(sc, /if \(window\.rfqMatchBadge && l\.status === "approved"\) rfqMatchBadge\(l, r\)/);
+  assert.match(sc, /if \(window\.rfqListingCta\) rfqListingCta\(l, ob, true\)/); assert.match(sc, /if \(window\.rfqListingCta\) rfqListingCta\(l, act, false\)/);
+  assert.match(fs.readFileSync(path.join(__dirname, 'listings.js'), 'utf8'), /category: l\.category, category_slug: l\.category_slug,/);
+});
+
+test('anunț atașat indisponibil: cumpărătorul e anunțat o singură dată, doar în aplicație', async () => {
+  const x = (status, extra) => ({ buyer_id: 9, request_id: 4, request_title: 'Far', listing_title: 'Far Audi', listing_status: status, ...extra });
+  script = () => ({ rows: [x('sold'), x('deleted'), x('blocked'), x('approved')], rowCount: 4 });   // „approved” aici = expirat (a ieșit din LIVE)
+  queries = []; notes.length = 0; mails.length = 0;
+  const n = await R.sweepListings(); await tick();
+  assert.strictEqual(n, 4);
+  const q = queries[0].s; assert.match(q, /UPDATE rq_offers o SET listing_notified = TRUE FROM listings l, rq_requests q/); assert.match(q, /o\.status = 'pending' AND q\.status = 'open' AND NOT o\.listing_notified/);
+  assert.match(q, /NOT \(l\.status = 'approved' AND \(l\.expires_at IS NULL OR l\.expires_at > NOW\(\)\)\)/);
+  assert.deepStrictEqual(notes.map((a) => a[0]), [9, 9, 9, 9]); assert.ok(notes.every((a) => a[1] === 'rfq_edit'));
+  assert.match(notes[0][3], /Anunțul din oferta pentru „Far” a fost vândut/); assert.match(notes[1][3], /a fost șters/); assert.match(notes[2][3], /a fost blocat/); assert.match(notes[3][3], /a expirat/);
+  assert.match(notes[0][4], /„Far Audi” nu mai e disponibil/); assert.strictEqual(mails.length, 0, 'fără email');
+  script = () => ({ rows: [], rowCount: 0 }); notes.length = 0; assert.strictEqual(await R.sweepListings(), 0); assert.strictEqual(notes.length, 0);
+});
+
+test('schimbarea anunțului atașat resetează notificarea de indisponibilitate', async () => {
+  script = (s) => (/FROM rq_requests WHERE id/.test(s) ? { rows: [], rowCount: 0 } : /FROM listings l WHERE/.test(s) ? { rows: [{ x: 1 }], rowCount: 1 } : { rows: [{ id: 9, buyer_id: 7, title: 'Far' }], rowCount: 1 });
+  queries = []; await H('R1 PATCH /:id(\\d+)')({ params: { id: '9' }, body: { price: 20, listing_id: 44 }, user: { id: 5 } }, resp());
+  assert.match(queries.find((q) => /UPDATE rq_offers o SET/.test(q.s)).s, /listing_notified = CASE WHEN \$6::boolean THEN FALSE ELSE o\.listing_notified END/);
+});
+
+test('migrarea 045 și programarea din server.js: anunț indisponibil, coadă de emailuri, atribute Marca/Model la piese', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '045_rfq_followups.sql'), 'utf8');
+  assert.match(sql, /ALTER TABLE rq_offers ADD COLUMN IF NOT EXISTS listing_notified BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS rfq_mail_queue/); assert.match(sql, /user_id INTEGER NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/); assert.match(sql, /sent_at TIMESTAMPTZ/);
+  assert.match(sql, /'marca_auto', 'Marca mașinii', TRUE, 12/); assert.match(sql, /'model_auto', 'Model compatibil', FALSE, 13/); assert.match(sql, /c\.slug = 'piese-auto'/); assert.match(sql, /NOT EXISTS \(SELECT 1 FROM category_attributes/);
+  assert.ok(!/DROP TABLE/i.test(sql));
+  const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  assert.match(srv, /\['sweep', \(\) => rq\.sweep\(\)\], \['listings', \(\) => rq\.sweepListings\(\)\], \['mail', \(\) => nf\.flushQueue\(\)\]/);
+  assert.match(srv, /10 \* 60 \* 1000\)\.unref\(\)/);
 });
 
 test('interfața apelează doar rute care există în backend', () => {
@@ -342,6 +409,7 @@ test('integrare: cârligele din script.js și rutele paginii există', () => {
   const ui = fs.readFileSync(path.join(__dirname, 'requests-ui.js'), 'utf8');
   for (const f of ['openRequests', 'rfqSummaryRefresh', 'rfqRefresh', 'rfqMsg']) assert.match(ui, new RegExp('window\\.' + f + ' ='), f);
   for (const r of ['"/cereri"', '"/cerere-noua"', '"/cererile-mele"', '"/oferte-primite"', '"/ofertele-mele"']) assert.ok(ui.includes(r), r);
+  assert.match(fs.readFileSync(path.join(__dirname, 'script.js'), 'utf8'), /\(x\.new_quotes \|\| 0\) \+ \(x\.new_answers \|\| 0\) \+ \(x\.order_updates \|\| 0\)/, 'insigna din Cont include și comenzile actualizate');
   const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   for (const m of ['/api/requests', '/api/offers', '/api/offer-questions', '/api/orders']) assert.ok(app.includes(`'${m}'`), 'nemontat: ' + m);
 });

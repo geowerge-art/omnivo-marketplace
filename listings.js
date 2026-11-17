@@ -251,7 +251,7 @@ router.get('/:id(\\d+)', ah(async (req, res) => {
     edit: (owner || staff) ? { category_id: l.category_id, attributes: l.attributes || {}, images: imgs.rows, contact: { name: l.contact_name, phone: l.contact_phone, wa: l.contact_wa, show: l.contact_show } } : undefined,
     id: l.id, title: l.title, description: l.description, price: l.price, currency: l.currency, negotiable: l.negotiable,
     condition: l.condition, county: l.county, city: l.city, status: l.status, created_at: l.created_at,
-    category: l.category, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type, seller_plan: plans.effective(l),
+    category: l.category, category_slug: l.category_slug, parent_category: l.parent_category, seller: l.seller, seller_type: l.seller_type, seller_plan: plans.effective(l),
     address: l.address || null,
     // doar proprietarul: datele din bara de acțiuni de pe pagina anunțului
     owner_info: owner ? { favs: (await db.query('SELECT COUNT(*)::int n FROM favorites WHERE listing_id = $1', [l.id])).rows[0].n, msgs: (await db.query('SELECT COUNT(*)::int n FROM messages WHERE listing_id = $1 AND recipient_id = $2', [l.id, me.id])).rows[0].n, views: l.views, expires_at: l.expires_at, bumped_at: l.bumped_at, updated_at: l.updated_at, promoted_until: l.promoted_until } : undefined,

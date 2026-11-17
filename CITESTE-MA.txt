@@ -1,26 +1,39 @@
-Versiune peste arhiva ta noua (omnivo-marketplace-main__4_, cea cu swap / photo_hash).
-Copiaza fisierele din acest zip peste proiect (aceleasi locuri, in radacina), apoi ruleaza: npm run migrate
-Migrari noi (dupa 041_swaps si 042_photo_hash): 043_rfq_orders_reviews.sql, apoi 044_offer_listing.sql
+Doar fisierele schimbate, fata de arhiva ta omnivo-marketplace-main__4_ (cea cu swap / photo_hash).
 
-NOI:
-  043_rfq_orders_reviews.sql   comenzi (suspendare, motiv, AWB, nota), reviews.order_id, users.rfq_email
-  044_offer_listing.sql        rq_offers.listing_id (anunt atasat la oferta)
-  rfq-notify.js                notificari in aplicatie + email pentru cereri/oferte/comenzi
-  rfq-notify.test.js           teste pentru notificari si email
-  erase.test.js                teste pentru stergerea contului
+1) Copiaza fisierele din acest folder peste proiect, in aceleasi locuri (radacina proiectului). Suprascrie cand te intreaba.
+2) STERGE din proiect testele vechi (pentru sistemul inlocuit; altfel pica la npm test):
+  ./requests.offers.test.js
+  ./requests.photos.test.js
+  ./requests.summary.test.js
+  ./requests.summary.ui.test.js
+3) Dupa deploy ruleaza: npm run migrate
+   Migrari noi: 039_rfq_autoparts, 040_rfq_reports, 043_rfq_orders_reviews, 044_offer_listing, 045_rfq_followups (041 si 042 sunt ale tale).
+   Tabelele vechi de cereri (part_requests, quotes, dealers) raman in baza de date, dar nu mai sunt folosite.
 
-MODIFICATE:
-  requests.js                  comenzi bogate, calificative, AWB, contact pe cerere, preferinta email, anunt atasat
-  requests-ui.js               pagina "Comenzi", calificative, contact, bifa de email, "Atașează un anunț"
-  admin-requests.js            moderarea trimite si email; cel care raporteaza afla rezultatul
-  profiles.js                  recenziile din comenzi apar in profil cu titlul comenzii
-  erase.js                     la stergerea contului se sterg si pozele cererilor/ofertelor din Storage, nota privata, comenzile orfane
-  style.css                    stiluri noi la final (rqx-*)
-  requests.test.js, requests.ui.test.js, admin-requests.test.js   teste actualizate
-  MODIFICARI.md                nota
+Fisiere NOI:
+  ./043_rfq_orders_reviews.sql
+  ./044_offer_listing.sql
+  ./045_rfq_followups.sql
+  ./erase.test.js
+  ./rfq-notify.js
+  ./rfq-notify.test.js
 
-DE STERS din proiect (testele vechi, pentru sistemul inlocuit; inca sunt in arhiva ta si pica):
-  requests.offers.test.js
-  requests.photos.test.js
-  requests.summary.test.js
-  requests.summary.ui.test.js
+Fisiere MODIFICATE (suprascriu pe ale tale):
+  ./MODIFICARI.md
+  ./admin-requests.js
+  ./admin-requests.test.js
+  ./erase.js
+  ./listings.js
+  ./profiles.js
+  ./requests-ui.js
+  ./requests.js
+  ./requests.test.js
+  ./requests.ui.test.js
+  ./script.js
+  ./server.js
+  ./style.css
+
+Variabile optionale pentru emailuri (nu sunt necesare): RFQ_QUIET_START=22  RFQ_QUIET_END=8  RFQ_MAIL_TZ=Europe/Bucharest
+(emailurile din timpul noptii se trimit dimineata; acelasi numar la start si final = fara interval de liniste)
+
+Detalii: MODIFICARI.md

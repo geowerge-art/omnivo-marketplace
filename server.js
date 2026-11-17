@@ -14,7 +14,11 @@ async function main() {
     const purge = () => require('./listings').purgeDeleted().catch((e) => console.error('purge anunțuri:', e.message));
     setTimeout(purge, 30 * 1000).unref(); setInterval(purge, 3600000).unref();
     // „Cere oferte”: expirări, reamintiri și anunțuri fără să aștepte o vizită pe site
-    setInterval(() => require('./requests').sweep().catch((e) => console.error('rfq sweep:', e.message)), 10 * 60 * 1000).unref();
+    // la 10 minute: cererile expirate, ofertele al căror anunț nu mai e disponibil, emailurile reținute peste noapte
+    setInterval(async () => {
+      const rq = require('./requests'), nf = require('./rfq-notify');
+      for (const [name, fn] of [['sweep', () => rq.sweep()], ['listings', () => rq.sweepListings()], ['mail', () => nf.flushQueue()]]) { try { await fn(); } catch (e) { console.error('rfq ' + name + ':', e.message); } }
+    }, 10 * 60 * 1000).unref();
   } else {
     console.warn('DATABASE_URL lipsește: pornesc fără bază de date (conturile și anunțurile nu funcționează).');
   }
